@@ -15,3 +15,9 @@ struct Complex {
         return *this;
     }
 };
+
+struct ComplexArray
+{
+    qreal *real;
+    qreal *imag;
+};

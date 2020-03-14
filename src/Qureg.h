@@ -57,4 +57,5 @@ private:
     int numQubits;
     const QuESTEnv& env;
     std::vector<Gate> gates;
+    ComplexArray deviceStateVec;
 };

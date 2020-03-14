@@ -4,6 +4,7 @@
 #include <assert.h>
 #include "QuESTEnv.h"
 #include "utils.h"
+#include "kernel.h"
 
 Qureg createQureg(int numQubits, const QuESTEnv& env) {
     return Qureg(numQubits, env);
@@ -22,5 +23,6 @@ void destroyQureg(Qureg& q, const QuESTEnv& env) {
 }
 
 void Qureg::run() {
+    kernelInit(deviceStateVec, numQubits);
     assert(false);
 }

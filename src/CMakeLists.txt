@@ -1,4 +1,5 @@
-project(QCSimulator CXX)
+project(QCSimulator)
+aux_source_directory(. SRC_CXX)
+set(SRC_CU ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu)
 
-aux_source_directory(. DIR_LIB_SRCS)
-add_library (QCSimulator ${DIR_LIB_SRCS})
+cuda_add_library(QCSimulator ${SRC_CXX} ${SRC_CU})
