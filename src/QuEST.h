@@ -10,8 +10,8 @@ QuESTEnv createQuESTEnv();
 void destroyQuESTEnv(QuESTEnv& env);
 
 // in Qureg.cpp
-Qureg createQureg(int numQubits, QuESTEnv& env);
-void destroyQureg(Qureg& q, QuESTEnv& env);
+Qureg createQureg(int numQubits, const QuESTEnv& env);
+void destroyQureg(Qureg& q, const QuESTEnv& env);
 qreal calcProbOfOutcome(Qureg& q, int measureQubit, int outcome);
 Complex getAmp(Qureg& q, long long int index);
 

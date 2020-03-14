@@ -1,11 +1,12 @@
 #include "Qureg.h"
 
 #include <cstdio>
+#include <assert.h>
 #include "QuESTEnv.h"
 #include "utils.h"
 
-Qureg createQureg(int numQubits, QuESTEnv& env) {
-    return Qureg();
+Qureg createQureg(int numQubits, const QuESTEnv& env) {
+    return Qureg(numQubits, env);
 }
 
 qreal calcProbOfOutcome(Qureg& q, int measureQubit, int outcome) {
@@ -16,6 +17,10 @@ Complex getAmp(Qureg& q, long long int index) {
     return Complex(0, 0);
 }
 
-void destroyQureg(Qureg& q, QuESTEnv& env) {
+void destroyQureg(Qureg& q, const QuESTEnv& env) {
     printf("destroy qureg: just return!");
+}
+
+void Qureg::run() {
+    assert(false);
 }
