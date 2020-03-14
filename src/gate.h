@@ -4,9 +4,9 @@
 #include "utils.h"
 
 enum GateType {
-    GateNormal,
-    GateDiagonal,
-    GateSwap // [0, 1; 1, 0], not two-qubit swap gate
+    GateHadamard,
+    GateCAlphaBeta,
+    GateCNot
 };
 
 struct Gate {

@@ -29,7 +29,40 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
 }
 
 template <unsigned int blockSize>
-__global__ void controlledGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, Complex* g) {
+__global__ void controlledNotGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        if (!((i >> controlQubit) & 1))
+            continue;
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qindex hi = lo | (1 << targetQubit);
+        qreal real = a.real[lo]; a.real[lo] = a.real[hi]; a.real[hi] = real;
+        qreal imag = a.imag[lo]; a.imag[lo] = a.imag[hi]; a.imag[hi] = imag;
+    }
+}
+
+
+template <unsigned int blockSize>
+__global__ void hadamardGate(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qindex hi = lo | (1 << targetQubit);
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = recRoot2 * (loReal + hiReal);
+        a.imag[lo] = recRoot2 * (loImag + hiImag);
+        a.real[hi] = recRoot2 * (loReal - hiReal);
+        a.imag[hi] = recRoot2 * (loImag - hiImag);
+    }
+}
+
+template <unsigned int blockSize>
+__global__ void controlAlphaBetaGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, Complex alpha, Complex beta) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     qindex mask = (qindex(1) << targetQubit) - 1;
     for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
@@ -41,44 +74,34 @@ __global__ void controlledGate(ComplexArray a, int numQubit_, int controlQubit, 
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
         qreal hiImag = a.imag[hi];
-        a.real[lo] = g[0].real * loReal - g[0].imag * loImag + g[1].real * hiReal - g[1].imag * hiImag;
-        a.imag[lo] = g[0].real * loImag + g[0].imag * loReal + g[1].real * hiImag + g[1].imag * hiReal;
-        a.real[hi] = g[2].real * loReal - g[2].imag * loImag + g[3].real * hiReal - g[3].imag * hiImag;
-        a.imag[hi] = g[2].real * loImag + g[2].imag * loReal + g[3].real * hiImag + g[3].imag * hiReal;
-    }
-}
-
-template <unsigned int blockSize>
-__global__ void normalGate(ComplexArray a, int numQubit_, int targetQubit, Complex* g) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    qindex mask = (qindex(1) << targetQubit) - 1;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
-        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (1 << targetQubit);
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = g[0].real * loReal - g[0].imag * loImag + g[1].real * hiReal - g[1].imag * hiImag;
-        a.imag[lo] = g[0].real * loImag + g[0].imag * loReal + g[1].real * hiImag + g[1].imag * hiReal;
-        a.real[hi] = g[2].real * loReal - g[2].imag * loImag + g[3].real * hiReal - g[3].imag * hiImag;
-        a.imag[hi] = g[2].real * loImag + g[2].imag * loReal + g[3].real * hiImag + g[3].imag * hiReal;
+        a.real[lo] = alpha.real * loReal - alpha.imag * loImag - beta.real * hiReal - beta.imag * hiImag;
+        a.imag[lo] = alpha.real * loImag + alpha.imag * loReal - beta.real * hiImag + beta.imag * hiReal;
+        a.real[hi] = beta.real * loReal - beta.imag * loImag + alpha.real * hiReal + alpha.imag * hiImag;
+        a.imag[hi] = beta.real * loImag + beta.imag * loReal + alpha.real * hiImag - alpha.imag * hiReal;
     }
 }
 
 void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>& gates) {
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
-    Complex* g;
-    checkCudaErrors(cudaMalloc(&g, sizeof(Complex) * 4));
-    Complex z = kernelGetAmp(deviceStateVec, 0);
     for (auto gate: gates) {
-        checkCudaErrors(cudaMemcpy(g, gate.mat[0], sizeof(Complex) * 4, cudaMemcpyHostToDevice));
-        if (gate.controlQubit != -1) {
-            controlledGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, g);
-        } else {
-            normalGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                deviceStateVec, numQubit_, gate.targetQubit, g);
+        switch (gate.type) {
+            case GateHadamard: {
+                hadamardGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real);
+                break;
+            }
+            case GateCAlphaBeta: {
+                controlAlphaBetaGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0], gate.mat[1][0]);
+                break;
+            }
+            case GateCNot: {
+                controlledNotGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                break;
+            }
+            default: {
+                assert(false);
+            }
         }
     }
 }
@@ -137,18 +160,18 @@ __global__ void measure(ComplexArray a, qreal* ans, int numQubit_, int targetQub
 
 qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit) {
     int numQubit_ = numQubits - 1;
-    int nVec = 1 << numQubit_;
-    int totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
+    qindex nVec = 1 << numQubit_;
+    qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
     qreal *ans1, *ans2, *ans3;
     checkCudaErrors(cudaMalloc(&ans1, sizeof(qreal) * totalBlocks));
     measure<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, targetQubit);
     checkCudaErrors(cudaMalloc(&ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
     reduce<1<<THREAD_DEP><<<1<<REDUCE_BLOCK_DEP, 1<<THREAD_DEP>>>
-        (ans1, ans2, totalBlocks, totalBlocks >> THREAD_DEP >> REDUCE_BLOCK_DEP >> 1);
+        (ans1, ans2, totalBlocks, totalBlocks >> (THREAD_DEP + REDUCE_BLOCK_DEP - 1));
     checkCudaErrors(cudaMallocHost(&ans3, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
     checkCudaErrors(cudaMemcpy(ans3, ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP), cudaMemcpyDeviceToHost));
     qreal ret = 0;
-    for (int i = 0; i < (1<<THREAD_DEP); i++)
+    for (int i = 0; i < (1<<REDUCE_BLOCK_DEP); i++)
         ret += ans3[i];
     checkCudaErrors(cudaFree(ans1));
     checkCudaErrors(cudaFree(ans2));

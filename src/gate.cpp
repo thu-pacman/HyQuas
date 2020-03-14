@@ -3,7 +3,7 @@
 
 void controlledNot(Qureg& q, int controlQubit, int targetQubit) {
     Gate g;
-    g.type = GateSwap;
+    g.type = GateCNot;
     g.mat[0][0] = 0; g.mat[0][1] = 1;
     g.mat[1][0] = 1; g.mat[1][1] = 0;
     g.name = "CN";
@@ -30,7 +30,7 @@ void controlledRotateY(Qureg& q, int controlQubit, int targetQubit, qreal angle)
 void controlledRotateZ(Qureg& q, int controlQubit, int targetQubit, qreal angle) {
     assert(controlQubit != targetQubit);
     Gate g;
-    g.type = GateDiagonal;
+    g.type = GateCAlphaBeta;
     g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
     g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
     g.name = "CN";
@@ -41,7 +41,7 @@ void controlledRotateZ(Qureg& q, int controlQubit, int targetQubit, qreal angle)
 
 void hadamard(Qureg& q, int targetQubit) {
     Gate g;
-    g.type = GateNormal;
+    g.type = GateHadamard;
     g.mat[0][0] = 1/sqrt(2); g.mat[0][1] = 1/sqrt(2);
     g.mat[1][0] = 1/sqrt(2); g.mat[1][1] = -1/sqrt(2);
     g.name = "H";
