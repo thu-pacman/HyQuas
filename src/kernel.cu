@@ -13,7 +13,7 @@ inline void __checkCudaErrors(cudaError_t err, const char *file, const int line)
 }
 
 const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
-const int THREAD_DEP = 6; // 1 << THREAD_DEP threads per block
+const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
@@ -36,9 +36,13 @@ __global__ void controlledNotGate(ComplexArray a, int numQubit_, int controlQubi
         if (!((i >> controlQubit) & 1))
             continue;
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (1 << targetQubit);
-        qreal real = a.real[lo]; a.real[lo] = a.real[hi]; a.real[hi] = real;
-        qreal imag = a.imag[lo]; a.imag[lo] = a.imag[hi]; a.imag[hi] = imag;
+        qindex hi = lo | (qindex(1) << targetQubit);
+        qreal real = a.real[lo];
+        qreal imag = a.imag[lo];
+        a.real[lo] = a.real[hi];
+        a.imag[lo] = a.imag[hi];
+        a.real[hi] = real;
+        a.imag[hi] = imag;
     }
 }
 
@@ -49,7 +53,7 @@ __global__ void hadamardGate(ComplexArray a, int numQubit_, int targetQubit, qre
     qindex mask = (qindex(1) << targetQubit) - 1;
     for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (1 << targetQubit);
+        qindex hi = lo | (qindex(1) << targetQubit);
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
@@ -69,7 +73,7 @@ __global__ void controlAlphaBetaGate(ComplexArray a, int numQubit_, int controlQ
         if (!((i >> controlQubit) & 1))
             continue;
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (1 << targetQubit);
+        qindex hi = lo | (qindex(1) << targetQubit);
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
@@ -129,11 +133,10 @@ __global__ void reduce(qreal* g_idata, qreal *g_odata, unsigned int n, unsigned 
     __shared__ qreal sdata[blockSize];
     unsigned tid = threadIdx.x;
     unsigned idx = blockIdx.x * blockSize + threadIdx.x;
-    unsigned halfGrid = gridSize >> 1;
+    unsigned twoGrid = gridSize << 1;
     sdata[tid] = 0;
-    for (int i = idx; i < n; i += gridSize) {
-        sdata[tid] += g_idata[i] + g_idata[i + halfGrid];
-        i += gridSize;
+    for (int i = idx; i < n; i += twoGrid) {
+        sdata[tid] += g_idata[i] + g_idata[i + gridSize];
     }
     __syncthreads();
     blockReduce<blockSize>(sdata, tid);
@@ -167,7 +170,7 @@ qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit
     measure<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, targetQubit);
     checkCudaErrors(cudaMalloc(&ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
     reduce<1<<THREAD_DEP><<<1<<REDUCE_BLOCK_DEP, 1<<THREAD_DEP>>>
-        (ans1, ans2, totalBlocks, totalBlocks >> (THREAD_DEP + REDUCE_BLOCK_DEP - 1));
+        (ans1, ans2, totalBlocks, 1 << (THREAD_DEP + REDUCE_BLOCK_DEP));
     checkCudaErrors(cudaMallocHost(&ans3, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
     checkCudaErrors(cudaMemcpy(ans3, ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP), cudaMemcpyDeviceToHost));
     qreal ret = 0;
