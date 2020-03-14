@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
 project(QCSimulatorRoot CXX)
+set(CMAKE_CXX_FLAGS "-std=c++0x -O3 -g -Wall")
 
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
 
 set(TASKS GHZ_QFT random)
-set(CMAKE_CXX_FLAGS "-std=c++11 -O3 -g -Wall")
 
 foreach(TASK IN LISTS TASKS)
 	message(STATUS "Compiling ${TASK}")
