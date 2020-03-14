@@ -1,6 +1,7 @@
 #pragma once
 
 typedef double qreal;
+typedef int qindex;
 
 struct Complex {
     qreal real;
@@ -16,8 +17,7 @@ struct Complex {
     }
 };
 
-struct ComplexArray
-{
+struct ComplexArray {
     qreal *real;
     qreal *imag;
 };

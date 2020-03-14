@@ -13,7 +13,7 @@ void destroyQuESTEnv(QuESTEnv& env);
 Qureg createQureg(int numQubits, const QuESTEnv& env);
 void destroyQureg(Qureg& q, const QuESTEnv& env);
 qreal calcProbOfOutcome(Qureg& q, int measureQubit, int outcome);
-Complex getAmp(Qureg& q, long long int index);
+Complex getAmp(Qureg& q, qindex index);
 
 // in gates.cpp
 void controlledNot(Qureg& q, int controlQubit, int targetQubit);

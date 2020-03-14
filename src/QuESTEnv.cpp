@@ -7,5 +7,5 @@ QuESTEnv createQuESTEnv() {
 }
 
 void destroyQuESTEnv(QuESTEnv& env) {
-    printf("destroy env: just return!");
+    printf("destroy env: just return!\n");
 }

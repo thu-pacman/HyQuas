@@ -1,5 +1,7 @@
 #include "kernel.h"
 #include <cstdio>
+#include <assert.h>
+using namespace std;
 
 #define checkCudaErrors(err)  __checkCudaErrors (err, __FILE__, __LINE__)
 inline void __checkCudaErrors(cudaError_t err, const char *file, const int line) {
@@ -10,22 +12,153 @@ inline void __checkCudaErrors(cudaError_t err, const char *file, const int line)
     }
 }
 
-const int SINGLE_SIZE_DEP = 5; // handle 1 << SINGLE_SIZE_DEP items per thread
-const int THREAD_DEP = 8; // 1 << THREAD_DEP threads per block
-
-__global__ void initZeroState(ComplexArray& a) {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;
-    for (int i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++)
-        a.real[i] = 1;
-    for (int i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++)
-        a.imag[i] = 0;
-}
-
+const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
+const int THREAD_DEP = 6; // 1 << THREAD_DEP threads per block
+const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
-    int nVec = 1 << numQubits;
-    checkCudaErrors(cudaMalloc(&deviceStateVec.real, sizeof(qreal) << numQubits));
-    checkCudaErrors(cudaMalloc(&deviceStateVec.imag, sizeof(qreal) << numQubits));
-    initZeroState<<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec);
-    printf("init end\n");
+    assert(numQubits > (SINGLE_SIZE_DEP +THREAD_DEP + 1 + REDUCE_BLOCK_DEP + THREAD_DEP + 1));
+    assert(numQubits < 31);
+    size_t size = sizeof(qreal) << numQubits;
+    checkCudaErrors(cudaMalloc(&deviceStateVec.real, size));
+    checkCudaErrors(cudaMalloc(&deviceStateVec.imag, size));
+    checkCudaErrors(cudaMemset(deviceStateVec.real, 0, size));
+    checkCudaErrors(cudaMemset(deviceStateVec.imag, 0, size));
+    qreal one = 1;
+    checkCudaErrors(cudaMemcpy(deviceStateVec.real, &one, sizeof(qreal), cudaMemcpyHostToDevice)); // state[0] = 1
+}
+
+template <unsigned int blockSize>
+__global__ void controlledGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, Complex* g) {
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        if (!((i >> controlQubit) & 1))
+            continue;
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qindex hi = lo | (1 << targetQubit);
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = g[0].real * loReal - g[0].imag * loImag + g[1].real * hiReal - g[1].imag * hiImag;
+        a.imag[lo] = g[0].real * loImag + g[0].imag * loReal + g[1].real * hiImag + g[1].imag * hiReal;
+        a.real[hi] = g[2].real * loReal - g[2].imag * loImag + g[3].real * hiReal - g[3].imag * hiImag;
+        a.imag[hi] = g[2].real * loImag + g[2].imag * loReal + g[3].real * hiImag + g[3].imag * hiReal;
+    }
+}
+
+template <unsigned int blockSize>
+__global__ void normalGate(ComplexArray a, int numQubit_, int targetQubit, Complex* g) {
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qindex hi = lo | (1 << targetQubit);
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = g[0].real * loReal - g[0].imag * loImag + g[1].real * hiReal - g[1].imag * hiImag;
+        a.imag[lo] = g[0].real * loImag + g[0].imag * loReal + g[1].real * hiImag + g[1].imag * hiReal;
+        a.real[hi] = g[2].real * loReal - g[2].imag * loImag + g[3].real * hiReal - g[3].imag * hiImag;
+        a.imag[hi] = g[2].real * loImag + g[2].imag * loReal + g[3].real * hiImag + g[3].imag * hiReal;
+    }
+}
+
+void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>& gates) {
+    int numQubit_ = numQubits - 1;
+    int nVec = 1 << numQubit_;
+    Complex* g;
+    checkCudaErrors(cudaMalloc(&g, sizeof(Complex) * 4));
+    Complex z = kernelGetAmp(deviceStateVec, 0);
+    for (auto gate: gates) {
+        checkCudaErrors(cudaMemcpy(g, gate.mat[0], sizeof(Complex) * 4, cudaMemcpyHostToDevice));
+        if (gate.controlQubit != -1) {
+            controlledGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, g);
+        } else {
+            normalGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                deviceStateVec, numQubit_, gate.targetQubit, g);
+        }
+    }
+}
+
+template <unsigned int blockSize>
+__device__ void warpReduce(volatile qreal *sdata, unsigned int tid) {
+    if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
+    if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
+    if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
+    if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
+    if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
+    if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
+}
+
+template <unsigned int blockSize>
+__device__ void blockReduce(volatile qreal *sdata, unsigned int tid) {
+    if (blockSize >= 512) { if (tid < 256) { sdata[tid] += sdata[tid + 256]; } __syncthreads(); }
+    if (blockSize >= 256) { if (tid < 128) { sdata[tid] += sdata[tid + 128]; } __syncthreads(); }
+    if (blockSize >= 128) { if (tid < 64) { sdata[tid] += sdata[tid + 64]; } __syncthreads(); }
+    if (tid < 32) warpReduce<blockSize>(sdata, tid);
+}
+
+template <unsigned int blockSize>
+__global__ void reduce(qreal* g_idata, qreal *g_odata, unsigned int n, unsigned int gridSize) {
+    __shared__ qreal sdata[blockSize];
+    unsigned tid = threadIdx.x;
+    unsigned idx = blockIdx.x * blockSize + threadIdx.x;
+    unsigned halfGrid = gridSize >> 1;
+    sdata[tid] = 0;
+    for (int i = idx; i < n; i += gridSize) {
+        sdata[tid] += g_idata[i] + g_idata[i + halfGrid];
+        i += gridSize;
+    }
+    __syncthreads();
+    blockReduce<blockSize>(sdata, tid);
+    if (tid == 0) g_odata[blockIdx.x] = sdata[0];
+}
+
+template <unsigned int blockSize>
+__global__ void measure(ComplexArray a, qreal* ans, int numQubit_, int targetQubit) {
+    __shared__ qreal sdata[blockSize];
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    int tid = threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    sdata[tid] = 0;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        sdata[tid] += loReal * loReal + loImag * loImag;
+    }
+    __syncthreads();
+    blockReduce<blockSize>(sdata, tid);
+    if (tid == 0) ans[blockIdx.x] = sdata[0];
+}
+
+qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit) {
+    int numQubit_ = numQubits - 1;
+    int nVec = 1 << numQubit_;
+    int totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
+    qreal *ans1, *ans2, *ans3;
+    checkCudaErrors(cudaMalloc(&ans1, sizeof(qreal) * totalBlocks));
+    measure<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, targetQubit);
+    checkCudaErrors(cudaMalloc(&ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
+    reduce<1<<THREAD_DEP><<<1<<REDUCE_BLOCK_DEP, 1<<THREAD_DEP>>>
+        (ans1, ans2, totalBlocks, totalBlocks >> THREAD_DEP >> REDUCE_BLOCK_DEP >> 1);
+    checkCudaErrors(cudaMallocHost(&ans3, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
+    checkCudaErrors(cudaMemcpy(ans3, ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP), cudaMemcpyDeviceToHost));
+    qreal ret = 0;
+    for (int i = 0; i < (1<<THREAD_DEP); i++)
+        ret += ans3[i];
+    checkCudaErrors(cudaFree(ans1));
+    checkCudaErrors(cudaFree(ans2));
+    checkCudaErrors(cudaFreeHost(ans3));
+    return ret;
+}
+
+Complex kernelGetAmp(ComplexArray& deviceStateVec, qindex idx) {
+    Complex ret;
+    cudaMemcpy(&ret.real, deviceStateVec.real + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&ret.imag, deviceStateVec.imag + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
+    return ret;
 }

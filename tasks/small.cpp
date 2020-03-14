@@ -464,7 +464,6 @@ int main (int narg, char *argv[]) {
     controlledRotateZ(q, 25, 27, 0.785398);
     controlledRotateZ(q, 26, 27, 1.5708);
     hadamard(q, 27);
-    q.dumpGates();
     q.run();
 	/* end of QFT circuit */
 
