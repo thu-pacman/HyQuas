@@ -50,7 +50,7 @@ __global__ void controlledFixGate(ComplexArray a, int numQubit_, int controlQubi
 
 
 template <unsigned int blockSize, GateType gate>
-__global__ void fixGate(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+__global__ void fixGate(ComplexArray a, int numQubit_, int targetQubit) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     qindex mask = (qindex(1) << targetQubit) - 1;
     for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
@@ -61,6 +61,7 @@ __global__ void fixGate(ComplexArray a, int numQubit_, int targetQubit, qreal re
             qreal loImag = a.imag[lo];
             qreal hiReal = a.real[hi];
             qreal hiImag = a.imag[hi];
+            qreal recRoot2 = 1/sqrt(float(2));
             a.real[lo] = recRoot2 * (loReal + hiReal);
             a.imag[lo] = recRoot2 * (loImag + hiImag);
             a.real[hi] = recRoot2 * (loReal - hiReal);
@@ -99,20 +100,20 @@ enum GateImpl {
 
 GateImpl toImpl(GateType type) {
     switch (type) {
-        GateHadamard: return GateImplFix;
-        GateCNot: return GateImplCFix;
-        GateCPauliY: return GateImplCFix;
-        GateCRotateX: return GateImplCAlphaBeta;
-        GateCRotateY: return GateImplCAlphaBeta;
-        GateCRotateZ: return GateImplCAlphaBeta;
-        GatePauliX: return GateImplFix;
-        GatePauliY: return GateImplFix;
-        GatePauliZ: return GateImplFix;
-        GateRotateX: return GateImplAlphaBeta;
-        GateRotateY: return GateImplAlphaBeta;
-        GateRotateZ: return GateImplAlphaBeta;
-        GateS: return GateImplFix;
-        GateT: return GateImplFix;
+        case GateHadamard: return GateImplFix;
+        case GateCNot: return GateImplCFix;
+        case GateCPauliY: return GateImplCFix;
+        case GateCRotateX: return GateImplCAlphaBeta;
+        case GateCRotateY: return GateImplCAlphaBeta;
+        case GateCRotateZ: return GateImplCAlphaBeta;
+        case GatePauliX: return GateImplFix;
+        case GatePauliY: return GateImplFix;
+        case GatePauliZ: return GateImplFix;
+        case GateRotateX: return GateImplAlphaBeta;
+        case GateRotateY: return GateImplAlphaBeta;
+        case GateRotateZ: return GateImplAlphaBeta;
+        case GateS: return GateImplFix;
+        case GateT: return GateImplFix;
         default: assert(false);
     }
     // shouldn't reach here, just for compile
@@ -126,7 +127,7 @@ void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>&
         switch (toImpl(gate.type)) {
             case GateImplCFix: {
                 switch (gate.type) {
-                    GateCNot: {
+                    case GateCNot: {
                         controlledFixGate<1<<THREAD_DEP, GateCNot><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                         break;
                     }
@@ -136,8 +137,9 @@ void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>&
             }
             case GateImplFix: {
                 switch (gate.type) {
-                    GateHadamard: {
-                        fixGate<1<<THREAD_DEP, GateHadamard><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real);
+                    case GateHadamard: {
+                        fixGate<1<<THREAD_DEP, GateHadamard><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                        break;
                     }
                     default: assert(false);
                 }
