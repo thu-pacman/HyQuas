@@ -4,7 +4,7 @@ set -e
 
 # ensure GPUs
 #GPU_NUMS="1 2 4 8"
-GPU_NUMS="1"
+GPU_NUMS="1 2"
 
 # load CUDA with spack
 source /opt/spack/share/spack/setup-env.sh
@@ -45,11 +45,21 @@ for task in $TASKS; do
 		set -e
 		/usr/bin/time -v ../../../$task
 	    	for f in $(ls *); do
-			if [ $gpu -eq 1 ]; then
-				echo -e "\nOutput file: $f"
+			ANSWER_PATH=../../../../tasks/answer/$task/$f
+			if [ -f $ANSWER_PATH ]; then
+				# if answer exists, compare with answer
+				echo -ne "Checking $f against $ANSWER_PATH: "
+				diff $ANSWER_PATH $f
+				echo "PASS"
+			elif [ $gpu -eq 1 ]; then
+				# or generate temporary answer by 1 GPU
+				echo -e "\nDetected $f with no answer present:"
 				cat $f
 			else
-				diff $f ../1/$f
+				# compare multiple-GPU result with 1 GPU
+				echo -ne "Checking $f against ../1/$f: "
+				diff ../1/$f $f
+				echo "PASS"
 			fi
 		done
 		cd ..
