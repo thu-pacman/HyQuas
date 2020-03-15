@@ -21,9 +21,9 @@ int main (int narg, char *argv[]) {
         return 0;
     }
 
-    Qureg q = createQureg(30, Env);
-    double t3 = get_wall_time();
-    printf("init %.12f\n", t3 - t1);
+    Qureg q = createQureg(29, Env);
+    // double t3 = get_wall_time();
+    // printf("init %.12f\n", t3 - t1);
 
     float q_measure[30];
     int c[30];
@@ -60,7 +60,7 @@ int main (int narg, char *argv[]) {
     controlledNot(q, 25, 26);
     controlledNot(q, 26, 27);
     controlledNot(q, 27, 28);
-    controlledNot(q, 28, 29);
+    // controlledNot(q, 28, 29);
 	/* end of GHZ circuit */
 
 	/* QFT starts */
@@ -470,40 +470,40 @@ int main (int narg, char *argv[]) {
     controlledRotateZ(q, 25, 27, 0.785398);
     controlledRotateZ(q, 26, 27, 1.5708);
     hadamard(q, 27);
-    controlledRotateZ(q, 0, 28, 1.17033e-08);
-    controlledRotateZ(q, 1, 28, 2.34067e-08);
-    controlledRotateZ(q, 2, 28, 4.68134e-08);
-    controlledRotateZ(q, 3, 28, 9.36268e-08);
-    controlledRotateZ(q, 4, 28, 1.87254e-07);
-    controlledRotateZ(q, 5, 28, 3.74507e-07);
-    controlledRotateZ(q, 6, 28, 7.49014e-07);
-    controlledRotateZ(q, 7, 28, 1.49803e-06);
-    controlledRotateZ(q, 8, 28, 2.99606e-06);
-    controlledRotateZ(q, 9, 28, 5.99211e-06);
-    controlledRotateZ(q, 10, 28, 1.19842e-05);
-    controlledRotateZ(q, 11, 28, 2.39684e-05);
-    controlledRotateZ(q, 12, 28, 4.79369e-05);
-    controlledRotateZ(q, 13, 28, 9.58738e-05);
-    controlledRotateZ(q, 14, 28, 0.000191748);
-    controlledRotateZ(q, 15, 28, 0.000383495);
-    controlledRotateZ(q, 16, 28, 0.00076699);
-    controlledRotateZ(q, 17, 28, 0.00153398);
-    controlledRotateZ(q, 18, 28, 0.00306796);
-    controlledRotateZ(q, 19, 28, 0.00613592);
-    controlledRotateZ(q, 20, 28, 0.0122718);
-    controlledRotateZ(q, 21, 28, 0.0245437);
-    controlledRotateZ(q, 22, 28, 0.0490874);
-    controlledRotateZ(q, 23, 28, 0.0981748);
-    controlledRotateZ(q, 24, 28, 0.19635);
-    controlledRotateZ(q, 25, 28, 0.392699);
-    controlledRotateZ(q, 26, 28, 0.785398);
-    controlledRotateZ(q, 27, 28, 1.5708);
-    hadamard(q, 28);
-    double t4 = get_wall_time();
-    printf("compile %.12f\n", t4 - t3);
-    q.run();
-    double t5 = get_wall_time();
-    printf("run %.12f\n", t5 - t4);
+    // controlledRotateZ(q, 0, 28, 1.17033e-08);
+    // controlledRotateZ(q, 1, 28, 2.34067e-08);
+    // controlledRotateZ(q, 2, 28, 4.68134e-08);
+    // controlledRotateZ(q, 3, 28, 9.36268e-08);
+    // controlledRotateZ(q, 4, 28, 1.87254e-07);
+    // controlledRotateZ(q, 5, 28, 3.74507e-07);
+    // controlledRotateZ(q, 6, 28, 7.49014e-07);
+    // controlledRotateZ(q, 7, 28, 1.49803e-06);
+    // controlledRotateZ(q, 8, 28, 2.99606e-06);
+    // controlledRotateZ(q, 9, 28, 5.99211e-06);
+    // controlledRotateZ(q, 10, 28, 1.19842e-05);
+    // controlledRotateZ(q, 11, 28, 2.39684e-05);
+    // controlledRotateZ(q, 12, 28, 4.79369e-05);
+    // controlledRotateZ(q, 13, 28, 9.58738e-05);
+    // controlledRotateZ(q, 14, 28, 0.000191748);
+    // controlledRotateZ(q, 15, 28, 0.000383495);
+    // controlledRotateZ(q, 16, 28, 0.00076699);
+    // controlledRotateZ(q, 17, 28, 0.00153398);
+    // controlledRotateZ(q, 18, 28, 0.00306796);
+    // controlledRotateZ(q, 19, 28, 0.00613592);
+    // controlledRotateZ(q, 20, 28, 0.0122718);
+    // controlledRotateZ(q, 21, 28, 0.0245437);
+    // controlledRotateZ(q, 22, 28, 0.0490874);
+    // controlledRotateZ(q, 23, 28, 0.0981748);
+    // controlledRotateZ(q, 24, 28, 0.19635);
+    // controlledRotateZ(q, 25, 28, 0.392699);
+    // controlledRotateZ(q, 26, 28, 0.785398);
+    // controlledRotateZ(q, 27, 28, 1.5708);
+    // hadamard(q, 28);
+    // double t4 = get_wall_time();
+    // printf("compile %.12f\n", t4 - t3);
+    // q.run();
+    // double t5 = get_wall_time();
+    // printf("run %.12f\n", t5 - t4);
 	/* end of QFT circuit */
 
     printf("\n");
@@ -521,7 +521,7 @@ int main (int narg, char *argv[]) {
 	fprintf(fvec, "Amplitude of %dth state vector: %12.6f,%12.6f\n", i, amp.real, amp.imag);
     }
 
-    double t2 = get_wall_time(); printf("measure %.12f\n", t2 - t5);
+    double t2 = get_wall_time();
     printf("Complete the simulation takes time %12.6f seconds.", t2 - t1);
     printf("\n");
     destroyQureg(q, Env);

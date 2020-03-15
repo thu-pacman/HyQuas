@@ -30,7 +30,7 @@ void controlledRotateY(Qureg& q, int controlQubit, int targetQubit, qreal angle)
 void controlledRotateZ(Qureg& q, int controlQubit, int targetQubit, qreal angle) {
     assert(controlQubit != targetQubit);
     Gate g;
-    g.type = GateCAlphaBeta;
+    g.type = GateCRotateZ;
     g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
     g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
     g.name = "CN";

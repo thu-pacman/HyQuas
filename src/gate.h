@@ -5,8 +5,19 @@
 
 enum GateType {
     GateHadamard,
-    GateCAlphaBeta,
-    GateCNot
+    GateCNot,
+    GateCPauliY,
+    GateCRotateX,
+    GateCRotateY,
+    GateCRotateZ,
+    GatePauliX,
+    GatePauliY,
+    GatePauliZ,
+    GateRotateX,
+    GateRotateY,
+    GateRotateZ,
+    GateS,
+    GateT
 };
 
 struct Gate {
