@@ -37,7 +37,8 @@ for task in $TASKS; do
 				echo "Not even one GPU usable, abort."
 				exit 1
 			else
-				echo "Skip due to not enough GPUs"
+				echo "Skipped due to not enough GPUs"
+				cd ../
 				continue
 			fi
 		fi
