@@ -4,7 +4,7 @@ set -e
 
 # ensure GPUs
 #GPU_NUMS="1 2 4 8"
-GPU_NUMS="1 2"
+GPU_NUMS="1"
 
 # load CUDA with spack
 source /opt/spack/share/spack/setup-env.sh
