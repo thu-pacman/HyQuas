@@ -505,6 +505,7 @@ int main (int narg, char *argv[]) {
     // double t5 = get_wall_time();
     // printf("run %.12f\n", t5 - t4);
 	/* end of QFT circuit */
+    q.run();
 
     printf("\n");
     for(long long int i=0; i<30; ++i){

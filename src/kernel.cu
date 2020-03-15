@@ -28,57 +28,57 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
     checkCudaErrors(cudaMemcpy(deviceStateVec.real, &one, sizeof(qreal), cudaMemcpyHostToDevice)); // state[0] = 1
 }
 
-template <unsigned int blockSize, GateType gate>
-__global__ void controlledFixGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    qindex mask = (qindex(1) << targetQubit) - 1;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
-        if (!((i >> controlQubit) & 1))
-            continue;
-        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+
+#define SINGLE_GATE_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit) - 1; \
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) { \
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask); \
         qindex hi = lo | (qindex(1) << targetQubit);
-        if (gate == GateCNot) {
-            qreal real = a.real[lo];
-            qreal imag = a.imag[lo];
-            a.real[lo] = a.real[hi];
-            a.imag[lo] = a.imag[hi];
-            a.real[hi] = real;
-            a.imag[hi] = imag;
-        }
-    }
+
+#define SINGLE_GATE_END }
+
+#define CONTROL_GATE_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit) - 1; \
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) { \
+        if (!((i >> controlQubit) & 1)) \
+            continue; \
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask); \
+        qindex hi = lo | (qindex(1) << targetQubit);
+
+#define CONTROL_GATE_END }
+        
+template <unsigned int blockSize>
+__global__ void controlledNotGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+    CONTROL_GATE_BEGIN {
+        qreal real = a.real[lo];
+        qreal imag = a.imag[lo];
+        a.real[lo] = a.real[hi];
+        a.imag[lo] = a.imag[hi];
+        a.real[hi] = real;
+        a.imag[hi] = imag;
+    } CONTROL_GATE_END
 }
 
 
-template <unsigned int blockSize, GateType gate>
-__global__ void fixGate(ComplexArray a, int numQubit_, int targetQubit) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    qindex mask = (qindex(1) << targetQubit) - 1;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
-        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (qindex(1) << targetQubit);
-        if (gate == GateHadamard) {
-            qreal loReal = a.real[lo];
-            qreal loImag = a.imag[lo];
-            qreal hiReal = a.real[hi];
-            qreal hiImag = a.imag[hi];
-            qreal recRoot2 = 1/sqrt(float(2));
-            a.real[lo] = recRoot2 * (loReal + hiReal);
-            a.imag[lo] = recRoot2 * (loImag + hiImag);
-            a.real[hi] = recRoot2 * (loReal - hiReal);
-            a.imag[hi] = recRoot2 * (loImag - hiImag);
-        }
-    }
+template <unsigned int blockSize>
+__global__ void hadamardGate(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+    SINGLE_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = recRoot2 * (loReal + hiReal);
+        a.imag[lo] = recRoot2 * (loImag + hiImag);
+        a.real[hi] = recRoot2 * (loReal - hiReal);
+        a.imag[hi] = recRoot2 * (loImag - hiImag);
+    } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
 __global__ void controlAlphaBetaGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, Complex alpha, Complex beta) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    qindex mask = (qindex(1) << targetQubit) - 1;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
-        if (!((i >> controlQubit) & 1))
-            continue;
-        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qindex hi = lo | (qindex(1) << targetQubit);
+    CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
@@ -87,37 +87,36 @@ __global__ void controlAlphaBetaGate(ComplexArray a, int numQubit_, int controlQ
         a.imag[lo] = alpha.real * loImag + alpha.imag * loReal - beta.real * hiImag + beta.imag * hiReal;
         a.real[hi] = beta.real * loReal - beta.imag * loImag + alpha.real * hiReal + alpha.imag * hiImag;
         a.imag[hi] = beta.real * loImag + beta.imag * loReal + alpha.real * hiImag - alpha.imag * hiReal;
-    }
+    } CONTROL_GATE_END
 }
 
 
 enum GateImpl {
-    GateImplCFix,
+    GateImplCNot,
     GateImplCAlphaBeta,
-    GateImplFix,
-    GateImplAlphaBeta
+    GateImplHadamard
 };
 
 GateImpl toImpl(GateType type) {
     switch (type) {
-        case GateHadamard: return GateImplFix;
-        case GateCNot: return GateImplCFix;
-        case GateCPauliY: return GateImplCFix;
-        case GateCRotateX: return GateImplCAlphaBeta;
-        case GateCRotateY: return GateImplCAlphaBeta;
+        case GateHadamard: return GateImplHadamard;
+        case GateCNot: return GateImplCNot;
+        // case GateCPauliY: return GateImplCFix;
+        // case GateCRotateX: return GateImplCAlphaBeta;
+        // case GateCRotateY: return GateImplCAlphaBeta;
         case GateCRotateZ: return GateImplCAlphaBeta;
-        case GatePauliX: return GateImplFix;
-        case GatePauliY: return GateImplFix;
-        case GatePauliZ: return GateImplFix;
-        case GateRotateX: return GateImplAlphaBeta;
-        case GateRotateY: return GateImplAlphaBeta;
-        case GateRotateZ: return GateImplAlphaBeta;
-        case GateS: return GateImplFix;
-        case GateT: return GateImplFix;
+        // case GatePauliX: return GateImplFix;
+        // case GatePauliY: return GateImplFix;
+        // case GatePauliZ: return GateImplFix;
+        // case GateRotateX: return GateImplAlphaBeta;
+        // case GateRotateY: return GateImplAlphaBeta;
+        // case GateRotateZ: return GateImplAlphaBeta;
+        // case GateS: return GateImplFix;
+        // case GateT: return GateImplFix;
         default: assert(false);
     }
     // shouldn't reach here, just for compile
-    return GateImplFix;
+    return GateImplCNot;
 }
 
 void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>& gates) {
@@ -125,24 +124,12 @@ void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>&
     int nVec = 1 << numQubit_;
     for (auto gate: gates) {
         switch (toImpl(gate.type)) {
-            case GateImplCFix: {
-                switch (gate.type) {
-                    case GateCNot: {
-                        controlledFixGate<1<<THREAD_DEP, GateCNot><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
-                        break;
-                    }
-                    default: assert(false);
-                }
+            case GateImplCNot: {
+                controlledNotGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                 break;
             }
-            case GateImplFix: {
-                switch (gate.type) {
-                    case GateHadamard: {
-                        fixGate<1<<THREAD_DEP, GateHadamard><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                        break;
-                    }
-                    default: assert(false);
-                }
+            case GateImplHadamard: {
+                hadamardGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real);
                 break;
             }
             case GateImplCAlphaBeta: {
