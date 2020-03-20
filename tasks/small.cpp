@@ -513,8 +513,11 @@ int main (int narg, char *argv[]) {
     controlledNot(q, 19, 17);
     rotateX(q, 25, 2.852692622378647);
     sGate(q, 22);
+    q.dumpGates();
+    double t3 = get_wall_time();
     q.run();
-
+    double t4 = get_wall_time();
+    printf("run %12.6f\n", t4 - t3);
     printf("\n");
     for(long long int i=0; i<29; ++i){
         q_measure[i] = calcProbOfOutcome(q,  i, 1);

@@ -2,6 +2,7 @@
 
 typedef double qreal;
 typedef int qindex;
+const int LOCAL_QUBIT_SIZE = 10; // TODO find the best value
 
 struct Complex {
     qreal real;

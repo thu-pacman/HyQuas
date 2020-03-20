@@ -11,7 +11,9 @@ public:
     Qureg(int numQubits, const QuESTEnv& env): numQubits(numQubits), env(env) {}
     void run();
     void addGate(const Gate& gate) {
-        gates.push_back(gate);
+        // WARNING
+        if (gate.controlQubit < LOCAL_QUBIT_SIZE && gate.targetQubit < LOCAL_QUBIT_SIZE)
+            gates.push_back(gate);
     }
     qreal measure(int targetQubit); // probability of zero state
     void dumpGates();

@@ -25,11 +25,12 @@ void destroyQureg(Qureg& q, const QuESTEnv& env) {
 
 void Qureg::run() {
     kernelInit(deviceStateVec, numQubits);
-    kernelExec(deviceStateVec, numQubits, gates);
+    kernelExecSmall(deviceStateVec, numQubits, gates);
 }
 
 void Qureg::dumpGates() {
     int totalGates = gates.size();
+    printf("total Gates: %d\n", totalGates);
     int L = 4;
     for (const Gate& gate: gates) {
         for (int i = 0; i < numQubits; i++) {
