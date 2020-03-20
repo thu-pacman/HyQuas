@@ -12,7 +12,7 @@ spack load cuda@10.2.89
 
 # detect tasks
 cd tasks
-TASKS=$(ls *.cpp | tr ' ' '\n' | cut -d '.' -f 1 | xargs)
+TASKS=$(ls answer | tr ' ' '\n' | xargs)
 echo "Tasks to run: $TASKS"
 cd ..
 
