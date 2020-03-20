@@ -23,7 +23,6 @@ int main (int narg, char *argv[]) {
     Qureg q = createQureg(29, Env);
 
     float q_measure[30];
-#if 1
     tGate(q, 25);
     controlledNot(q, 28, 21);
     controlledRotateX(q, 17, 5, 0.3293660327520663);
@@ -514,7 +513,6 @@ int main (int narg, char *argv[]) {
     controlledNot(q, 19, 17);
     rotateX(q, 25, 2.852692622378647);
     sGate(q, 22);
-#endif
     q.run();
 
     printf("\n");

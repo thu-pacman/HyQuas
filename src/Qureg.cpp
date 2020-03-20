@@ -30,23 +30,20 @@ void Qureg::run() {
 
 void Qureg::dumpGates() {
     int totalGates = gates.size();
-    const int GATE_PER_LINE = 40;
-    for (int l = 0; l < totalGates; l += GATE_PER_LINE) {
+    int L = 4;
+    for (const Gate& gate: gates) {
         for (int i = 0; i < numQubits; i++) {
-            printf("%2d:", i);
-            for (int j = l; j < std::min(totalGates, l + GATE_PER_LINE); j++) {
-                const Gate& gate = gates[j];
-                int l = gate.name.length() + 1;
-                if (i == gate.controlQubit) {
-                    printf(".");
-                    for (int j = 1; j < l; j++) printf("-");
-                } else if (i == gate.targetQubit) {
-                    printf("%s-", gate.name.c_str());
-                } else {
-                    for (int j = 0; j < l; j++) printf("-");
-                }
+            if (i == gate.controlQubit) {
+                printf(".");
+                for (int j = 1; j < L; j++) printf(" ");
+            } else if (i == gate.targetQubit) {
+                printf("%s", gate.name.c_str());
+                for (int j = gate.name.length(); j < L; j++)
+                    printf(" ");
+            } else {
+                printf("|");
+                for (int j = 1; j < L; j++) printf(" ");
             }
-            printf("\n");
         }
         printf("\n");
     }

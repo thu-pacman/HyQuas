@@ -28,4 +28,7 @@ struct Gate {
     int controlQubit; // -1 if no control
     Gate() = default;
     Gate(const Gate&) = default;
+    bool isControlGate() {
+        return controlQubit != -1;
+    }
 };
