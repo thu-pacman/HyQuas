@@ -76,31 +76,45 @@ __global__ void controlledPauliYGate(ComplexArray a, int numQubit_, int controlQ
 }
 
 template <unsigned int blockSize>
-__global__ void controlAlphaBetaGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, Complex alpha, Complex beta) {
+__global__ void controlledRotateXGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
         qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha.real * loReal - alpha.imag * loImag - beta.real * hiReal - beta.imag * hiImag;
-        a.imag[lo] = alpha.real * loImag + alpha.imag * loReal - beta.real * hiImag + beta.imag * hiReal;
-        a.real[hi] = beta.real * loReal - beta.imag * loImag + alpha.real * hiReal + alpha.imag * hiImag;
-        a.imag[hi] = beta.real * loImag + beta.imag * loReal + alpha.real * hiImag - alpha.imag * hiReal;
+        a.real[lo] = alpha * loReal + beta * hiImag;
+        a.imag[lo] = alpha * loImag - beta * hiReal;
+        a.real[hi] = alpha * hiReal + beta * loImag;
+        a.imag[hi] = alpha * hiImag - beta * loReal;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void alphaBetaGate(ComplexArray a, int numQubit_, int targetQubit, Complex alpha, Complex beta) {
-    SINGLE_GATE_BEGIN {
+__global__ void controlledRotateYGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+    CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
         qreal hiReal = a.real[hi];
         qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha.real * loReal - alpha.imag * loImag - beta.real * hiReal - beta.imag * hiImag;
-        a.imag[lo] = alpha.real * loImag + alpha.imag * loReal - beta.real * hiImag + beta.imag * hiReal;
-        a.real[hi] = beta.real * loReal - beta.imag * loImag + alpha.real * hiReal + alpha.imag * hiImag;
-        a.imag[hi] = beta.real * loImag + beta.imag * loReal + alpha.real * hiImag - alpha.imag * hiReal;
-    } SINGLE_GATE_END
+        a.real[lo] = alpha * loReal - beta * hiReal;
+        a.imag[lo] = alpha * loImag - beta * hiImag;
+        a.real[hi] = beta * loReal + alpha * hiReal;
+        a.imag[hi] = beta * loImag + alpha * hiImag;
+    } CONTROL_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void controlledRotateZGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+    CONTROL_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = alpha * loReal + beta * loImag;
+        a.imag[lo] = alpha * loImag - beta * loReal;
+        a.real[hi] = alpha * hiReal - beta * hiImag;
+        a.imag[hi] = alpha * hiImag + beta * hiReal;
+    } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
@@ -152,6 +166,48 @@ __global__ void pauliZGate(ComplexArray a, int numQubit_, int targetQubit) {
 }
 
 template <unsigned int blockSize>
+__global__ void rotateXGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+    SINGLE_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = alpha * loReal + beta * hiImag;
+        a.imag[lo] = alpha * loImag - beta * hiReal;
+        a.real[hi] = alpha * hiReal + beta * loImag;
+        a.imag[hi] = alpha * hiImag - beta * loReal;
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void rotateYGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+    SINGLE_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = alpha * loReal - beta * hiReal;
+        a.imag[lo] = alpha * loImag - beta * hiImag;
+        a.real[hi] = beta * loReal + alpha * hiReal;
+        a.imag[hi] = beta * loImag + alpha * hiImag;
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void rotateZGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+    SINGLE_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = alpha * loReal + beta * loImag;
+        a.imag[lo] = alpha * loImag - beta * loReal;
+        a.real[hi] = alpha * hiReal - beta * hiImag;
+        a.imag[hi] = alpha * hiImag + beta * hiReal;
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
 __global__ void sGate(ComplexArray a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
         qreal hiReal = a.real[hi];
@@ -171,85 +227,70 @@ __global__ void tGate(ComplexArray a, int numQubit_, int targetQubit, qreal recR
     } SINGLE_GATE_END
 }
 
-enum GateImpl {
-    GateImplCNot,
-    GateImplCAlphaBeta,
-    GateImplCPauliY,
-    GateImplAlphaBeta,
-    GateImplHadamard,
-    GateImplPauliX,
-    GateImplPauliY,
-    GateImplPauliZ,
-    GateImplS,
-    GateImplT
-};
-
-GateImpl toImpl(GateType type) {
-    switch (type) {
-        case GateHadamard: return GateImplHadamard;
-        case GateCNot: return GateImplCNot;
-        case GateCPauliY: return GateImplCPauliY;
-        case GateCRotateX: return GateImplCAlphaBeta;
-        case GateCRotateY: return GateImplCAlphaBeta;
-        case GateCRotateZ: return GateImplCAlphaBeta;
-        case GatePauliX: return GateImplPauliX;
-        case GatePauliY: return GateImplPauliY;
-        case GatePauliZ: return GateImplPauliZ;
-        case GateRotateX: return GateImplAlphaBeta;
-        case GateRotateY: return GateImplAlphaBeta;
-        case GateRotateZ: return GateImplAlphaBeta;
-        case GateS: return GateImplS;
-        case GateT: return GateImplT;
-        default: assert(false);
-    }
-    // shouldn't reach here, just for compile
-    return GateImplCNot;
-}
-
 void kernelExec(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>& gates) {
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
     for (auto gate: gates) {
-        switch (toImpl(gate.type)) {
-            case GateImplCNot: {
+        switch (gate.type) {
+            case GateCNot: {
                 controlledNotGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                 break;
             }
-            case GateImplCPauliY: {
+            case GateCPauliY: {
                 controlledPauliYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                 break;
             }
-            case GateImplCAlphaBeta: {
-                controlAlphaBetaGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0], gate.mat[1][0]);
+            case GateCRotateX: {
+                controlledRotateXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[0][1].imag);
                 break;
             }
-            case GateImplAlphaBeta: {
-                alphaBetaGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0], gate.mat[1][0]);
+            case GateCRotateY: {
+                controlledRotateYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
                 break;
             }
-            case GateImplHadamard: {
+            case GateCRotateZ: {
+                controlledRotateZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                break;
+            }
+            case GateHadamard: {
                 hadamardGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
                 break;
             }
-            case GateImplPauliX: {
+            case GatePauliX: {
                 pauliXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                 break;
             }
-            case GateImplPauliY: {
+            case GatePauliY: {
                 pauliYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                 break;
             }
-            case GateImplPauliZ: {
+            case GatePauliZ: {
                 pauliZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                 break;
             }
-            case GateImplS: {
+            case GateRotateX: {
+                rotateXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[0][1].imag);
+                break;
+            }
+            case GateRotateY: {
+                rotateYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
+                break;
+            }
+            case GateRotateZ: {
+                rotateZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                break;
+            }
+            case GateS: {
                 sGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                 break;
             }
-            case GateImplT: {
+            case GateT: {
                 tGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
                 break;
             }
