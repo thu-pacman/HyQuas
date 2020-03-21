@@ -13,8 +13,8 @@ inline void __checkCudaErrors(cudaError_t err, const char *file, const int line)
 }
 
 struct KernelGate {
-    Complex alpha;
-    Complex beta;
+    qreal alpha;
+    qreal beta;
     int targetQubit;
     int controlQubit;
     GateType type;
@@ -28,15 +28,37 @@ const int MAX_GATE = 1024;
 extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
 
-__device__ inline void alphaBetaGate(int lo, int hi, Complex alpha, Complex beta) {
+__device__ inline void rotateXGate(int lo, int hi, qreal alpha, qreal beta) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
-    real[lo] = alpha.real * loReal - alpha.imag * loImag - beta.real * hiReal - beta.imag * hiImag;
-    imag[lo] = alpha.real * loImag + alpha.imag * loReal - beta.real * hiImag + beta.imag * hiReal;
-    real[hi] = beta.real * loReal - beta.imag * loImag + alpha.real * hiReal + alpha.imag * hiImag;
-    imag[hi] = beta.real * loImag + beta.imag * loReal + alpha.real * hiImag - alpha.imag * hiReal;
+    real[lo] = alpha * loReal + beta * hiImag;
+    imag[lo] = alpha * loImag - beta * hiReal;
+    real[hi] = alpha * hiReal + beta * loImag;
+    imag[hi] = alpha * hiImag - beta * loReal;
+}
+
+__device__ inline void rotateYGate(int lo, int hi, qreal alpha, qreal beta) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = alpha * loReal - beta * hiReal;
+    imag[lo] = alpha * loImag - beta * hiImag;
+    real[hi] = beta * loReal + alpha * hiReal;
+    imag[hi] = beta * loImag + alpha * hiImag;
+}
+
+__device__ inline void rotateZGate(int lo, int hi, qreal alpha, qreal beta){
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = alpha * loReal + beta * loImag;
+    imag[lo] = alpha * loImag - beta * loReal;
+    real[hi] = alpha * hiReal - beta * hiImag;
+    imag[hi] = alpha * hiImag + beta * hiReal;
 }
 
 __device__ inline void hadamardGate(int lo, int hi) {
@@ -127,10 +149,16 @@ __global__ void run(ComplexArray a, int numGates) {
                         pauliYGate(lo, hi);
                         break;
                     }
-                    case GateCRotateX: // no break
-                    case GateCRotateY: // no break
+                    case GateCRotateX: {
+                        rotateXGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        break;
+                    }
+                    case GateCRotateY: {
+                        rotateYGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        break;
+                    }
                     case GateCRotateZ: {
-                        alphaBetaGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        rotateZGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
                         break;
                     }
                     default: {
@@ -161,10 +189,16 @@ __global__ void run(ComplexArray a, int numGates) {
                         pauliZGate(hi);
                         break;
                     }
-                    case GateRotateX:
-                    case GateRotateY:
+                    case GateRotateX: {
+                        rotateXGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        break;
+                    }
+                    case GateRotateY: {
+                        rotateYGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        break;
+                    }
                     case GateRotateZ: {
-                        alphaBetaGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        rotateZGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
                         break;
                     }
                     case GateS: {
@@ -203,8 +237,29 @@ void kernelExecSmall(ComplexArray& deviceStateVec, int numQubits, const vector<G
     KernelGate hostGates[gates.size()];
     assert(gates.size() < MAX_GATE);
     for (int i = 0; i < gates.size(); i++) {
-        hostGates[i].alpha = gates[i].mat[0][0];
-        hostGates[i].beta = gates[i].mat[1][0];
+        switch (gates[i].type) {
+            case GateRotateX: // no break
+            case GateCRotateX: {
+                hostGates[i].alpha = gates[i].mat[0][0].real;
+                hostGates[i].beta = gates[i].mat[0][1].imag;
+                break;
+            }
+            case GateRotateY: // no break
+            case GateCRotateY: {
+                hostGates[i].alpha = gates[i].mat[0][0].real;
+                hostGates[i].beta = gates[i].mat[1][0].real;
+                break;
+            }
+            case GateRotateZ: // no break
+            case GateCRotateZ: {
+                hostGates[i].alpha = gates[i].mat[0][0].real;
+                hostGates[i].beta = - gates[i].mat[0][0].imag;
+                break;
+            }
+            default: {
+                hostGates[i].alpha = hostGates[i].beta = 0;
+            }
+        }
         hostGates[i].targetQubit = gates[i].targetQubit;
         hostGates[i].controlQubit = gates[i].controlQubit;
         hostGates[i].type = gates[i].type;
