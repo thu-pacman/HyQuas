@@ -20,7 +20,7 @@ struct KernelGate {
     GateType type;
 };
 
-__device__ __constant__ double recRoot2 = 1.4142135623730950488016887242097; // WARNING
+__device__ __constant__ double recRoot2 = 0.70710678118654752440084436210485; // WARNING
 __constant__ KernelGate deviceGates[1024];
 
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
@@ -90,35 +90,35 @@ __device__ inline void tGate(int hi) {
 }
 
 template <unsigned int blockSize>
-__global__ void run(ComplexArray a, int numGates, KernelGate* gates) {
+__global__ void run(ComplexArray a, int numGates) {
     int idx = blockIdx.x * blockSize + threadIdx.x;
     int n = 1 << LOCAL_QUBIT_SIZE; // no need for long long
+    qindex prefix = blockIdx.x << LOCAL_QUBIT_SIZE;
     // fetch data
-    for (int i = idx; i < n; i += blockSize) {
-        real[i] = a.real[i];
-        imag[i] = a.imag[i];
+    for (qindex i = idx; i < n; i += blockSize) {
+        real[i] = a.real[i | prefix];
+        imag[i] = a.imag[i | prefix];
     }
     __syncthreads();
-    return;
     // compute
     for (int i = 0; i < numGates; i++) {
-        int controlQubit = gates[i].controlQubit;
-        int targetQubit = gates[i].targetQubit;
+        int controlQubit = deviceGates[i].controlQubit;
+        int targetQubit = deviceGates[i].targetQubit;
         if (controlQubit != -1) {
             int m = 1 << (LOCAL_QUBIT_SIZE - 2);
             int maskTarget = (1 << targetQubit) - 1;
             int maskControl = (1 << controlQubit) - 1;
             for (int j = idx; j < m; j += blockSize) {
                 int lo;
-                if (controlQubit > gates[i].targetQubit) {
-                    lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & maskTarget);
-                    lo = ((lo >> controlQubit) << (controlQubit + 1) | 1) | (lo & maskControl);
+                if (controlQubit > targetQubit) {
+                    lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
+                    lo = ((lo >> controlQubit) << (controlQubit + 1)) | (lo & maskControl) | (1 << controlQubit);
                 } else {
-                    lo = ((i >> controlQubit) << (controlQubit + 1) | 1) | (i & maskTarget);
-                    lo = ((lo >> targetQubit) << (targetQubit + 1)) | (lo & maskControl);
+                    lo = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                    lo = ((lo >> targetQubit) << (targetQubit + 1)) | (lo & maskTarget);
                 }
                 int hi = lo | (1 << targetQubit);
-                switch (gates[i].type) {
+                switch (deviceGates[i].type) {
                     case GateCNot: {
                         pauliXGate(lo, hi);
                         break;
@@ -130,7 +130,7 @@ __global__ void run(ComplexArray a, int numGates, KernelGate* gates) {
                     case GateCRotateX: // no break
                     case GateCRotateY: // no break
                     case GateCRotateZ: {
-                        alphaBetaGate(lo, hi, gates[i].alpha, gates[i].beta);
+                        alphaBetaGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
                         break;
                     }
                     default: {
@@ -142,9 +142,9 @@ __global__ void run(ComplexArray a, int numGates, KernelGate* gates) {
             int m = 1 << (LOCAL_QUBIT_SIZE - 1);
             int maskTarget = (1 << targetQubit) - 1;
             for (int j = idx; j < m; j += blockSize) {
-                int lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & maskTarget);
+                int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
                 int hi = lo | (1 << targetQubit);
-                switch (gates[i].type) {
+                switch (deviceGates[i].type) {
                     case GateHadamard: {
                         hadamardGate(lo, hi);
                         break;
@@ -164,18 +164,37 @@ __global__ void run(ComplexArray a, int numGates, KernelGate* gates) {
                     case GateRotateX:
                     case GateRotateY:
                     case GateRotateZ: {
-                        alphaBetaGate(lo, hi, gates[i].alpha, gates[i].beta);
+                        alphaBetaGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
                         break;
+                    }
+                    case GateS: {
+                        sGate(hi);
+                        break;
+                    }
+                    case GateT: {
+                        tGate(hi);
+                        break;
+                    }
+                    default: {
+                        assert(false);
                     }
                 }
             }
         }
         __syncthreads();
+        // if (idx == 0) {
+        //     printf("%d(%d->%d %d):\n", i, controlQubit, targetQubit, deviceGates[i].type);
+        //     for (int j = 0; j < 32; j++) {
+        //         printf("(%f %f) ", real[j], imag[j]);
+        //         if (j % 4 == 3)
+        //             printf("\n");
+        //     }
+        // }
     }
     // write back
-    for (int i = 0; i < n; i += blockSize) {
-        a.real[i] = real[i];
-        a.imag[i] = imag[i];
+    for (qindex i = idx; i < n; i += blockSize) {
+        a.real[i | prefix] = real[i];
+        a.imag[i | prefix] = imag[i];
     }
 }
 
@@ -190,7 +209,7 @@ void kernelExecSmall(ComplexArray& deviceStateVec, int numQubits, const vector<G
         hostGates[i].controlQubit = gates[i].controlQubit;
         hostGates[i].type = gates[i].type;
     }
-    checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, gates.size()));
-    run<1<<THREAD_DEP><<<(1<<numQubits)>>LOCAL_QUBIT_SIZE, 1<<THREAD_DEP>>>(deviceStateVec, gates.size(), deviceGates);
+    checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, sizeof(hostGates)));
+    run<1<<THREAD_DEP><<<(1<<numQubits)>>LOCAL_QUBIT_SIZE, 1<<THREAD_DEP>>>(deviceStateVec, gates.size());
     checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
 }
