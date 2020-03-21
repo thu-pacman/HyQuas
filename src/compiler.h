@@ -28,6 +28,6 @@ private:
     int localSize;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
-    void moveToSchedule(const GateGroup& gg);
+    void moveToSchedule(GateGroup& gg);
     Schedule schedule;
 };

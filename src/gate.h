@@ -32,4 +32,7 @@ struct Gate {
     bool isControlGate() const {
         return controlQubit != -1;
     }
+    bool isDiagonal() const {
+        return type == GateCRotateZ || type == GatePauliZ || type == GateRotateZ || type == GateS || type == GateT;
+    }
 };

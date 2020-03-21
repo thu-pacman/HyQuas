@@ -23,10 +23,12 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
 
 void GateGroup::addGate(const Gate& gate) {
     gates.push_back(gate);
-    if (gate.isControlGate()) {
-        relatedQubits |= qindex(1) << gate.controlQubit;
+    if (!gate.isDiagonal()) {
+        if (gate.isControlGate()) {
+            relatedQubits |= qindex(1) << gate.controlQubit;
+        }
+        relatedQubits |= qindex(1) << gate.targetQubit;
     }
-    relatedQubits |= qindex(1) << gate.targetQubit;
 }
 
 void Schedule::dump(int numQubits) {
@@ -64,7 +66,7 @@ Schedule Compiler::run() {
             break;
         cnt ++;
     }
-    // schedule.dump(numQubits);
+    schedule.dump(numQubits);
     return schedule;
 }
 
@@ -105,11 +107,22 @@ GateGroup Compiler::getGroup() {
         if (!full[i] && canMerge(ret, cur[i]))
             ret = GateGroup::merge(ret, cur[i]);
     }
+
+    // for (int i = 0; i < numQubits; i++)
+    //     if (!ret.contains(i)) {
+    //         for (auto& g: cur[i].gates) {
+    //             if (g.targetQubit != i) continue;
+    //             if (g.isDiagonal() && g.targetQubit == i) {
+    //                 ret.gates.push_back(g);
+    //             } else {
+    //                 break;
+    //             }
+    //         }
+    //     }
     return ret;
 }
 
-void Compiler::moveToSchedule(const GateGroup& gg) {
-    schedule.gateGroups.push_back(gg);
+void Compiler::moveToSchedule(GateGroup& gg) {
     std::vector<int> usedID;
     for (auto& g: gg.gates) {
         usedID.push_back(g.gateID);
@@ -117,9 +130,32 @@ void Compiler::moveToSchedule(const GateGroup& gg) {
     std::sort(usedID.begin(), usedID.end());
     std::vector<Gate> temp = remainGates;
     remainGates.clear();
+    bool blocked[numQubits];
+    memset(blocked, 0, sizeof(blocked));
     for (auto& g: temp) {
-        if (!std::binary_search(usedID.begin(), usedID.end(), g.gateID)) {
+        if (std::binary_search(usedID.begin(), usedID.end(), g.gateID)) continue;
+        if (g.isDiagonal()) {
+            if (g.isControlGate()) {
+                if (blocked[g.controlQubit] || blocked[g.targetQubit]) {
+                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
+                    remainGates.push_back(g);
+                } else {
+                    gg.gates.push_back(g);
+                }
+            } else {
+                if (blocked[g.targetQubit]) {
+                    remainGates.push_back(g);
+                } else {
+                    gg.gates.push_back(g);
+                }
+            }
+        } else {
+            if (g.isControlGate()) {
+                blocked[g.controlQubit] = 1;
+            }
+            blocked[g.targetQubit] = 1;
             remainGates.push_back(g);
         }
     }
+    schedule.gateGroups.push_back(gg);
 }
