@@ -5,6 +5,7 @@
 #include "QuESTEnv.h"
 #include "utils.h"
 #include "kernel.h"
+#include "compiler.h"
 using namespace std;
 
 Qureg createQureg(int numQubits, const QuESTEnv& env) {
@@ -60,29 +61,12 @@ Complex Qureg::ampAt(qindex idx) {
 }
 
 void Qureg::compile() {
-    vector<Gate> cur[numQubits];
-    vector<GateGroup> groups;
-    for (auto& gate: gates) {
-        if (gate.isControlGate()) {
-            GateGroup gg;
-            gg.insert(gg.end(), cur[gate.controlQubit].begin(), cur[gate.controlQubit].end());
-            gg.insert(gg.end(), cur[gate.targetQubit].begin(), cur[gate.targetQubit].end());
-            cur[gate.controlQubit].clear();
-            cur[gate.targetQubit].clear();
-            gg.push_back(gate);
-            groups.push_back(gg);
-        } else {
-            cur[gate.targetQubit].push_back(gate);
-        }
-    }
-    for (int i = 0; i < numQubits; i++) {
-        groups.push_back(cur[i]);
-    }
+    printf("before compiler %d\n", int(gates.size()));
+    Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
+    schedule = compiler.run();
+    printf("Total Groups: %d\n", int(schedule.gateGroups.size()));
     gates.clear();
-    for (auto& group: groups) {
-        for (auto& gate: group) {
-            gates.push_back(gate);
-        }
+    for (auto& gg: schedule.gateGroups) {
+        gates.insert(gates.end(), gg.gates.begin(), gg.gates.end());
     }
-    dumpGates();
 }

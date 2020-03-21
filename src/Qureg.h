@@ -5,8 +5,7 @@
 #include "utils.h"
 #include "QuESTEnv.h"
 #include "gate.h"
-
-typedef std::vector<Gate> GateGroup;
+#include "compiler.h"
 
 class Qureg {
 public:
@@ -25,4 +24,5 @@ private:
     const QuESTEnv& env;
     std::vector<Gate> gates;
     ComplexArray deviceStateVec;
+    Schedule schedule;
 };

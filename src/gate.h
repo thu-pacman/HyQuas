@@ -21,6 +21,7 @@ enum GateType {
 };
 
 struct Gate {
+    int gateID;
     GateType type;
     Complex mat[2][2];
     std::string name;
@@ -28,7 +29,7 @@ struct Gate {
     int controlQubit; // -1 if no control
     Gate() = default;
     Gate(const Gate&) = default;
-    bool isControlGate() {
+    bool isControlGate() const {
         return controlQubit != -1;
     }
 };

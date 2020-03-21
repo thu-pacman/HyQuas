@@ -236,7 +236,7 @@ __global__ void run(ComplexArray a, int numGates) {
 void kernelExecSmall(ComplexArray& deviceStateVec, int numQubits, const vector<Gate>& gates) {
     KernelGate hostGates[gates.size()];
     assert(gates.size() < MAX_GATE);
-    for (int i = 0; i < gates.size(); i++) {
+    for (size_t i = 0; i < gates.size(); i++) {
         switch (gates[i].type) {
             case GateRotateX: // no break
             case GateCRotateX: {
