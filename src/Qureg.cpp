@@ -5,6 +5,7 @@
 #include "QuESTEnv.h"
 #include "utils.h"
 #include "kernel.h"
+using namespace std;
 
 Qureg createQureg(int numQubits, const QuESTEnv& env) {
     return Qureg(numQubits, env);
@@ -56,4 +57,32 @@ qreal Qureg::measure(int targetQubit) {
 
 Complex Qureg::ampAt(qindex idx) {
     return kernelGetAmp(deviceStateVec, idx);
+}
+
+void Qureg::compile() {
+    vector<Gate> cur[numQubits];
+    vector<GateGroup> groups;
+    for (auto& gate: gates) {
+        if (gate.isControlGate()) {
+            GateGroup gg;
+            gg.insert(gg.end(), cur[gate.controlQubit].begin(), cur[gate.controlQubit].end());
+            gg.insert(gg.end(), cur[gate.targetQubit].begin(), cur[gate.targetQubit].end());
+            cur[gate.controlQubit].clear();
+            cur[gate.targetQubit].clear();
+            gg.push_back(gate);
+            groups.push_back(gg);
+        } else {
+            cur[gate.targetQubit].push_back(gate);
+        }
+    }
+    for (int i = 0; i < numQubits; i++) {
+        groups.push_back(cur[i]);
+    }
+    gates.clear();
+    for (auto& group: groups) {
+        for (auto& gate: group) {
+            gates.push_back(gate);
+        }
+    }
+    dumpGates();
 }

@@ -516,6 +516,7 @@ int main (int narg, char *argv[]) {
     controlledNot(q, 19, 17);
     rotateX(q, 25, 2.852692622378647);
     sGate(q, 22);
+    q.compile();
     q.run();
 
     printf("\n");

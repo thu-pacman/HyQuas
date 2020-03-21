@@ -6,9 +6,12 @@
 #include "QuESTEnv.h"
 #include "gate.h"
 
+typedef std::vector<Gate> GateGroup;
+
 class Qureg {
 public:
     Qureg(int numQubits, const QuESTEnv& env): numQubits(numQubits), env(env) {}
+    void compile();
     void run();
     void addGate(const Gate& gate) {
         gates.push_back(gate);
