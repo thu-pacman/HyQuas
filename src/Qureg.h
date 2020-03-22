@@ -25,4 +25,5 @@ private:
     std::vector<Gate> gates;
     ComplexArray deviceStateVec;
     Schedule schedule;
+    std::vector<qreal> result;
 };

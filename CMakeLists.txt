@@ -8,7 +8,7 @@ set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70")
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
 
-set(TASKS GHZ_QFT random small)
+set(TASKS GHZ_QFT random small hadamard)
 
 foreach(TASK IN LISTS TASKS)
 	message(STATUS "Compiling tasks/${TASK}")

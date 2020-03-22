@@ -498,7 +498,10 @@ int main (int narg, char *argv[]) {
     controlledRotateZ(q, 27, 28, 1.5708);
     hadamard(q, 28);
     q.compile();
+    double t3 = get_wall_time();
     q.run();
+    double t4 = get_wall_time();
+    printf("run %12.6f\n", t4 - t3);
 	/* end of QFT circuit */
 
     printf("\n");

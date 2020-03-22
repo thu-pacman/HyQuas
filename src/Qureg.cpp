@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
+#define USE_OPT 1
 using namespace std;
 
 Qureg createQureg(int numQubits, const QuESTEnv& env) {
@@ -27,7 +28,11 @@ void destroyQureg(Qureg& q, const QuESTEnv& env) {
 
 void Qureg::run() {
     kernelInit(deviceStateVec, numQubits);
-    kernelExecOpt(deviceStateVec, numQubits, schedule);
+    if (USE_OPT) {
+        result = kernelExecOpt(deviceStateVec, numQubits, schedule);
+    } else {
+        kernelExecOpt(deviceStateVec, numQubits, schedule);
+    }
 }
 
 void Qureg::dumpGates() {
@@ -53,7 +58,11 @@ void Qureg::dumpGates() {
 }
 
 qreal Qureg::measure(int targetQubit) {
-    return kernelMeasure(deviceStateVec, numQubits, targetQubit);
+    if (USE_OPT) {
+        return 1 - result[targetQubit];
+    } else {
+        return kernelMeasure(deviceStateVec, numQubits, targetQubit);
+    }
 }
 
 Complex Qureg::ampAt(qindex idx) {
