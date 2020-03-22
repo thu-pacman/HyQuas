@@ -5,6 +5,7 @@
 5. 把门的具体内容放在了constant memory里，但constant memory容量有限，如果门比现在的测例多，可能会放不下。不知道放global会不会变慢，后期可以强拆成多次调用，或者直接为每个门编译一个kernel
 6. 交换门的顺序后，会因为浮点误差的原因导致结果出错吗
 7. 对角门的schedule暂时没有将作用在同一个qubit上的操作聚在一起
+8. 数据在global mem 和 share mem 里的交换怎么写会比较快。。
 TODO:
 
 unroll
@@ -14,3 +15,5 @@ unroll
 因为0的缘故，前期的很多操作不会影响到所有值
 
 把对同一个qubit的操作fuse成一个矩阵乘
+
+X Gate 可以不算

@@ -22,7 +22,7 @@ void controlledPauliY(Qureg& q, int controlQubit, int targetQubit) {
     g.type = GateCPauliY;
     g.mat[0][0] = 0; g.mat[0][1] = Complex(0, -1);
     g.mat[1][0] = Complex(0, 1); g.mat[1][1] = Complex(0, 0);
-    g.name = "CPY";
+    g.name = "CP";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
     q.addGate(g);

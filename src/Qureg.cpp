@@ -27,13 +27,13 @@ void destroyQureg(Qureg& q, const QuESTEnv& env) {
 
 void Qureg::run() {
     kernelInit(deviceStateVec, numQubits);
-    kernelExec(deviceStateVec, numQubits, gates);
+    kernelExecSmall(deviceStateVec, numQubits, schedule);
 }
 
 void Qureg::dumpGates() {
     int totalGates = gates.size();
     printf("total Gates: %d\n", totalGates);
-    int L = 4;
+    int L = 3;
     for (const Gate& gate: gates) {
         for (int i = 0; i < numQubits; i++) {
             if (i == gate.controlQubit) {
@@ -65,8 +65,4 @@ void Qureg::compile() {
     Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
     printf("Total Groups: %d\n", int(schedule.gateGroups.size()));
-    gates.clear();
-    for (auto& gg: schedule.gateGroups) {
-        gates.insert(gates.end(), gg.gates.begin(), gg.gates.end());
-    }
 }

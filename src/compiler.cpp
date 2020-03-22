@@ -32,7 +32,7 @@ void GateGroup::addGate(const Gate& gate) {
 }
 
 void Schedule::dump(int numQubits) {
-    int L = 4;
+    int L = 3;
     for (auto& gg: gateGroups) {
         for (const Gate& gate: gg.gates) {
             for (int i = 0; i < numQubits; i++) {
