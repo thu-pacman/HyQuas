@@ -343,7 +343,7 @@ __global__ void run(ComplexArray a, qindex* threadBias, int numQubits, int numGa
     saveData(a, threadBias, idx, blockHot, enumerate);
 }
 
-void kernelExecSmall(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
+void kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
     qindex hostThreadBias[1 << THREAD_DEP];
     qindex* threadBias;
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));

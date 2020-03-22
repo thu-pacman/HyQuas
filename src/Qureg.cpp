@@ -27,7 +27,7 @@ void destroyQureg(Qureg& q, const QuESTEnv& env) {
 
 void Qureg::run() {
     kernelInit(deviceStateVec, numQubits);
-    kernelExecSmall(deviceStateVec, numQubits, schedule);
+    kernelExecOpt(deviceStateVec, numQubits, schedule);
 }
 
 void Qureg::dumpGates() {

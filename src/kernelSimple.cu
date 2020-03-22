@@ -227,7 +227,7 @@ __global__ void tGate(ComplexArray a, int numQubit_, int targetQubit, qreal recR
     } SINGLE_GATE_END
 }
 
-void kernelExec(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
+void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
     for (auto& gg: schedule.gateGroups) {
