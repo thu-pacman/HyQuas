@@ -3,7 +3,7 @@ project(QCSimulatorRoot)
 find_package(CUDA REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-std=c++0x -O2 -g -Wall")
-set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70")
+set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v")
 
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
