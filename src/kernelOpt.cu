@@ -385,9 +385,7 @@ __device__ void measure(qreal* result, qindex* threadBias, int numQubits, qindex
         REDUCE_QUBIT_STEP(2);
         REDUCE_QUBIT_STEP(1);
         if (tid == 0) {
-            for (int j = 0; j < numQubits; j++) {
-                result[j * gridDim.x + blockIdx.x] = sdata[0];
-            }
+            result[j * gridDim.x + blockIdx.x] = sdata[0];
         }
     }
 }
