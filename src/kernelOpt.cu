@@ -337,8 +337,7 @@ __device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
 #define REDUCE_QUBIT_STEP(x) {\
 if (blockSize >= x * 2) { \
     if (tid < x) { \
-        for (int j = 0; j < numQubits; j++) \
-            sdata[j * blockSize + tid] += sdata[j * blockSize + tid + x]; \
+            sdata[tid] += sdata[tid + x]; \
     } \
 } \
 __syncthreads();\
@@ -357,35 +356,39 @@ template <unsigned int blockSize>
 __device__ void measure(qreal* result, qindex* threadBias, int numQubits, qindex enumerate) {
     int tid = threadIdx.x;
     qindex bias = blockBias | threadBias[tid];
-    __shared__ qreal sdata[MAX_QUBIT * blockSize];
-    for (int j = 0; j < numQubits; j++) {
-        sdata[j * blockSize + tid] = 0;
-    }
+    __shared__ qreal sdata[blockSize];
     for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | tid, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
-        
-        qindex target = bias | y;
-        qreal amp = real[x] * real[x] + imag[x] * imag[x];
-        for (int j = 0; j < numQubits; j++) {
-            sdata[j * blockSize + tid] += ((target >> j) & 1) ? amp : 0;
-        }
+            real[x] = real[x] * real[x] + imag[x] * imag[x];
     }
-    __syncthreads();
-    REDUCE_QUBIT_STEP(512);
-    REDUCE_QUBIT_STEP(256);
-    REDUCE_QUBIT_STEP(128);
-    REDUCE_QUBIT_STEP(64);
-    REDUCE_QUBIT_STEP(32);
-    REDUCE_QUBIT_STEP(16);
-    REDUCE_QUBIT_STEP(8);
-    REDUCE_QUBIT_STEP(4);
-    REDUCE_QUBIT_STEP(2);
-    REDUCE_QUBIT_STEP(1);
-    if (tid == 0) {
-        for (int j = 0; j < numQubits; j++) {
-            result[j * gridDim.x + blockIdx.x] = sdata[j * blockSize + tid];
-       }
+    for (int j = 0; j < numQubits; j++) {
+        sdata[tid] = 0;
+        for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | tid, y = enumerate;
+            x >= 0;
+            x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
+            
+            qindex target = bias | y;
+            if ((target >> j) & 1) {
+                sdata[tid] += real[x];
+            }
+        }
+        __syncthreads();
+        REDUCE_QUBIT_STEP(512);
+        REDUCE_QUBIT_STEP(256);
+        REDUCE_QUBIT_STEP(128);
+        REDUCE_QUBIT_STEP(64);
+        REDUCE_QUBIT_STEP(32);
+        REDUCE_QUBIT_STEP(16);
+        REDUCE_QUBIT_STEP(8);
+        REDUCE_QUBIT_STEP(4);
+        REDUCE_QUBIT_STEP(2);
+        REDUCE_QUBIT_STEP(1);
+        if (tid == 0) {
+            for (int j = 0; j < numQubits; j++) {
+                result[j * gridDim.x + blockIdx.x] = sdata[0];
+            }
+        }
     }
 }
 
@@ -407,7 +410,7 @@ __global__ void runLast(ComplexArray a, qreal* result, qindex* threadBias, int n
     doCompute<blockSize>(numGates);
     __syncthreads();
     saveData(a, threadBias, enumerate);
-    measure<blockSize>(result, threadBias, numQubits, enumerate);
+    measure<blockSize>(result, threadBias, numQubits, enumerate); // measure must behind save
 }
 
 template <unsigned int blockSize, typename T>
