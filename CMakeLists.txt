@@ -7,12 +7,7 @@ set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-opti
 
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
+add_executable(parser tasks/from_qasm.cpp)
+target_link_libraries(parser QCSimulator)
 
-set(TASKS GHZ_QFT random small hadamard random29 GHZ_QFT29 random28 GHZ_QFT28)
-
-foreach(TASK IN LISTS TASKS)
-	message(STATUS "Compiling tasks/${TASK}")
-	add_executable(${TASK} tasks/${TASK}.cpp)
-	target_link_libraries(${TASK} QCSimulator)
-endforeach()
 

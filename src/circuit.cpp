@@ -1,32 +1,14 @@
-#include "Qureg.h"
+#include "circuit.h"
 
 #include <cstdio>
 #include <assert.h>
-#include "QuESTEnv.h"
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
 #define USE_OPT 1
 using namespace std;
 
-Qureg createQureg(int numQubits, const QuESTEnv& env) {
-    return Qureg(numQubits, env);
-}
-
-qreal calcProbOfOutcome(Qureg& q, int measureQubit, int outcome) {
-    qreal probZero = q.measure(measureQubit);
-    return outcome ? 1 - probZero : probZero;
-}
-
-Complex getAmp(Qureg& q, qindex index) {
-    return q.ampAt(index);
-}
-
-void destroyQureg(Qureg& q, const QuESTEnv& env) {
-    printf("destroy qureg: just return!\n");
-}
-
-void Qureg::run() {
+void Circuit::run() {
     kernelInit(deviceStateVec, numQubits);
     if (USE_OPT) {
         result = kernelExecOpt(deviceStateVec, numQubits, schedule);
@@ -35,7 +17,7 @@ void Qureg::run() {
     }
 }
 
-void Qureg::dumpGates() {
+void Circuit::dumpGates() {
     int totalGates = gates.size();
     printf("total Gates: %d\n", totalGates);
     int L = 3;
@@ -57,19 +39,19 @@ void Qureg::dumpGates() {
     }
 }
 
-qreal Qureg::measure(int targetQubit) {
-    if (USE_OPT) {
-        return 1 - result[targetQubit];
-    } else {
-        return kernelMeasure(deviceStateVec, numQubits, targetQubit);
+qreal Circuit::measure(int targetQubit, int state) {
+    qreal prob = USE_OPT ? (1 - result[targetQubit]) : kernelMeasure(deviceStateVec, numQubits, targetQubit);
+    if (state == 1) {
+        prob = 1 - prob;
     }
+    return prob;
 }
 
-Complex Qureg::ampAt(qindex idx) {
+Complex Circuit::ampAt(qindex idx) {
     return kernelGetAmp(deviceStateVec, idx);
 }
 
-void Qureg::compile() {
+void Circuit::compile() {
     printf("before compiler %d\n", int(gates.size()));
     Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();

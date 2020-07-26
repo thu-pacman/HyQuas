@@ -3,25 +3,23 @@
 #include <string>
 #include <vector>
 #include "utils.h"
-#include "QuESTEnv.h"
 #include "gate.h"
 #include "compiler.h"
 
-class Qureg {
+class Circuit {
 public:
-    Qureg(int numQubits, const QuESTEnv& env): numQubits(numQubits), env(env) {}
+    Circuit(int numQubits): numQubits(numQubits) {}
     void compile();
     void run();
     void addGate(const Gate& gate) {
         gates.push_back(gate);
     }
-    qreal measure(int targetQubit); // probability of zero state
+    qreal measure(int targetQubit, int state = 0); // probability of zero state
     void dumpGates();
     Complex ampAt(qindex idx);
 
 private:
     int numQubits;
-    const QuESTEnv& env;
     std::vector<Gate> gates;
     ComplexArray deviceStateVec;
     Schedule schedule;

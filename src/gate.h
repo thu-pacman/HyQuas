@@ -35,4 +35,20 @@ struct Gate {
     bool isDiagonal() const {
         return type == GateCRotateZ || type == GatePauliZ || type == GateRotateZ || type == GateS || type == GateT;
     }
+
+    static Gate controlledNot(int controlQubit, int targetQubit);
+    static Gate controlledPauliY(int controlQubit, int targetQubit);
+    static Gate controlledRotateX(int controlQubit, int targetQubit, qreal angle);
+    static Gate controlledRotateY(int controlQubit, int targetQubit, qreal angle);
+    static Gate controlledRotateZ(int controlQubit, int targetQubit, qreal angle);
+    static Gate hadamard(int targetQubit);
+    static Gate pauliX(int targetQubit);
+    static Gate pauliY(int targetQubit);
+    static Gate pauliZ(int targetQubit);
+    static Gate rotateX(int targetQubit, qreal angle);
+    static Gate rotateY(int targetQubit, qreal angle);
+    static Gate rotateZ(int targetQubit, qreal angle);
+    static Gate sGate(int targetQubit);
+    static Gate tGate(int targetQubit);
+
 };

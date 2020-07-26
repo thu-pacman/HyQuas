@@ -17,6 +17,12 @@ const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
+    cudaError_t cuda_status;
+	cuda_status = cudaSetDevice(0);
+	if (cuda_status != cudaSuccess) {
+        printf("cudaSetDevice failed! ");
+        exit(1);
+	}
     assert(numQubits > (SINGLE_SIZE_DEP +THREAD_DEP + 1 + REDUCE_BLOCK_DEP + THREAD_DEP + 1));
     assert(numQubits < 31);
     size_t size = sizeof(qreal) << numQubits;

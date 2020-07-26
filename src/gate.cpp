@@ -1,9 +1,11 @@
-#include "QuEST.h"
+#include "gate.h"
+
 #include <cmath>
+#include <assert.h>
 
 static int globalGateID = 0;
 
-void controlledNot(Qureg& q, int controlQubit, int targetQubit) {
+Gate Gate::controlledNot(int controlQubit, int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateCNot;
@@ -12,10 +14,10 @@ void controlledNot(Qureg& q, int controlQubit, int targetQubit) {
     g.name = "CN";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
-    q.addGate(g);
+    return g;
 }
 
-void controlledPauliY(Qureg& q, int controlQubit, int targetQubit) {
+Gate Gate::controlledPauliY(int controlQubit, int targetQubit) {
     assert(controlQubit != targetQubit);
     Gate g;
     g.gateID = ++ globalGateID;
@@ -25,10 +27,10 @@ void controlledPauliY(Qureg& q, int controlQubit, int targetQubit) {
     g.name = "CP";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
-    q.addGate(g);
+    return g;
 }
 
-void controlledRotateX(Qureg& q, int controlQubit, int targetQubit, qreal angle) {
+Gate Gate::controlledRotateX(int controlQubit, int targetQubit, qreal angle) {
     assert(controlQubit != targetQubit);
     Gate g;
     g.gateID = ++ globalGateID;
@@ -38,10 +40,10 @@ void controlledRotateX(Qureg& q, int controlQubit, int targetQubit, qreal angle)
     g.name = "CX";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
-    q.addGate(g);
+    return g;
 }
 
-void controlledRotateY(Qureg& q, int controlQubit, int targetQubit, qreal angle) {
+Gate Gate::controlledRotateY(int controlQubit, int targetQubit, qreal angle) {
     assert(controlQubit != targetQubit);
     Gate g;
     g.gateID = ++ globalGateID;
@@ -51,10 +53,10 @@ void controlledRotateY(Qureg& q, int controlQubit, int targetQubit, qreal angle)
     g.name = "CY";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
-    q.addGate(g);
+    return g;
 }
 
-void controlledRotateZ(Qureg& q, int controlQubit, int targetQubit, qreal angle) {
+Gate Gate::controlledRotateZ(int controlQubit, int targetQubit, qreal angle) {
     assert(controlQubit != targetQubit);
     Gate g;
     g.gateID = ++ globalGateID;
@@ -64,10 +66,10 @@ void controlledRotateZ(Qureg& q, int controlQubit, int targetQubit, qreal angle)
     g.name = "CZ";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
-    q.addGate(g);
+    return g;
 }
 
-void hadamard(Qureg& q, int targetQubit) {
+Gate Gate::hadamard(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateHadamard;
@@ -76,10 +78,10 @@ void hadamard(Qureg& q, int targetQubit) {
     g.name = "H";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void pauliX(Qureg& q, int targetQubit) {
+Gate Gate::pauliX(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GatePauliX;
@@ -88,10 +90,10 @@ void pauliX(Qureg& q, int targetQubit) {
     g.name = "PX";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void pauliY(Qureg& q, int targetQubit) {
+Gate Gate::pauliY(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GatePauliY;
@@ -100,10 +102,10 @@ void pauliY(Qureg& q, int targetQubit) {
     g.name = "PY";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void pauliZ(Qureg& q, int targetQubit) {
+Gate Gate::pauliZ(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GatePauliZ;
@@ -112,10 +114,10 @@ void pauliZ(Qureg& q, int targetQubit) {
     g.name = "PZ";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void rotateX(Qureg& q, int targetQubit, qreal angle) {
+Gate Gate::rotateX(int targetQubit, qreal angle) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateRotateX;
@@ -124,10 +126,10 @@ void rotateX(Qureg& q, int targetQubit, qreal angle) {
     g.name = "X";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void rotateY(Qureg& q, int targetQubit, qreal angle) {
+Gate Gate::rotateY(int targetQubit, qreal angle) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateRotateY;
@@ -136,10 +138,10 @@ void rotateY(Qureg& q, int targetQubit, qreal angle) {
     g.name = "Y";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void rotateZ(Qureg& q, int targetQubit, qreal angle) {
+Gate Gate::rotateZ(int targetQubit, qreal angle) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateRotateZ;
@@ -148,10 +150,10 @@ void rotateZ(Qureg& q, int targetQubit, qreal angle) {
     g.name = "Z";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g);
+    return g;
 }
 
-void sGate(Qureg& q, int targetQubit) {
+Gate Gate::sGate(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateS;
@@ -160,10 +162,10 @@ void sGate(Qureg& q, int targetQubit) {
     g.name = "S";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g); 
+    return g;
 }
 
-void tGate(Qureg& q, int targetQubit) {
+Gate Gate::tGate(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
     g.type = GateT;
@@ -172,5 +174,5 @@ void tGate(Qureg& q, int targetQubit) {
     g.name = "T";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
-    q.addGate(g); 
+    return g;
 }
