@@ -5,7 +5,6 @@
 
 enum GateType {
     GateHadamard,
-    GateCNot,
     GateCPauliY,
     GateCRotateX,
     GateCRotateY,
@@ -17,7 +16,11 @@ enum GateType {
     GateRotateY,
     GateRotateZ,
     GateS,
-    GateT
+    GateT,
+    GateCNot,
+    GateU1,
+    GateU3,
+    GateCZ,
 };
 
 struct Gate {
@@ -33,22 +36,26 @@ struct Gate {
         return controlQubit != -1;
     }
     bool isDiagonal() const {
-        return type == GateCRotateZ || type == GatePauliZ || type == GateRotateZ || type == GateS || type == GateT;
+        return type == GateCRotateZ || type == GatePauliZ || type == GateRotateZ || type == GateS || type == GateT || type == GateCZ || type == GateU1;
     }
 
-    static Gate controlledNot(int controlQubit, int targetQubit);
     static Gate controlledPauliY(int controlQubit, int targetQubit);
     static Gate controlledRotateX(int controlQubit, int targetQubit, qreal angle);
     static Gate controlledRotateY(int controlQubit, int targetQubit, qreal angle);
     static Gate controlledRotateZ(int controlQubit, int targetQubit, qreal angle);
-    static Gate hadamard(int targetQubit);
-    static Gate pauliX(int targetQubit);
     static Gate pauliY(int targetQubit);
     static Gate pauliZ(int targetQubit);
-    static Gate rotateX(int targetQubit, qreal angle);
-    static Gate rotateY(int targetQubit, qreal angle);
-    static Gate rotateZ(int targetQubit, qreal angle);
     static Gate sGate(int targetQubit);
     static Gate tGate(int targetQubit);
+    
+    static Gate CNOT(int controlQubit, int targetQubit);
+    static Gate U1(int targetQubit, qreal lambda);
+    static Gate U3(int targetQubit, qreal theta, qreal phi, qreal lambda);
+    static Gate CZ(int controlQubit, int targetQubit);
+    static Gate Hadamard(int targetQubit);
+    static Gate PauliX(int targetQubit);
+    static Gate RotateX(int targetQubit, qreal angle);
+    static Gate RotateY(int targetQubit, qreal angle);
+    static Gate RotateZ(int targetQubit, qreal angle);
 
 };
