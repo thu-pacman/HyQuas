@@ -8,7 +8,7 @@ static int globalGateID = 0;
 Gate Gate::CNOT(int controlQubit, int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateCNot;
+    g.type = GateType::CNOT;
     g.mat[0][0] = 0; g.mat[0][1] = 1;
     g.mat[1][0] = 1; g.mat[1][1] = 0;
     g.name = "CN";
@@ -17,10 +17,71 @@ Gate Gate::CNOT(int controlQubit, int targetQubit) {
     return g;
 }
 
+Gate Gate::CY(int controlQubit, int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CY;
+    g.mat[0][0] = 0; g.mat[0][1] = Complex(0, -1);
+    g.mat[1][0] = Complex(0, 1); g.mat[1][1] = Complex(0, 0);
+    g.name = "CY";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CZ(int controlQubit, int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CZ;
+    g.mat[0][0] = 1; g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = -1;
+    g.name = "CZ";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CRX(int controlQubit, int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CRX;
+    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = Complex(0, -sin(angle/2.0));
+    g.mat[1][0] = Complex(0, -sin(angle/2.0)); g.mat[1][1] = cos(angle/2.0);
+    g.name = "CRX";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CRY(int controlQubit, int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CRY;
+    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = -sin(angle/2.0);
+    g.mat[1][0] = sin(angle/2.0); g.mat[1][1] = cos(angle/2.0);
+    g.name = "CRY";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CRZ(int controlQubit, int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CRZ;
+    g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
+    g.name = "CRZ";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+
 Gate Gate::U1(int targetQubit, qreal lambda) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateU1;
+    g.type = GateType::U1;
     g.mat[0][0] = 1;
     g.mat[0][1] = 0;
     g.mat[1][0] = 0;
@@ -31,10 +92,24 @@ Gate Gate::U1(int targetQubit, qreal lambda) {
     return g;
 }
 
+Gate Gate::U2(int targetQubit, qreal phi, qreal lambda) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::U2;
+    g.mat[0][0] = 1 / sqrt(2);
+    g.mat[0][1] = Complex(-cos(lambda), -sin(lambda));
+    g.mat[1][0] = Complex(cos(lambda), sin(lambda));
+    g.mat[1][1] = Complex(cos(lambda + phi), sin(lambda + phi));
+    g.name = "U2";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
 Gate Gate::U3(int targetQubit, qreal theta, qreal phi, qreal lambda) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateU3;
+    g.type = GateType::U3;
     g.mat[0][0] = cos(theta / 2);
     g.mat[0][1] = Complex(-cos(lambda) * sin(theta / 2), -sin(lambda) * sin(theta / 2));
     g.mat[1][0] = Complex(cos(phi) * sin(theta / 2), sin(phi) * sin(theta / 2));
@@ -45,76 +120,10 @@ Gate Gate::U3(int targetQubit, qreal theta, qreal phi, qreal lambda) {
     return g;
 }
 
-
-Gate Gate::CZ(int controlQubit, int targetQubit) {
-    assert(controlQubit != targetQubit);
+Gate Gate::H(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateCZ;
-    g.mat[0][0] = 1; g.mat[0][1] = 0;
-    g.mat[1][0] = 0; g.mat[1][1] = -1;
-    g.name = "CZ";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    return g;
-}
-
-Gate Gate::controlledPauliY(int controlQubit, int targetQubit) {
-    assert(controlQubit != targetQubit);
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateCPauliY;
-    g.mat[0][0] = 0; g.mat[0][1] = Complex(0, -1);
-    g.mat[1][0] = Complex(0, 1); g.mat[1][1] = Complex(0, 0);
-    g.name = "CP";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    return g;
-}
-
-Gate Gate::controlledRotateX(int controlQubit, int targetQubit, qreal angle) {
-    assert(controlQubit != targetQubit);
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateCRotateX;
-    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = Complex(0, sin(angle/2.0));
-    g.mat[1][0] = Complex(0, -sin(angle/2.0)); g.mat[1][1] = cos(angle/2.0);
-    g.name = "CX";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    return g;
-}
-
-Gate Gate::controlledRotateY(int controlQubit, int targetQubit, qreal angle) {
-    assert(controlQubit != targetQubit);
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateCRotateY;
-    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = -sin(angle/2.0);
-    g.mat[1][0] = sin(angle/2.0); g.mat[1][1] = cos(angle/2.0);
-    g.name = "CY";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    return g;
-}
-
-Gate Gate::controlledRotateZ(int controlQubit, int targetQubit, qreal angle) {
-    assert(controlQubit != targetQubit);
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateCRotateZ;
-    g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
-    g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
-    g.name = "CZ";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    return g;
-}
-
-Gate Gate::Hadamard(int targetQubit) {
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateHadamard;
+    g.type = GateType::H;
     g.mat[0][0] = 1/sqrt(2); g.mat[0][1] = 1/sqrt(2);
     g.mat[1][0] = 1/sqrt(2); g.mat[1][1] = -1/sqrt(2);
     g.name = "H";
@@ -123,10 +132,10 @@ Gate Gate::Hadamard(int targetQubit) {
     return g;
 }
 
-Gate Gate::PauliX(int targetQubit) {
+Gate Gate::X(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GatePauliX;
+    g.type = GateType::X;
     g.mat[0][0] = 0; g.mat[0][1] = 1;
     g.mat[1][0] = 1; g.mat[1][1] = 0;
     g.name = "X";
@@ -135,10 +144,10 @@ Gate Gate::PauliX(int targetQubit) {
     return g;
 }
 
-Gate Gate::pauliY(int targetQubit) {
+Gate Gate::Y(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GatePauliY;
+    g.type = GateType::Y;
     g.mat[0][0] = 0; g.mat[0][1] = Complex(0, -1);
     g.mat[1][0] = Complex(0, 1); g.mat[1][1] = Complex(0, 0);
     g.name = "Y";
@@ -147,10 +156,10 @@ Gate Gate::pauliY(int targetQubit) {
     return g;
 }
 
-Gate Gate::pauliZ(int targetQubit) {
+Gate Gate::Z(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GatePauliZ;
+    g.type = GateType::Z;
     g.mat[0][0] = 1; g.mat[0][1] = 0;
     g.mat[1][0] = 0; g.mat[1][1] = -1;
     g.name = "Z";
@@ -159,46 +168,10 @@ Gate Gate::pauliZ(int targetQubit) {
     return g;
 }
 
-Gate Gate::RotateX(int targetQubit, qreal angle) {
+Gate Gate::S(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateRotateX;
-    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = Complex(0, -sin(angle/2.0));
-    g.mat[1][0] = Complex(0, -sin(angle/2.0)); g.mat[1][1] = cos(angle/2.0);
-    g.name = "RX";
-    g.targetQubit = targetQubit;
-    g.controlQubit = -1;
-    return g;
-}
-
-Gate Gate::RotateY(int targetQubit, qreal angle) {
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateRotateY;
-    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = -sin(angle/2.0);
-    g.mat[1][0] = sin(angle/2.0); g.mat[1][1] = cos(angle/2.0);
-    g.name = "RY";
-    g.targetQubit = targetQubit;
-    g.controlQubit = -1;
-    return g;
-}
-
-Gate Gate::RotateZ(int targetQubit, qreal angle) {
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateRotateZ;
-    g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
-    g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
-    g.name = "RZ";
-    g.targetQubit = targetQubit;
-    g.controlQubit = -1;
-    return g;
-}
-
-Gate Gate::sGate(int targetQubit) {
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateS;
+    g.type = GateType::S;
     g.mat[0][0] = 1; g.mat[0][1] = 0;
     g.mat[1][0] = 0; g.mat[1][1] = Complex(0, 1);
     g.name = "S";
@@ -207,10 +180,10 @@ Gate Gate::sGate(int targetQubit) {
     return g;
 }
 
-Gate Gate::tGate(int targetQubit) {
+Gate Gate::T(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
-    g.type = GateT;
+    g.type = GateType::T;
     g.mat[0][0] = 1; g.mat[0][1] = 0;
     g.mat[1][0] = 0; g.mat[1][1] = Complex(1/sqrt(2), 1/sqrt(2));
     g.name = "T";
@@ -218,3 +191,41 @@ Gate Gate::tGate(int targetQubit) {
     g.controlQubit = -1;
     return g;
 }
+
+
+Gate Gate::RX(int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::RX;
+    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = Complex(0, -sin(angle/2.0));
+    g.mat[1][0] = Complex(0, -sin(angle/2.0)); g.mat[1][1] = cos(angle/2.0);
+    g.name = "RX";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::RY(int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::RY;
+    g.mat[0][0] = cos(angle/2.0); g.mat[0][1] = -sin(angle/2.0);
+    g.mat[1][0] = sin(angle/2.0); g.mat[1][1] = cos(angle/2.0);
+    g.name = "RY";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::RZ(int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::RZ;
+    g.mat[0][0] = Complex(cos(angle/2), -sin(angle/2)); g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(cos(angle/2), sin(angle/2));
+    g.name = "RZ";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+

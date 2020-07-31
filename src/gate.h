@@ -3,24 +3,8 @@
 #include <string>
 #include "utils.h"
 
-enum GateType {
-    GateHadamard,
-    GateCPauliY,
-    GateCRotateX,
-    GateCRotateY,
-    GateCRotateZ,
-    GatePauliX,
-    GatePauliY,
-    GatePauliZ,
-    GateRotateX,
-    GateRotateY,
-    GateRotateZ,
-    GateS,
-    GateT,
-    GateCNot,
-    GateU1,
-    GateU3,
-    GateCZ,
+enum class GateType {
+    CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ
 };
 
 struct Gate {
@@ -36,26 +20,26 @@ struct Gate {
         return controlQubit != -1;
     }
     bool isDiagonal() const {
-        return type == GateCRotateZ || type == GatePauliZ || type == GateRotateZ || type == GateS || type == GateT || type == GateCZ || type == GateU1;
+        return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
     }
-
-    static Gate controlledPauliY(int controlQubit, int targetQubit);
-    static Gate controlledRotateX(int controlQubit, int targetQubit, qreal angle);
-    static Gate controlledRotateY(int controlQubit, int targetQubit, qreal angle);
-    static Gate controlledRotateZ(int controlQubit, int targetQubit, qreal angle);
-    static Gate pauliY(int targetQubit);
-    static Gate pauliZ(int targetQubit);
-    static Gate sGate(int targetQubit);
-    static Gate tGate(int targetQubit);
     
     static Gate CNOT(int controlQubit, int targetQubit);
-    static Gate U1(int targetQubit, qreal lambda);
-    static Gate U3(int targetQubit, qreal theta, qreal phi, qreal lambda);
+    static Gate CY(int controlQubit, int targetQubit);
     static Gate CZ(int controlQubit, int targetQubit);
-    static Gate Hadamard(int targetQubit);
-    static Gate PauliX(int targetQubit);
-    static Gate RotateX(int targetQubit, qreal angle);
-    static Gate RotateY(int targetQubit, qreal angle);
-    static Gate RotateZ(int targetQubit, qreal angle);
+    static Gate CRX(int controlQubit, int targetQubit, qreal angle);
+    static Gate CRY(int controlQubit, int targetQubit, qreal angle);
+    static Gate CRZ(int controlQubit, int targetQubit, qreal angle);
+    static Gate U1(int targetQubit, qreal lambda);
+    static Gate U2(int targetQubit, qreal phi, qreal lambda);
+    static Gate U3(int targetQubit, qreal theta, qreal phi, qreal lambda);
+    static Gate H(int targetQubit);
+    static Gate X(int targetQubit);
+    static Gate Y(int targetQubit);
+    static Gate Z(int targetQubit);
+    static Gate S(int targetQubit); 
+    static Gate T(int targetQubit);
+    static Gate RX(int targetQubit, qreal angle);
+    static Gate RY(int targetQubit, qreal angle);
+    static Gate RZ(int targetQubit, qreal angle);
 
 };

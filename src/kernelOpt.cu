@@ -14,84 +14,26 @@ inline void __checkCudaErrors(cudaError_t err, const char *file, const int line)
 }
 
 struct KernelGate {
-    qreal alpha;
-    qreal beta;
     int targetQubit;
     int controlQubit;
     GateType type;
     char targetIsGlobal;  // 0-local 1-global
     char controlIsGlobal; // 0-local 1-global 2-not control 
+    qreal r00, i00, r01, i01, r10, i10, r11, i11;
 };
 
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
-const int MAX_GATE = 1024;
+const int MAX_GATE = 152;
 const int MAX_QUBIT = 30;
 extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qindex blockBias;
 
 __device__ __constant__ double recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
-__constant__ KernelGate deviceGates[1024];
+__constant__ KernelGate deviceGates[MAX_GATE];
 
-__device__ inline void rotateXGate(int lo, int hi, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal + beta * hiImag;
-    imag[lo] = alpha * loImag - beta * hiReal;
-    real[hi] = alpha * hiReal + beta * loImag;
-    imag[hi] = alpha * hiImag - beta * loReal;
-}
 
-__device__ inline void rotateYGate(int lo, int hi, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal - beta * hiReal;
-    imag[lo] = alpha * loImag - beta * hiImag;
-    real[hi] = beta * loReal + alpha * hiReal;
-    imag[hi] = beta * loImag + alpha * hiImag;
-}
-
-__device__ inline void rotateZGate(int lo, int hi, qreal alpha, qreal beta){
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal + beta * loImag;
-    imag[lo] = alpha * loImag - beta * loReal;
-    real[hi] = alpha * hiReal - beta * hiImag;
-    imag[hi] = alpha * hiImag + beta * hiReal;
-}
-
-__device__ inline void rotateZlo(int lo, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    real[lo] = alpha * loReal + beta * loImag;
-    imag[lo] = alpha * loImag - beta * loReal;
-}
-
-__device__ inline void rotateZhi(int hi, qreal alpha, qreal beta){
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[hi] = alpha * hiReal - beta * hiImag;
-    imag[hi] = alpha * hiImag + beta * hiReal;
-}
-
-__device__ inline void hadamardGate(int lo, int hi) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = recRoot2 * (loReal + hiReal);
-    imag[lo] = recRoot2 * (loImag + hiImag);
-    real[hi] = recRoot2 * (loReal - hiReal);
-    imag[hi] = recRoot2 * (loImag - hiImag);
-}
-
-__device__ inline void pauliXGate(int lo, int hi) {
+__device__ inline void XSingle(int lo, int hi) {
     qreal Real = real[lo];
     qreal Imag = imag[lo];
     real[lo] = real[hi];
@@ -100,7 +42,7 @@ __device__ inline void pauliXGate(int lo, int hi) {
     imag[hi] = Imag;
 }
 
-__device__ inline void pauliYGate(int lo, int hi) {
+__device__ inline void YSingle(int lo, int hi) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -111,19 +53,98 @@ __device__ inline void pauliYGate(int lo, int hi) {
     imag[hi] = loReal;
 }
 
-__device__ inline void pauliZGate(int hi) {
+__device__ inline void ZHi(int hi) {
     real[hi] = -real[hi];
     imag[hi] = -imag[hi];
 }
 
-__device__ inline void sGate(int hi) {
+
+__device__ inline void RXSingle(int lo, int hi, qreal alpha, qreal beta) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = alpha * loReal + beta * hiImag;
+    imag[lo] = alpha * loImag - beta * hiReal;
+    real[hi] = alpha * hiReal + beta * loImag;
+    imag[hi] = alpha * hiImag - beta * loReal;
+}
+
+__device__ inline void RYSingle(int lo, int hi, qreal alpha, qreal beta) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = alpha * loReal - beta * hiReal;
+    imag[lo] = alpha * loImag - beta * hiImag;
+    real[hi] = beta * loReal + alpha * hiReal;
+    imag[hi] = beta * loImag + alpha * hiImag;
+}
+
+__device__ inline void RZSingle(int lo, int hi, qreal alpha, qreal beta){
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = alpha * loReal + beta * loImag;
+    imag[lo] = alpha * loImag - beta * loReal;
+    real[hi] = alpha * hiReal - beta * hiImag;
+    imag[hi] = alpha * hiImag + beta * hiReal;
+}
+
+__device__ inline void RZLo(int lo, qreal alpha, qreal beta) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    real[lo] = alpha * loReal + beta * loImag;
+    imag[lo] = alpha * loImag - beta * loReal;
+}
+
+__device__ inline void RZHi(int hi, qreal alpha, qreal beta){
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[hi] = alpha * hiReal - beta * hiImag;
+    imag[hi] = alpha * hiImag + beta * hiReal;
+}
+
+__device__ inline void U1Hi(int hi, qreal alpha, qreal beta) {
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[hi] = alpha * hiReal - beta * hiImag;
+    imag[hi] = alpha * hiImag + beta * hiReal;
+}
+
+#define COMPLEX_MULTIPLY_REAL(i0, r0, i1, r1) (i0 * i1 - r0 * r1)
+#define COMPLEX_MULTIPLY_IMAG(i0, r0, i1, r1) (i0 * r1 + i1 * r0)
+__device__ inline void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
+    imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
+    real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
+    real[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+}
+
+__device__ inline void HSingle(int lo, int hi) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = recRoot2 * (loReal + hiReal);
+    imag[lo] = recRoot2 * (loImag + hiImag);
+    real[hi] = recRoot2 * (loReal - hiReal);
+    imag[hi] = recRoot2 * (loImag - hiImag);
+}
+
+__device__ inline void SHi(int hi) {
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = -hiImag;
     imag[hi] = hiReal;
 }
 
-__device__ inline void tGate(int hi) {
+__device__ inline void THi(int hi) {
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = recRoot2 * (hiReal - hiImag);
@@ -153,24 +174,29 @@ __device__ void doCompute(int numGates) {
                     }
                     int hi = lo | (1 << targetQubit);
                     switch (deviceGates[i].type) {
-                        case GateCNot: {
-                            pauliXGate(lo, hi);
+                        // controlled gates' base type
+                        case GateType::CNOT: {
+                            XSingle(lo, hi);
                             break;
                         }
-                        case GateCPauliY: {
-                            pauliYGate(lo, hi);
+                        case GateType::CY: {
+                            YSingle(lo, hi);
                             break;
                         }
-                        case GateCRotateX: {
-                            rotateXGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::CZ: {
+                            ZHi(hi);
                             break;
                         }
-                        case GateCRotateY: {
-                            rotateYGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::CRX: {
+                            RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
                             break;
                         }
-                        case GateCRotateZ: {
-                            rotateZGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::CRY: {
+                            RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10);
+                            break;
+                        }
+                        case GateType::CRZ: {
+                            RZSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00);
                             break;
                         }
                         default: {
@@ -179,19 +205,25 @@ __device__ void doCompute(int numGates) {
                     }
                 }
             } else {
-                assert(deviceGates[i].type == GateCRotateZ);
+                assert(deviceGates[i].type == GateType::CZ || deviceGates[i].type == GateType::CRZ);
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskControl = (1 << controlQubit) - 1;
                 if (!isHighBlock){
                     for (int j = threadIdx.x; j < m; j += blockSize) {
                         int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                        rotateZlo(x, deviceGates[i].alpha, deviceGates[i].beta);
+                        if (deviceGates[i].type == GateType::CRZ) {
+                            RZLo(x, deviceGates[i].r00, - deviceGates[i].i00);
+                        }
                     }
                 } else {
                     for (int j = threadIdx.x; j < m; j += blockSize) {
                         int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                        rotateZhi(x, deviceGates[i].alpha, deviceGates[i].beta);
+                        if (deviceGates[i].type == GateType::CRZ) {
+                            RZHi(x, deviceGates[i].r00, - deviceGates[i].i00);
+                        } else {
+                            ZHi(x);
+                        }
                     }
                 }
             }
@@ -206,41 +238,51 @@ __device__ void doCompute(int numGates) {
                     int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
                     int hi = lo | (1 << targetQubit);
                     switch (deviceGates[i].type) {
-                        case GateHadamard: {
-                            hadamardGate(lo, hi);
+                        case GateType::U1: {
+                            U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11);
                             break;
                         }
-                        case GatePauliX: {
-                            pauliXGate(lo, hi);
+                        case GateType::U2:
+                        case GateType::U3: {
+                            USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11);
                             break;
                         }
-                        case GatePauliY: {
-                            pauliYGate(lo, hi);
+                        case GateType::H: {
+                            HSingle(lo, hi);
                             break;
                         }
-                        case GatePauliZ: {
-                            pauliZGate(hi);
+                        case GateType::X: {
+                            XSingle(lo, hi);
                             break;
                         }
-                        case GateRotateX: {
-                            rotateXGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::Y: {
+                            YSingle(lo, hi);
                             break;
                         }
-                        case GateRotateY: {
-                            rotateYGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::Z: // no break
+                        case GateType::CZ: {
+                            ZHi(hi);
                             break;
                         }
-                        case GateCRotateZ: // no break
-                        case GateRotateZ: {
-                            rotateZGate(lo, hi, deviceGates[i].alpha, deviceGates[i].beta);
+                        case GateType::RX: {
+                            RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01);
                             break;
                         }
-                        case GateS: {
-                            sGate(hi);
+                        case GateType::RY: {
+                            RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10);
                             break;
                         }
-                        case GateT: {
-                            tGate(hi);
+                        case GateType::RZ: // no break
+                        case GateType::CRZ: {
+                            RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
+                            break;
+                        }
+                        case GateType::S: {
+                            SHi(hi);
+                            break;
+                        }
+                        case GateType::T: {
+                            THi(hi);
                             break;
                         }
                         default: {
@@ -251,43 +293,51 @@ __device__ void doCompute(int numGates) {
             } else {
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 switch (deviceGates[i].type) {
-                    case GateCRotateZ: // no break
-                    case GateRotateZ: {
+                    case GateType::CZ: // no break
+                    case GateType::Z: {
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         if (!isHighBlock){
                             for (int j = threadIdx.x; j < m; j += blockSize) {
-                                rotateZlo(j, deviceGates[i].alpha, deviceGates[i].beta);
+                                RZLo(j, deviceGates[i].i00, - deviceGates[i].r00);
                             }
                         } else {
                             for (int j = threadIdx.x; j < m; j += blockSize) {
-                                rotateZhi(j, deviceGates[i].alpha, deviceGates[i].beta);
+                                RZHi(j, deviceGates[i].i00, - deviceGates[i].r00);
                             }
                         }
                         break;
                     }
-                    case GatePauliZ: {
+                    case GateType::RZ:
+                    case GateType::CRZ: {
                         if (!isHighBlock) continue;
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         for (int j = threadIdx.x; j < m; j += blockSize) {
-                            pauliZGate(j);
+                            ZHi(j);
                         }
                         break;
                     }
-                    case GateS: {
+                    case GateType::S: {
                         if (!isHighBlock) continue;
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         for (int j = threadIdx.x; j < m; j += blockSize) {
-                            sGate(j);
+                            SHi(j);
                         }
                         break;
                     }
-                    case GateT: {
+                    case GateType::T: {
                         if (!isHighBlock) continue;
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         for (int j = threadIdx.x; j < m; j += blockSize) {
-                            tGate(j);
+                            THi(j);
                         }
                         break;
+                    }
+                    case GateType::U1: {
+                        if (!isHighBlock) continue;
+                        int m = 1 << LOCAL_QUBIT_SIZE;
+                        for (int j = threadIdx.x; j < m; j += blockSize) {
+                            U1Hi(j, deviceGates[i].r11, deviceGates[i].i11);
+                        }
                     }
                     default: {
                         assert(false);
@@ -496,30 +546,14 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
         KernelGate hostGates[gates.size()];
         assert(gates.size() < MAX_GATE);
         for (size_t i = 0; i < gates.size(); i++) {
-            switch (gates[i].type) {
-                case GateRotateX: // no break
-                case GateCRotateX: {
-                    hostGates[i].alpha = gates[i].mat[0][0].real;
-                    hostGates[i].beta = gates[i].mat[0][1].imag;
-                    break;
-                }
-                case GateRotateY: // no break
-                case GateCRotateY: {
-                    hostGates[i].alpha = gates[i].mat[0][0].real;
-                    hostGates[i].beta = gates[i].mat[1][0].real;
-                    break;
-                }
-                case GateRotateZ: // no break
-                case GateCRotateZ: {
-                    hostGates[i].alpha = gates[i].mat[0][0].real;
-                    hostGates[i].beta = - gates[i].mat[0][0].imag;
-                    break;
-                }
-                default: {
-                    hostGates[i].alpha = hostGates[i].beta = 0;
-                }
-            }
-            
+            hostGates[i].r00 = gates[i].mat[0][0].real;
+            hostGates[i].i00 = gates[i].mat[0][0].imag;
+            hostGates[i].r01 = gates[i].mat[0][1].real;
+            hostGates[i].i01 = gates[i].mat[0][1].imag;
+            hostGates[i].r10 = gates[i].mat[1][0].real;
+            hostGates[i].i10 = gates[i].mat[1][0].imag;
+            hostGates[i].r11 = gates[i].mat[1][1].real;
+            hostGates[i].i11 = gates[i].mat[1][1].imag;
             if (gates[i].controlQubit == -1) {
                 hostGates[i].controlQubit = -1;
                 hostGates[i].controlIsGlobal = 2;

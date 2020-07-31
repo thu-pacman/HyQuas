@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
-#define USE_OPT 1
+#define USE_OPT 0
 using namespace std;
 
 void Circuit::run() {
@@ -13,7 +13,7 @@ void Circuit::run() {
     if (USE_OPT) {
         result = kernelExecOpt(deviceStateVec, numQubits, schedule);
     } else {
-        kernelExecOpt(deviceStateVec, numQubits, schedule);
+        kernelExecSimple(deviceStateVec, numQubits, schedule);
     }
 }
 

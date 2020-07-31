@@ -9,4 +9,4 @@ cd $HOME/QCSimulator/build
 cmake ..
 make clean
 make
-./parser $HOME/QC/qc-benchmark/output/adder_26
+./parser $HOME/QC/qc-benchmark/output/basis_change_28

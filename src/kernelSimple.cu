@@ -56,7 +56,7 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
 #define CONTROL_GATE_END }
 
 template <unsigned int blockSize>
-__global__ void controlledNotGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+__global__ void CNOTKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
         qreal real = a.real[lo];
         qreal imag = a.imag[lo];
@@ -68,7 +68,7 @@ __global__ void controlledNotGate(ComplexArray a, int numQubit_, int controlQubi
 }
 
 template <unsigned int blockSize>
-__global__ void controlledPauliYGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+__global__ void CYKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -82,7 +82,15 @@ __global__ void controlledPauliYGate(ComplexArray a, int numQubit_, int controlQ
 }
 
 template <unsigned int blockSize>
-__global__ void controlledRotateXGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CZKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+    CONTROL_GATE_BEGIN {
+        a.real[hi] = -a.real[hi];
+        a.imag[hi] = -a.imag[hi];
+    } CONTROL_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void CRXKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -96,7 +104,7 @@ __global__ void controlledRotateXGate(ComplexArray a, int numQubit_, int control
 }
 
 template <unsigned int blockSize>
-__global__ void controlledRotateYGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CRYKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -110,7 +118,7 @@ __global__ void controlledRotateYGate(ComplexArray a, int numQubit_, int control
 }
 
 template <unsigned int blockSize>
-__global__ void controlledRotateZGate(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CRZKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -124,7 +132,37 @@ __global__ void controlledRotateZGate(ComplexArray a, int numQubit_, int control
 }
 
 template <unsigned int blockSize>
-__global__ void hadamardGate(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+__global__ void U1Kernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+    SINGLE_GATE_BEGIN {
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[hi] = alpha * hiReal - beta * hiImag;
+        a.imag[hi] = alpha * hiImag + beta * hiReal;
+    } SINGLE_GATE_END
+}
+
+#define COMPLEX_MULTIPLY_REAL(i0, r0, i1, r1) (i0 * i1 - r0 * r1)
+#define COMPLEX_MULTIPLY_IMAG(i0, r0, i1, r1) (i0 * r1 + i1 * r0)
+
+template <unsigned int blockSize>
+__global__ void UKernel(ComplexArray a, int numQubit_, int targetQubit, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+    SINGLE_GATE_BEGIN {
+        qreal loReal = a.real[lo];
+        qreal loImag = a.imag[lo];
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
+        a.imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
+        a.real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
+        a.real[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+    } SINGLE_GATE_END
+}
+
+#undef COMPLEX_MULTIPLY_REAL
+#undef COMPLEX_MULTIPLY_IMAG
+
+template <unsigned int blockSize>
+__global__ void HKernel(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
     SINGLE_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -138,7 +176,7 @@ __global__ void hadamardGate(ComplexArray a, int numQubit_, int targetQubit, qre
 }
 
 template <unsigned int blockSize>
-__global__ void pauliXGate(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void XKernel(ComplexArray a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
         qreal real = a.real[lo];
         qreal imag = a.imag[lo];
@@ -150,7 +188,7 @@ __global__ void pauliXGate(ComplexArray a, int numQubit_, int targetQubit) {
 }
 
 template <unsigned int blockSize>
-__global__ void pauliYGate(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void YKernel(ComplexArray a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -164,15 +202,36 @@ __global__ void pauliYGate(ComplexArray a, int numQubit_, int targetQubit) {
 }
 
 template <unsigned int blockSize>
-__global__ void pauliZGate(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void ZKernel(ComplexArray a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
         a.real[hi] = -a.real[hi];
         a.imag[hi] = -a.imag[hi];
     } SINGLE_GATE_END
 }
 
+
 template <unsigned int blockSize>
-__global__ void rotateXGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void SKernel(ComplexArray a, int numQubit_, int targetQubit) {
+    SINGLE_GATE_BEGIN {
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[hi] = -hiImag;
+        a.imag[hi] = hiReal;
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void TKernel(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+    SINGLE_GATE_BEGIN {
+        qreal hiReal = a.real[hi];
+        qreal hiImag = a.imag[hi];
+        a.real[hi] = recRoot2 * (hiReal - hiImag);
+        a.imag[hi] = recRoot2 * (hiReal + hiImag);
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void RXKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -186,7 +245,7 @@ __global__ void rotateXGate(ComplexArray a, int numQubit_, int targetQubit, qrea
 }
 
 template <unsigned int blockSize>
-__global__ void rotateYGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void RYKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -200,7 +259,7 @@ __global__ void rotateYGate(ComplexArray a, int numQubit_, int targetQubit, qrea
 }
 
 template <unsigned int blockSize>
-__global__ void rotateZGate(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void RZKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
         qreal loReal = a.real[lo];
         qreal loImag = a.imag[lo];
@@ -213,25 +272,6 @@ __global__ void rotateZGate(ComplexArray a, int numQubit_, int targetQubit, qrea
     } SINGLE_GATE_END
 }
 
-template <unsigned int blockSize>
-__global__ void sGate(ComplexArray a, int numQubit_, int targetQubit) {
-    SINGLE_GATE_BEGIN {
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[hi] = -hiImag;
-        a.imag[hi] = hiReal;
-    } SINGLE_GATE_END
-}
-
-template <unsigned int blockSize>
-__global__ void tGate(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
-    SINGLE_GATE_BEGIN {
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[hi] = recRoot2 * (hiReal - hiImag);
-        a.imag[hi] = recRoot2 * (hiReal + hiImag);
-    } SINGLE_GATE_END
-}
 
 void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
     int numQubit_ = numQubits - 1;
@@ -239,66 +279,86 @@ void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const Schedul
     for (auto& gg: schedule.gateGroups) {
         for (auto& gate: gg.gates) {
             switch (gate.type) {
-                case GateCNot: {
-                    controlledNotGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                case GateType::CNOT: {
+                    CNOTKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                     break;
                 }
-                case GateCPauliY: {
-                    controlledPauliYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                case GateType::CY: {
+                    CYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                     break;
                 }
-                case GateCRotateX: {
-                    controlledRotateXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[0][1].imag);
+                case GateType::CZ: {
+                    CZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
                     break;
                 }
-                case GateCRotateY: {
-                    controlledRotateYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                case GateType::CRX: {
+                    CRXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                        deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                    break;
+                }
+                case GateType::CRY: {
+                    CRYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                         deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
                     break;
                 }
-                case GateCRotateZ: {
-                    controlledRotateZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                case GateType::CRZ: {
+                    CRZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                         deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
                     break;
                 }
-                case GateHadamard: {
-                    hadamardGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
+                case GateType::U1: {
+                    U1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[1][1].real, gate.mat[1][1].imag);
                     break;
                 }
-                case GatePauliX: {
-                    pauliXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                case GateType::U2: // no break
+                case GateType::U3: {
+                    UKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                        deviceStateVec, numQubit_, gate.targetQubit,
+                        gate.mat[0][0].real, gate.mat[0][0].imag,
+                        gate.mat[0][1].real, gate.mat[0][1].imag,
+                        gate.mat[1][0].real, gate.mat[1][0].imag,
+                        gate.mat[1][1].real, gate.mat[1][1].imag
+                    );
                     break;
                 }
-                case GatePauliY: {
-                    pauliYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                case GateType::H: {
+                    HKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
                     break;
                 }
-                case GatePauliZ: {
-                    pauliZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                case GateType::X: {
+                    XKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                     break;
                 }
-                case GateRotateX: {
-                    rotateXGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[0][1].imag);
+                case GateType::Y: {
+                    YKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                     break;
                 }
-                case GateRotateY: {
-                    rotateYGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                case GateType::Z: {
+                    ZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                    break;
+                }
+                case GateType::S: {
+                    SKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                    break;
+                }
+                case GateType::T: {
+                    TKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
+                    break;
+                }
+                case GateType::RX: {
+                    RXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                    break;
+                }
+                case GateType::RY: {
+                    RYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                         deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
                     break;
                 }
-                case GateRotateZ: {
-                    rotateZGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                case GateType::RZ: {
+                    RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                         deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
-                    break;
-                }
-                case GateS: {
-                    sGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                    break;
-                }
-                case GateT: {
-                    tGate<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
                     break;
                 }
                 default: {

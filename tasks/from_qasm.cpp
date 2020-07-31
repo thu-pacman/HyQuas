@@ -96,13 +96,13 @@ int main(int argc, char* argv[]) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
             assert(qid.size() == 1);
-            c->addGate(Gate::Hadamard(qid[0]));
+            c->addGate(Gate::H(qid[0]));
             // printf("h %d\n", qid[0]);
         } else if (strcmp(buffer, "x") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
             assert(qid.size() == 1);
-            c->addGate(Gate::PauliX(qid[0]));
+            c->addGate(Gate::X(qid[0]));
             // pritnf("x %d\n", qid[0]);
         } else {
             auto gate = parse_gate(buffer);
@@ -125,21 +125,21 @@ int main(int argc, char* argv[]) {
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 1);
-                c->addGate(Gate::RotateX(qid[0], gate.second[0]));
+                c->addGate(Gate::RX(qid[0], gate.second[0]));
                 // printf("rx %d %f\n", qid[0], gate.second[0]);
             } else if (gate.first == "ry") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 1);
-                c->addGate(Gate::RotateY(qid[0], gate.second[0]));
+                c->addGate(Gate::RY(qid[0], gate.second[0]));
                 // printf("ry %d %f\n", qid[0], gate.second[0]);
             } else if (gate.first == "rz") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 1);
-                c->addGate(Gate::RotateZ(qid[0], gate.second[0]));
+                c->addGate(Gate::RZ(qid[0], gate.second[0]));
                 // printf("rz %d %f\n", qid[0], gate.second[0]);
             } else {
                 printf("unrecognized token %s\n", buffer);
@@ -149,5 +149,10 @@ int main(int argc, char* argv[]) {
         fgets(buffer, BUFFER_SIZE, f);
     }
     c->compile();
+    c->run();
+    for (int i = 0; i < 10; i++) {
+        Complex x = c->ampAt(i);
+        printf("%.12f %.12f\n", x.real, x.imag);
+    }
     return 0;
 }
