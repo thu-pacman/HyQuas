@@ -110,7 +110,25 @@ int main(int argc, char* argv[]) {
             // pritnf("x %d\n", qid[0]);
         } else {
             auto gate = parse_gate(buffer);
-            if (gate.first == "u1") {
+            if (gate.first == "crx") {
+                assert(gate.second.size() == 1);
+                fscanf(f, "%s", buffer);
+                auto qid = parse_qid(buffer);
+                assert(qid.size() == 2);
+                c->addGate(Gate::CRX(qid[0], qid[1], gate.second[0]));
+            } else if (gate.first == "cry") {
+                assert(gate.second.size() == 1);
+                fscanf(f, "%s", buffer);
+                auto qid = parse_qid(buffer);
+                assert(qid.size() == 2);
+                c->addGate(Gate::CRY(qid[0], qid[1], gate.second[0]));
+            } else if (gate.first == "crz") {
+                assert(gate.second.size() == 1);
+                fscanf(f, "%s", buffer);
+                auto qid = parse_qid(buffer);
+                assert(qid.size() == 2);
+                c->addGate(Gate::CRZ(qid[0], qid[1], gate.second[0]));
+            } else if (gate.first == "u1") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
@@ -157,6 +175,6 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < 128; i++) {
         show(c, i);
     }
-    show(c, 4435313);
+    show(c, 144460237);
     return 0;
 }

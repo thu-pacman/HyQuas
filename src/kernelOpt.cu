@@ -23,7 +23,7 @@ struct KernelGate {
 };
 
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
-const int MAX_GATE = 152;
+const int MAX_GATE = 600;
 const int MAX_QUBIT = 30;
 extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
@@ -123,7 +123,7 @@ __device__ inline void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, 
     real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
     imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
     real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
-    real[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+    imag[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
 }
 
 __device__ inline void HSingle(int lo, int hi) {
@@ -188,7 +188,7 @@ __device__ void doCompute(int numGates) {
                             break;
                         }
                         case GateType::CRX: {
-                            RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
+                            RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01);
                             break;
                         }
                         case GateType::CRY: {
@@ -196,7 +196,7 @@ __device__ void doCompute(int numGates) {
                             break;
                         }
                         case GateType::CRZ: {
-                            RZSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00);
+                            RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
                             break;
                         }
                         default: {
@@ -338,6 +338,7 @@ __device__ void doCompute(int numGates) {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             U1Hi(j, deviceGates[i].r11, deviceGates[i].i11);
                         }
+                        break;
                     }
                     default: {
                         assert(false);
@@ -384,62 +385,6 @@ __device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
     }
 }
 
-#define REDUCE_QUBIT_STEP(x) {\
-if (blockSize >= x * 2) { \
-    if (tid < x) { \
-            sdata[tid] += sdata[tid + x]; \
-    } \
-} \
-__syncthreads();\
-}
-
-#define REDUCE_SINGLE_STEP(x) {\
-if (blockSize >= x * 2) { \
-    if (tid < x) { \
-        sdata[tid] += sdata[tid + x]; \
-    } \
-} \
-__syncthreads(); \
-}
-
-template <unsigned int blockSize>
-__device__ void measure(qreal* result, qindex* threadBias, int numQubits, qindex enumerate) {
-    int tid = threadIdx.x;
-    qindex bias = blockBias | threadBias[tid];
-    __shared__ qreal sdata[blockSize];
-    for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | tid, y = enumerate;
-        x >= 0;
-        x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
-            real[x] = real[x] * real[x] + imag[x] * imag[x];
-    }
-    for (int j = 0; j < numQubits; j++) {
-        sdata[tid] = 0;
-        for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | tid, y = enumerate;
-            x >= 0;
-            x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
-            
-            qindex target = bias | y;
-            if ((target >> j) & 1) {
-                sdata[tid] += real[x];
-            }
-        }
-        __syncthreads();
-        REDUCE_QUBIT_STEP(512);
-        REDUCE_QUBIT_STEP(256);
-        REDUCE_QUBIT_STEP(128);
-        REDUCE_QUBIT_STEP(64);
-        REDUCE_QUBIT_STEP(32);
-        REDUCE_QUBIT_STEP(16);
-        REDUCE_QUBIT_STEP(8);
-        REDUCE_QUBIT_STEP(4);
-        REDUCE_QUBIT_STEP(2);
-        REDUCE_QUBIT_STEP(1);
-        if (tid == 0) {
-            result[j * gridDim.x + blockIdx.x] = sdata[0];
-        }
-    }
-}
-
 template <unsigned int blockSize>
 __global__ void run(ComplexArray a, qindex* threadBias, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
@@ -448,42 +393,6 @@ __global__ void run(ComplexArray a, qindex* threadBias, int numQubits, int numGa
     doCompute<blockSize>(numGates);
     __syncthreads();
     saveData(a, threadBias, enumerate);
-}
-
-template <unsigned int blockSize>
-__global__ void runLast(ComplexArray a, qreal* result, qindex* threadBias, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    fetchData(a, threadBias, idx, blockHot, enumerate, numQubits);
-    __syncthreads();
-    doCompute<blockSize>(numGates);
-    __syncthreads();
-    saveData(a, threadBias, enumerate);
-    measure<blockSize>(result, threadBias, numQubits, enumerate); // measure must behind save
-}
-
-template <unsigned int blockSize, typename T>
-__global__ void reduceSum(T* g_idata, T* g_odata, int n) {
-    __shared__ T sdata[blockSize];
-    int tid = threadIdx.x;
-    qindex i = blockIdx.x * n + tid;
-    int gridSize = blockSize * 2;
-    sdata[tid] = 0;
-    while (i < (blockIdx.x + 1) * n) {
-        sdata[tid] += g_idata[i] + g_idata[i + blockSize]; i += gridSize;
-    }
-    __syncthreads();
-    REDUCE_SINGLE_STEP(512);
-    REDUCE_SINGLE_STEP(256);
-    REDUCE_SINGLE_STEP(128);
-    REDUCE_SINGLE_STEP(64);
-    REDUCE_SINGLE_STEP(32);
-    REDUCE_SINGLE_STEP(16);
-    REDUCE_SINGLE_STEP(8);
-    REDUCE_SINGLE_STEP(4);
-    REDUCE_SINGLE_STEP(2);
-    REDUCE_SINGLE_STEP(1);
-    // if (tid == 0) printf("%d: sdata %f\n", blockIdx.x, sdata[0]);
-    if (tid == 0) g_odata[blockIdx.x] = sdata[0];
 }
 
 std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
@@ -571,25 +480,8 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
 
         // execute
         qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
-        if (g == schedule.gateGroups.size() - 1) {
-            qreal *deviceResultRaw, *deviceResult;
-            // raw format:
-            // ---------------------------------------------------
-            // | qubit 0 (* gridDim) | qubit 1 (* gridDim) | ...
-            // ---------------------------------------------------
-            checkCudaErrors(cudaMalloc(&deviceResultRaw, gridDim * sizeof(qreal) * numQubits));
-            runLast<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-                (deviceStateVec, deviceResultRaw, threadBias, numQubits, gates.size(), blockHot, enumerate);
-            checkCudaErrors(cudaMalloc(&deviceResult, sizeof(qreal) * numQubits));
-            reduceSum<1<<THREAD_DEP><<<numQubits, 1<<THREAD_DEP>>>(deviceResultRaw, deviceResult, gridDim);
-            ret.resize(numQubits);
-            checkCudaErrors(cudaMemcpy(ret.data(), deviceResult, sizeof(qreal) * numQubits, cudaMemcpyDeviceToHost));
-            checkCudaErrors(cudaFree(deviceResult));
-            checkCudaErrors(cudaFree(deviceResultRaw));
-        }else {
-            run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-                (deviceStateVec, threadBias, numQubits, gates.size(), blockHot, enumerate);
-        }
+        run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
+            (deviceStateVec, threadBias, numQubits, gates.size(), blockHot, enumerate);
         if (MEASURE_STAGE) {
             cudaEventRecord(stop, 0);
             cudaEventSynchronize(stop);
