@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
+#include "logger.h"
 using namespace std;
 
 void Circuit::run() {
@@ -18,7 +19,10 @@ void Circuit::run() {
 #endif
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-    printf("time: %d ms\n", int(duration.count()));
+    Logger::add("Time Cost: %d ms", int(duration.count()));
+    resultReal.resize(1ll << numQubits);
+    resultImag.resize(1ll << numQubits);
+    kernelDeviceToHost((ComplexArray){resultReal.data(), resultImag.data()}, deviceStateVec, numQubits);
 }
 
 void Circuit::dumpGates() {
@@ -44,15 +48,15 @@ void Circuit::dumpGates() {
 }
 
 Complex Circuit::ampAt(qindex idx) {
-    return kernelGetAmp(deviceStateVec, idx);
+    return Complex(resultReal[idx], resultImag[idx]);
 }
 
 void Circuit::compile() {
+    Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    printf("before compiler %d\n", int(gates.size()));
     Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
-    printf("Total Groups: %d\n", int(schedule.gateGroups.size()));
+    Logger::add("Total Groups: %d", int(schedule.gateGroups.size()));
     fflush(stdout);
 #endif
 }

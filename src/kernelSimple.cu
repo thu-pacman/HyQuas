@@ -395,6 +395,7 @@ void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const std::ve
             }
         }
     }
+    checkCudaErrors(cudaDeviceSynchronize());
 }
 
 template <unsigned int blockSize>
@@ -474,4 +475,11 @@ Complex kernelGetAmp(ComplexArray& deviceStateVec, qindex idx) {
     cudaMemcpy(&ret.real, deviceStateVec.real + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
     cudaMemcpy(&ret.imag, deviceStateVec.imag + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
     return ret;
+}
+
+void kernelDeviceToHost(ComplexArray hostStateVec, ComplexArray deviceStateVec, int numQubits) {
+    cudaMemcpy(hostStateVec.real, deviceStateVec.real, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
+    cudaMemcpy(hostStateVec.imag, deviceStateVec.imag, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
+    cudaFree(deviceStateVec.real);
+    cudaFree(deviceStateVec.imag);
 }

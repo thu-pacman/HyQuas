@@ -402,12 +402,12 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));
     std::vector<qreal> ret;
     for (size_t g = 0; g < schedule.gateGroups.size(); g++) {
+#ifdef MEASURE_STAGE
         cudaEvent_t start, stop;
-        if (MEASURE_STAGE) {
             checkCudaErrors(cudaEventCreate(&start));
             checkCudaErrors(cudaEventCreate(&stop));
             checkCudaErrors(cudaEventRecord(start, 0));
-        }
+#endif
         auto& gates = schedule.gateGroups[g].gates;
         // initialize blockHot, enumerate, threadBias
         qindex relatedQubits = schedule.gateGroups[g].relatedQubits;
@@ -482,7 +482,7 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
         qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
         run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
             (deviceStateVec, threadBias, numQubits, gates.size(), blockHot, enumerate);
-        if (MEASURE_STAGE) {
+#ifdef MEASURE_STAGE
             cudaEventRecord(stop, 0);
             cudaEventSynchronize(stop);
             float time;
@@ -490,13 +490,11 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
             cudaEventDestroy(start);
             cudaEventDestroy(stop);
             printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
-        }
+#endif
         // printf("Group End\n");
     }
     checkCudaErrors(cudaFree(threadBias));
-    if (MEASURE_STAGE) {
-        checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
-    }
+    checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
     return ret;
 }
 

@@ -19,6 +19,7 @@ struct Complex {
         imag = 0;
         return *this;
     }
+    qreal len() const { return real * real + imag * imag; }
 };
 
 struct ComplexArray {

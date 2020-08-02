@@ -67,7 +67,9 @@ Schedule Compiler::run() {
             break;
         cnt ++;
     }
+#ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
+#endif
     return schedule;
 }
 
@@ -108,18 +110,6 @@ GateGroup Compiler::getGroup() {
         if (!full[i] && canMerge(ret, cur[i]))
             ret = GateGroup::merge(ret, cur[i]);
     }
-
-    // for (int i = 0; i < numQubits; i++)
-    //     if (!ret.contains(i)) {
-    //         for (auto& g: cur[i].gates) {
-    //             if (g.targetQubit != i) continue;
-    //             if (g.isDiagonal() && g.targetQubit == i) {
-    //                 ret.gates.push_back(g);
-    //             } else {
-    //                 break;
-    //             }
-    //         }
-    //     }
     return ret;
 }
 

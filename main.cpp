@@ -4,6 +4,7 @@
 #include <regex>
 #include <cmath>
 #include "circuit.h"
+#include "logger.h"
 using namespace std;
 const int BUFFER_SIZE = 1000;
 char buffer[BUFFER_SIZE];
@@ -63,20 +64,27 @@ void show(Circuit* c, qindex idx) {
     printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, x.real, x.imag);
 }
 
+void conditionShow(Circuit* c, qindex idx) {
+    Complex x = c->ampAt(idx);
+    if (x.len() > 0.001) 
+        printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, x.real, x.imag);
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         printf("./parser qasmfile\n");
         exit(1);
     }
-    printf("%s\n", argv[1]);
-    FILE* f = fopen(argv[1], "r");
+    FILE* f = NULL;
+    if ((f = fopen(argv[1], "r")) == NULL) {
+        printf("fail to open %s\n", argv[1]);
+    }
     int n = -1;
     Circuit* c;
     while (fscanf(f, "%s", buffer) != EOF) {
         if (strcmp(buffer, "//") == 0 || strcmp(buffer, "OPENQASM") == 0 || strcmp(buffer, "include") == 0) {
         } else if (strcmp(buffer, "qreg") == 0) {
             fscanf(f, "%*c%*c%*c%d", &n);
-            printf("%d qubits\n", n); fflush(stdout);
             c = new Circuit(n);
         } else if (strcmp(buffer, "cx") == 0) {
             fscanf(f, "%s", buffer);
@@ -175,6 +183,9 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < 128; i++) {
         show(c, i);
     }
-    show(c, 144460237);
+    for (int i = 128; i < (1 << n); i++) {
+        conditionShow(c, i);
+    }
+    Logger::print();
     return 0;
 }
