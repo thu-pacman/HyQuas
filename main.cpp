@@ -59,15 +59,24 @@ std::pair<std::string, std::vector<qreal>> parse_gate(char buf[]) {
     return std::make_pair(name, params);
 }
 
+qreal zero_wrapper(qreal x) {
+    const qreal eps = 1e-14;
+    if (x > -eps && x < eps) {
+        return 0;
+    } else {
+        return x;
+    }
+}
+
 void show(Circuit* c, qindex idx) {
     Complex x = c->ampAt(idx);
-    printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, x.real, x.imag);
+    printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
 }
 
 void conditionShow(Circuit* c, qindex idx) {
     Complex x = c->ampAt(idx);
     if (x.len() > 0.001) 
-        printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, x.real, x.imag);
+        printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
 }
 
 int main(int argc, char* argv[]) {
@@ -78,6 +87,7 @@ int main(int argc, char* argv[]) {
     FILE* f = NULL;
     if ((f = fopen(argv[1], "r")) == NULL) {
         printf("fail to open %s\n", argv[1]);
+        exit(1);
     }
     int n = -1;
     Circuit* c;

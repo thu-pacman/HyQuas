@@ -175,6 +175,7 @@ __device__ void doCompute(int numGates) {
                     int hi = lo | (1 << targetQubit);
                     switch (deviceGates[i].type) {
                         // controlled gates' base type
+                        case GateType::CCX: // no break WARNING
                         case GateType::CNOT: {
                             XSingle(lo, hi);
                             break;
@@ -210,9 +211,9 @@ __device__ void doCompute(int numGates) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskControl = (1 << controlQubit) - 1;
                 if (!isHighBlock){
-                    for (int j = threadIdx.x; j < m; j += blockSize) {
-                        int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                        if (deviceGates[i].type == GateType::CRZ) {
+                    if (deviceGates[i].type == GateType::CRZ) {
+                        for (int j = threadIdx.x; j < m; j += blockSize) {
+                            int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
                             RZLo(x, deviceGates[i].r00, - deviceGates[i].i00);
                         }
                     }
@@ -293,8 +294,8 @@ __device__ void doCompute(int numGates) {
             } else {
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 switch (deviceGates[i].type) {
-                    case GateType::CZ: // no break
-                    case GateType::Z: {
+                    case GateType::RZ: // no break
+                    case GateType::CRZ: {
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         if (!isHighBlock){
                             for (int j = threadIdx.x; j < m; j += blockSize) {
@@ -307,8 +308,8 @@ __device__ void doCompute(int numGates) {
                         }
                         break;
                     }
-                    case GateType::RZ:
-                    case GateType::CRZ: {
+                    case GateType::Z: // no break
+                    case GateType::CZ: {
                         if (!isHighBlock) continue;
                         int m = 1 << LOCAL_QUBIT_SIZE;
                         for (int j = threadIdx.x; j < m; j += blockSize) {
