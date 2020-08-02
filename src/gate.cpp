@@ -5,6 +5,20 @@
 
 static int globalGateID = 0;
 
+Gate Gate::CCX(int controlQubit, int controlQubit2, int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CCX;
+    g.mat[0][0] = 0; g.mat[0][1] = 1;
+    g.mat[1][0] = 1; g.mat[1][1] = 0;
+    g.name = "CCX";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    g.controlQubit2 = controlQubit2;
+    return g;
+
+}
+
 Gate Gate::CNOT(int controlQubit, int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;

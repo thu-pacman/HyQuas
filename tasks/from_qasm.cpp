@@ -88,8 +88,7 @@ int main(int argc, char* argv[]) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
             assert(qid.size() == 3);
-            c->addGate(Gate::CNOT(qid[1], qid[2]));
-            printf("warning: ccx -> cx\n");
+            c->addGate(Gate::CCX(qid[0], qid[1], qid[2]));
             // printf("ccx %d %d %d\n", qid[0], qid[1], qid[2]);
         } else if (strcmp(buffer, "cz") == 0) {
             fscanf(f, "%s", buffer);
@@ -158,5 +157,6 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < 128; i++) {
         show(c, i);
     }
+    show(c, 4435313);
     return 0;
 }

@@ -6,17 +6,16 @@
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
-#define USE_OPT 0
 using namespace std;
 
 void Circuit::run() {
     kernelInit(deviceStateVec, numQubits);
     auto start = chrono::system_clock::now();
-    if (USE_OPT) {
-        result = kernelExecOpt(deviceStateVec, numQubits, schedule);
-    } else {
-        kernelExecSimple(deviceStateVec, numQubits, schedule);
-    }
+#ifdef USE_GROUP
+    kernelExecOpt(deviceStateVec, numQubits, schedule);
+#else
+    kernelExecSimple(deviceStateVec, numQubits, gates);
+#endif
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     printf("time: %d ms\n", int(duration.count()));
@@ -44,22 +43,16 @@ void Circuit::dumpGates() {
     }
 }
 
-qreal Circuit::measure(int targetQubit, int state) {
-    qreal prob = USE_OPT ? (1 - result[targetQubit]) : kernelMeasure(deviceStateVec, numQubits, targetQubit);
-    if (state == 1) {
-        prob = 1 - prob;
-    }
-    return prob;
-}
-
 Complex Circuit::ampAt(qindex idx) {
     return kernelGetAmp(deviceStateVec, idx);
 }
 
 void Circuit::compile() {
+#ifdef USE_GROUP
     printf("before compiler %d\n", int(gates.size()));
     Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
     printf("Total Groups: %d\n", int(schedule.gateGroups.size()));
     fflush(stdout);
+#endif
 }

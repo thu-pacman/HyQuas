@@ -4,7 +4,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ
+    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ
 };
 
 struct Gate {
@@ -14,7 +14,8 @@ struct Gate {
     std::string name;
     int targetQubit;
     int controlQubit; // -1 if no control
-    Gate() = default;
+    int controlQubit2; // -1 if no control
+    Gate(): controlQubit(-1), controlQubit2(-1) {};
     Gate(const Gate&) = default;
     bool isControlGate() const {
         return controlQubit != -1;
@@ -22,7 +23,7 @@ struct Gate {
     bool isDiagonal() const {
         return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
     }
-    
+    static Gate CCX(int c1, int c2, int targetQubit);
     static Gate CNOT(int controlQubit, int targetQubit);
     static Gate CY(int controlQubit, int targetQubit);
     static Gate CZ(int controlQubit, int targetQubit);

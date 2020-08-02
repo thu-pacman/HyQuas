@@ -54,6 +54,33 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
 
 #define CONTROL_GATE_END }
 
+#define CC_GATE_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit) - 1; \
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) { \
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask); \
+        if (!((lo >> c1) & 1)) \
+            continue; \
+        if (!((lo >> c2) & 1)) \
+            continue; \
+        qindex hi = lo | (qindex(1) << targetQubit);
+#define CC_GATE_END }
+
+
+
+template <unsigned int blockSize>
+__global__ void CCXKernel(ComplexArray a, int numQubit_, int c1, int c2, int targetQubit) {
+    CC_GATE_BEGIN {
+        qreal real = a.real[lo];
+        qreal imag = a.imag[lo];
+        a.real[lo] = a.real[hi];
+        a.imag[lo] = a.imag[hi];
+        a.real[hi] = real;
+        a.imag[hi] = imag;
+    } CC_GATE_END
+}
+
+
 template <unsigned int blockSize>
 __global__ void CNOTKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
@@ -272,97 +299,99 @@ __global__ void RZKernel(ComplexArray a, int numQubit_, int targetQubit, qreal a
 }
 
 
-void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
+void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
-    for (auto& gg: schedule.gateGroups) {
-        for (auto& gate: gg.gates) {
-            switch (gate.type) {
-                case GateType::CNOT: {
-                    CNOTKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
-                    break;
-                }
-                case GateType::CY: {
-                    CYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
-                    break;
-                }
-                case GateType::CZ: {
-                    CZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
-                    break;
-                }
-                case GateType::CRX: {
-                    CRXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
-                    break;
-                }
-                case GateType::CRY: {
-                    CRYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
-                    break;
-                }
-                case GateType::CRZ: {
-                    CRZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
-                    break;
-                }
-                case GateType::U1: {
-                    U1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[1][1].real, gate.mat[1][1].imag);
-                    break;
-                }
-                case GateType::U2: // no break
-                case GateType::U3: {
-                    UKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit,
-                        gate.mat[0][0].real, gate.mat[0][0].imag,
-                        gate.mat[0][1].real, gate.mat[0][1].imag,
-                        gate.mat[1][0].real, gate.mat[1][0].imag,
-                        gate.mat[1][1].real, gate.mat[1][1].imag
-                    );
-                    break;
-                }
-                case GateType::H: {
-                    HKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
-                    break;
-                }
-                case GateType::X: {
-                    XKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                    break;
-                }
-                case GateType::Y: {
-                    YKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                    break;
-                }
-                case GateType::Z: {
-                    ZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                    break;
-                }
-                case GateType::S: {
-                    SKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
-                    break;
-                }
-                case GateType::T: {
-                    TKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
-                    break;
-                }
-                case GateType::RX: {
-                    RXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
-                    break;
-                }
-                case GateType::RY: {
-                    RYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
-                    break;
-                }
-                case GateType::RZ: {
-                    RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                        deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
-                    break;
-                }
-                default: {
-                    assert(false);
-                }
+    for (auto& gate: gates) {
+        switch (gate.type) {
+            case GateType::CCX: {
+                CCXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.controlQubit2, gate.targetQubit);
+                break;
+            }
+            case GateType::CNOT: {
+                CNOTKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                break;
+            }
+            case GateType::CY: {
+                CYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                break;
+            }
+            case GateType::CZ: {
+                CZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit);
+                break;
+            }
+            case GateType::CRX: {
+                CRXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                break;
+            }
+            case GateType::CRY: {
+                CRYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
+                break;
+            }
+            case GateType::CRZ: {
+                CRZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                break;
+            }
+            case GateType::U1: {
+                U1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[1][1].real, gate.mat[1][1].imag);
+                break;
+            }
+            case GateType::U2: // no break
+            case GateType::U3: {
+                UKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit,
+                    gate.mat[0][0].real, gate.mat[0][0].imag,
+                    gate.mat[0][1].real, gate.mat[0][1].imag,
+                    gate.mat[1][0].real, gate.mat[1][0].imag,
+                    gate.mat[1][1].real, gate.mat[1][1].imag
+                );
+                break;
+            }
+            case GateType::H: {
+                HKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
+                break;
+            }
+            case GateType::X: {
+                XKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                break;
+            }
+            case GateType::Y: {
+                YKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                break;
+            }
+            case GateType::Z: {
+                ZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                break;
+            }
+            case GateType::S: {
+                SKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                break;
+            }
+            case GateType::T: {
+                TKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
+                break;
+            }
+            case GateType::RX: {
+                RXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                break;
+            }
+            case GateType::RY: {
+                RYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
+                break;
+            }
+            case GateType::RZ: {
+                RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                break;
+            }
+            default: {
+                assert(false);
             }
         }
     }

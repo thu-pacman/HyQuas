@@ -14,7 +14,6 @@ public:
     void addGate(const Gate& gate) {
         gates.push_back(gate);
     }
-    qreal measure(int targetQubit, int state = 0); // probability of zero state
     void dumpGates();
     Complex ampAt(qindex idx);
 
@@ -23,5 +22,4 @@ private:
     std::vector<Gate> gates;
     ComplexArray deviceStateVec;
     Schedule schedule;
-    std::vector<qreal> result;
 };
