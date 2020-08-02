@@ -58,6 +58,11 @@ std::pair<std::string, std::vector<qreal>> parse_gate(char buf[]) {
     return std::make_pair(name, params);
 }
 
+void show(Circuit* c, qindex idx) {
+    Complex x = c->ampAt(idx);
+    printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, x.real, x.imag);
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         printf("./parser qasmfile\n");
@@ -150,9 +155,8 @@ int main(int argc, char* argv[]) {
     }
     c->compile();
     c->run();
-    for (int i = 0; i < 10; i++) {
-        Complex x = c->ampAt(i);
-        printf("%.12f %.12f\n", x.real, x.imag);
+    for (int i = 0; i < 128; i++) {
+        show(c, i);
     }
     return 0;
 }

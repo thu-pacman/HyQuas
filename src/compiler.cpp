@@ -52,6 +52,7 @@ void Schedule::dump(int numQubits) {
         }
         printf("\n");
     }
+    fflush(stdout);
 }
 
 Compiler::Compiler(int numQubits, int localSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), remainGates(inputGates) { }

@@ -23,7 +23,6 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
         printf("cudaSetDevice failed! ");
         exit(1);
 	}
-    assert(numQubits > (SINGLE_SIZE_DEP +THREAD_DEP + 1 + REDUCE_BLOCK_DEP + THREAD_DEP + 1));
     assert(numQubits < 31);
     size_t size = sizeof(qreal) << numQubits;
     checkCudaErrors(cudaMalloc(&deviceStateVec.real, size));
@@ -154,7 +153,7 @@ __global__ void UKernel(ComplexArray a, int numQubit_, int targetQubit, qreal r0
         a.real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
         a.imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
         a.real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
-        a.real[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+        a.imag[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
     } SINGLE_GATE_END
 }
 

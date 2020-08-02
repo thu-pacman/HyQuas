@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <assert.h>
+#include <chrono>
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
@@ -10,11 +11,15 @@ using namespace std;
 
 void Circuit::run() {
     kernelInit(deviceStateVec, numQubits);
+    auto start = chrono::system_clock::now();
     if (USE_OPT) {
         result = kernelExecOpt(deviceStateVec, numQubits, schedule);
     } else {
         kernelExecSimple(deviceStateVec, numQubits, schedule);
     }
+    auto end = chrono::system_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+    printf("time: %d ms\n", int(duration.count()));
 }
 
 void Circuit::dumpGates() {
@@ -56,4 +61,5 @@ void Circuit::compile() {
     Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
     printf("Total Groups: %d\n", int(schedule.gateGroups.size()));
+    fflush(stdout);
 }
