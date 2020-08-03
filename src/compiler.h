@@ -12,6 +12,7 @@ struct GateGroup {
     static GateGroup merge(const GateGroup& a, const GateGroup& b);
     void addGate(const Gate& g);
     bool contains(int i) { return (relatedQubits >> i) & 1; }
+    std::vector<int> toID() const;
 };
 
 struct Schedule {
@@ -28,6 +29,6 @@ private:
     int localSize;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
-    void moveToSchedule(GateGroup& gg);
+    void removeFromSchedule(GateGroup& gg);
     Schedule schedule;
 };

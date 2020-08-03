@@ -24,9 +24,6 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
 void GateGroup::addGate(const Gate& gate) {
     gates.push_back(gate);
     if (!gate.isDiagonal()) {
-        if (gate.isControlGate()) {
-            relatedQubits |= qindex(1) << gate.controlQubit;
-        }
         relatedQubits |= qindex(1) << gate.targetQubit;
     }
 }
@@ -55,6 +52,15 @@ void Schedule::dump(int numQubits) {
     fflush(stdout);
 }
 
+std::vector<int> GateGroup::toID() const {
+    std::vector<int> ret;
+    for (auto& gate: gates) {
+        ret.push_back(gate.gateID);
+    }
+    return ret;
+}
+
+
 Compiler::Compiler(int numQubits, int localSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), remainGates(inputGates) { }
 
 Schedule Compiler::run() {
@@ -62,10 +68,12 @@ Schedule Compiler::run() {
     int cnt = 0;
     while (true) {
         GateGroup gg = getGroup();
-        moveToSchedule(gg);
+        schedule.gateGroups.push_back(gg);
+        removeFromSchedule(gg);
         if (remainGates.size() == 0)
             break;
         cnt ++;
+        assert(cnt < 100);
     }
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
@@ -77,28 +85,31 @@ GateGroup Compiler::getGroup() {
     GateGroup cur[numQubits];
     bool full[numQubits];
     memset(full, 0, sizeof(full));
-    GateGroup ret;
-    auto canMerge = [&](const GateGroup& a, const GateGroup & b) {
+
+    auto canMerge2 = [&](const GateGroup& a, const GateGroup & b) {
         return bitCount(a.relatedQubits | b.relatedQubits) <= localSize;
+    };
+    auto canMerge3 = [&](const GateGroup& a, const GateGroup &b, const GateGroup &c) {
+        return bitCount(a.relatedQubits | b.relatedQubits | c.relatedQubits) <= localSize;
     };
 
     for (auto& gate: remainGates) {
-        if (gate.isControlGate()) {
-            if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge(cur[gate.controlQubit], cur[gate.targetQubit])) {
+        if (gate.isC2Gate()) {
+            if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit])) {
+                GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.controlQubit2]);
+                newGroup = GateGroup::merge(newGroup, cur[gate.targetQubit]);
+                newGroup.addGate(gate);
+                cur[gate.controlQubit2] = cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
+            } else {
+                full[gate.controlQubit2] = full[gate.controlQubit] = full[gate.targetQubit] = 1;
+            }
+        } else if (gate.isControlGate()) {
+            if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit])) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.targetQubit]);
                 newGroup.addGate(gate);
                 cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
             } else {
-                if (!full[gate.controlQubit]) {
-                    full[gate.controlQubit] = 1;
-                    if (canMerge(ret, cur[gate.controlQubit]))
-                        ret = GateGroup::merge(ret, cur[gate.controlQubit]);
-                }
-                if (!full[gate.targetQubit]) {
-                    full[gate.targetQubit] = 1;
-                    if (canMerge(ret, cur[gate.targetQubit]))
-                        ret = GateGroup::merge(ret, cur[gate.targetQubit]);
-                }
+                full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
         } else {
             if (!full[gate.targetQubit])
@@ -106,38 +117,42 @@ GateGroup Compiler::getGroup() {
         }
     }
 
-    for (int i = 0; i < numQubits; i++) {
-        if (!full[i] && canMerge(ret, cur[i]))
-            ret = GateGroup::merge(ret, cur[i]);
+    GateGroup selected;
+    selected.relatedQubits = 0;
+    while (true) {
+        size_t mx = selected.gates.size();
+        int qid = -1;
+        for (int i = 0; i < numQubits; i++) {
+            if (canMerge2(selected, cur[i]) && cur[i].gates.size() > 0) {
+                GateGroup newGroup = GateGroup::merge(cur[i], selected);
+                if (newGroup.gates.size() > mx) {
+                    mx = newGroup.gates.size();
+                    qid = i;
+                }
+            }
+        }
+        if (mx == selected.gates.size())
+            break;
+        selected = GateGroup::merge(cur[qid], selected);
     }
-    return ret;
-}
 
-void Compiler::moveToSchedule(GateGroup& gg) {
-    std::vector<int> usedID;
-    for (auto& g: gg.gates) {
-        usedID.push_back(g.gateID);
-    }
+    std::vector<int> usedID = selected.toID();
     std::sort(usedID.begin(), usedID.end());
-    std::vector<Gate> temp = remainGates;
-    remainGates.clear();
     bool blocked[numQubits];
     memset(blocked, 0, sizeof(blocked));
-    for (auto& g: temp) {
+    for (auto& g: remainGates) {
         if (std::binary_search(usedID.begin(), usedID.end(), g.gateID)) continue;
         if (g.isDiagonal()) {
+            // TODO: Diagonal C2 Gate
             if (g.isControlGate()) {
-                if (blocked[g.controlQubit] || blocked[g.targetQubit]) {
-                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
-                    remainGates.push_back(g);
+                if (!blocked[g.controlQubit] && !blocked[g.targetQubit]) {
+                    selected.gates.push_back(g);
                 } else {
-                    gg.gates.push_back(g);
+                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
                 }
             } else {
-                if (blocked[g.targetQubit]) {
-                    remainGates.push_back(g);
-                } else {
-                    gg.gates.push_back(g);
+                if (!blocked[g.targetQubit]) {
+                    selected.gates.push_back(g);
                 }
             }
         } else {
@@ -145,8 +160,19 @@ void Compiler::moveToSchedule(GateGroup& gg) {
                 blocked[g.controlQubit] = 1;
             }
             blocked[g.targetQubit] = 1;
+        }
+    }
+    return selected;
+}
+
+void Compiler::removeFromSchedule(GateGroup& gg) {
+    std::vector<int> usedID = gg.toID();
+    std::sort(usedID.begin(), usedID.end());
+    auto temp = remainGates;
+    remainGates.clear();
+    for (auto& g: temp) {
+        if (!std::binary_search(usedID.begin(), usedID.end(), g.gateID)) {
             remainGates.push_back(g);
         }
     }
-    schedule.gateGroups.push_back(gg);
 }

@@ -20,6 +20,9 @@ struct Gate {
     bool isControlGate() const {
         return controlQubit != -1;
     }
+    bool isC2Gate() const {
+        return controlQubit2 != -1;
+    }
     bool isDiagonal() const {
         return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
     }

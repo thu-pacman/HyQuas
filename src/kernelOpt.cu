@@ -16,9 +16,11 @@ inline void __checkCudaErrors(cudaError_t err, const char *file, const int line)
 struct KernelGate {
     int targetQubit;
     int controlQubit;
+    int controlQubit2;
     GateType type;
     char targetIsGlobal;  // 0-local 1-global
     char controlIsGlobal; // 0-local 1-global 2-not control 
+    char control2IsGlobal; // 0-local 1-global 2-not control
     qreal r00, i00, r01, i01, r10, i10, r11, i11;
 };
 
@@ -154,10 +156,30 @@ __device__ inline void THi(int hi) {
 template <unsigned int blockSize>
 __device__ void doCompute(int numGates) {
     for (int i = 0; i < numGates; i++) {
+        int controlQubit2 = deviceGates[i].controlQubit2;
         int controlQubit = deviceGates[i].controlQubit;
         int targetQubit = deviceGates[i].targetQubit;
+        int control2IsGlobal = deviceGates[i].control2IsGlobal;
         char controlIsGlobal = deviceGates[i].controlIsGlobal;
         char targetIsGlobal = deviceGates[i].targetIsGlobal;
+        if (!control2IsGlobal) {
+            int m = 1 << (LOCAL_QUBIT_SIZE - 1);
+            assert(!controlIsGlobal && !targetIsGlobal);
+            assert(deviceGates[i].type == GateType::CCX);
+            int maskTarget = (1 << targetQubit) - 1;
+            for (int j = threadIdx.x; j < m; j += blockSize) {
+                int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
+                if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
+                    continue;
+                int hi = lo | (1 << targetQubit);
+                XSingle(lo, hi);
+            }
+            continue;
+            // TODO: targetIsGlobal == true
+        }
+        if (control2IsGlobal == 1 && !((blockIdx.x >> controlQubit2) & 1)) {
+            continue;
+        }
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 2);
@@ -174,8 +196,6 @@ __device__ void doCompute(int numGates) {
                     }
                     int hi = lo | (1 << targetQubit);
                     switch (deviceGates[i].type) {
-                        // controlled gates' base type
-                        case GateType::CCX: // no break WARNING
                         case GateType::CNOT: {
                             XSingle(lo, hi);
                             break;
@@ -252,11 +272,14 @@ __device__ void doCompute(int numGates) {
                             HSingle(lo, hi);
                             break;
                         }
-                        case GateType::X: {
+                        case GateType::X: // no break
+                        case GateType::CNOT: // no break
+                        case GateType::CCX: {
                             XSingle(lo, hi);
                             break;
                         }
-                        case GateType::Y: {
+                        case GateType::Y: //no break
+                        case GateType::CY: {
                             YSingle(lo, hi);
                             break;
                         }
@@ -265,11 +288,13 @@ __device__ void doCompute(int numGates) {
                             ZHi(hi);
                             break;
                         }
-                        case GateType::RX: {
+                        case GateType::RX: // no break
+                        case GateType::CRX: {
                             RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01);
                             break;
                         }
-                        case GateType::RY: {
+                        case GateType::RY: // no break
+                        case GateType::CRY: {
                             RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10);
                             break;
                         }
@@ -420,7 +445,7 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
                     cnt++;
                     relatedQubits |= (1 << i);
                     if (cnt == LOCAL_QUBIT_SIZE)
-                    break;
+                        break;
                 }
             }
         }
@@ -464,12 +489,26 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
             hostGates[i].i10 = gates[i].mat[1][0].imag;
             hostGates[i].r11 = gates[i].mat[1][1].real;
             hostGates[i].i11 = gates[i].mat[1][1].imag;
-            if (gates[i].controlQubit == -1) {
-                hostGates[i].controlQubit = -1;
-                hostGates[i].controlIsGlobal = 2;
-            } else {
+            if (gates[i].controlQubit2 != -1) {
+                int c1 = gates[i].controlQubit;
+                int c2 = gates[i].controlQubit2;
+                if (isLocalQubit(c2) && !isLocalQubit(c1)) {
+                    int c = c1; c1 = c2; c2 = c;
+                }
+                hostGates[i].controlQubit2 = toID[c2];
+                hostGates[i].control2IsGlobal = 1 - isLocalQubit(c2);
+                hostGates[i].controlQubit = toID[c1];
+                hostGates[i].controlIsGlobal = 1 - isLocalQubit(c1);
+            } else if (gates[i].controlQubit != -1) {
+                hostGates[i].controlQubit2 = -1;
+                hostGates[i].control2IsGlobal = 2;
                 hostGates[i].controlQubit = toID[gates[i].controlQubit];
                 hostGates[i].controlIsGlobal = 1 - isLocalQubit(gates[i].controlQubit);
+            } else {
+                hostGates[i].controlQubit2 = -1;
+                hostGates[i].control2IsGlobal = 2;
+                hostGates[i].controlQubit = -1;
+                hostGates[i].controlIsGlobal = 2;
             }
 
             hostGates[i].targetQubit = toID[gates[i].targetQubit];

@@ -17,6 +17,11 @@ void Circuit::run() {
 #else
     kernelExecSimple(deviceStateVec, numQubits, gates);
 #endif
+    // gates.clear();
+    // for (auto& gg: schedule.gateGroups)
+    //     for (auto& g: gg.gates)
+    //         gates.push_back(g);
+    // kernelExecSimple(deviceStateVec, numQubits, gates);
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));

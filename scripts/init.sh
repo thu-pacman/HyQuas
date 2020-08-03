@@ -6,7 +6,7 @@ source /usr/local/Modules/init/bash
 module load cuda-10.2/cuda
 module load cmake-3.12.3
 cd $HOME/QCSimulator/build
-rm CMakeCache.txt
+rm CMakeCache.txt || true
 cmake $* ..
 make clean
 make
