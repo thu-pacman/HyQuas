@@ -153,32 +153,48 @@ __device__ inline void THi(int hi) {
     imag[hi] = recRoot2 * (hiReal + hiImag);
 }
 
+// `CCASE(a) CASE(b, op)` means applying op on both a and b
+
+#define CCASE(TYPE) \
+case GateType::TYPE: // no break
+
+#define CASE(TYPE, OP) \
+case GateType::TYPE: { \
+    for (int j = threadIdx.x; j < m; j += blockSize) { \
+        int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
+        int hi = lo | (1 << targetQubit); \
+        OP; \
+    } \
+    break;\
+}
+
 template <unsigned int blockSize>
 __device__ void doCompute(int numGates) {
     for (int i = 0; i < numGates; i++) {
-        int controlQubit2 = deviceGates[i].controlQubit2;
         int controlQubit = deviceGates[i].controlQubit;
         int targetQubit = deviceGates[i].targetQubit;
-        int control2IsGlobal = deviceGates[i].control2IsGlobal;
         char controlIsGlobal = deviceGates[i].controlIsGlobal;
         char targetIsGlobal = deviceGates[i].targetIsGlobal;
-        if (!control2IsGlobal) {
-            int m = 1 << (LOCAL_QUBIT_SIZE - 1);
-            assert(!controlIsGlobal && !targetIsGlobal);
-            assert(deviceGates[i].type == GateType::CCX);
-            int maskTarget = (1 << targetQubit) - 1;
-            for (int j = threadIdx.x; j < m; j += blockSize) {
-                int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
-                if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
-                    continue;
-                int hi = lo | (1 << targetQubit);
-                XSingle(lo, hi);
+        if (deviceGates[i].type == GateType::CCX) {
+            int controlQubit2 = deviceGates[i].controlQubit2;
+            int control2IsGlobal = deviceGates[i].control2IsGlobal;
+            if (!control2IsGlobal) {
+                int m = 1 << (LOCAL_QUBIT_SIZE - 1);
+                assert(!controlIsGlobal && !targetIsGlobal);
+                assert(deviceGates[i].type == GateType::CCX);
+                int maskTarget = (1 << targetQubit) - 1;
+                for (int j = threadIdx.x; j < m; j += blockSize) {
+                    int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
+                    if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
+                        continue;
+                    int hi = lo | (1 << targetQubit);
+                    XSingle(lo, hi);
+                }
+                continue;
             }
-            continue;
-            // TODO: targetIsGlobal == true
-        }
-        if (control2IsGlobal == 1 && !((blockIdx.x >> controlQubit2) & 1)) {
-            continue;
+            if (control2IsGlobal == 1 && !((blockIdx.x >> controlQubit2) & 1)) {
+                continue;
+            }
         }
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
@@ -255,65 +271,28 @@ __device__ void doCompute(int numGates) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskTarget = (1 << targetQubit) - 1;
-                for (int j = threadIdx.x; j < m; j += blockSize) {
-                    int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
-                    int hi = lo | (1 << targetQubit);
-                    switch (deviceGates[i].type) {
-                        case GateType::U1: {
-                            U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11);
-                            break;
-                        }
-                        case GateType::U2:
-                        case GateType::U3: {
-                            USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11);
-                            break;
-                        }
-                        case GateType::H: {
-                            HSingle(lo, hi);
-                            break;
-                        }
-                        case GateType::X: // no break
-                        case GateType::CNOT: // no break
-                        case GateType::CCX: {
-                            XSingle(lo, hi);
-                            break;
-                        }
-                        case GateType::Y: //no break
-                        case GateType::CY: {
-                            YSingle(lo, hi);
-                            break;
-                        }
-                        case GateType::Z: // no break
-                        case GateType::CZ: {
-                            ZHi(hi);
-                            break;
-                        }
-                        case GateType::RX: // no break
-                        case GateType::CRX: {
-                            RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01);
-                            break;
-                        }
-                        case GateType::RY: // no break
-                        case GateType::CRY: {
-                            RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10);
-                            break;
-                        }
-                        case GateType::RZ: // no break
-                        case GateType::CRZ: {
-                            RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
-                            break;
-                        }
-                        case GateType::S: {
-                            SHi(hi);
-                            break;
-                        }
-                        case GateType::T: {
-                            THi(hi);
-                            break;
-                        }
-                        default: {
-                            assert(false);
-                        }
+                switch (deviceGates[i].type) {
+                    CASE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
+                    CCASE(U2)
+                    CASE(U3, USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11))
+                    CASE(H, HSingle(lo, hi))
+                    CCASE(X)
+                    CCASE(CNOT)
+                    CASE(CCX, XSingle(lo, hi))
+                    CCASE(Y)
+                    CASE(CY, YSingle(lo, hi))
+                    CCASE(Z)
+                    CASE(CZ, ZHi(hi))
+                    CCASE(RX)
+                    CASE(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
+                    CCASE(RY)
+                    CASE(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                    CCASE(RZ)
+                    CASE(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                    CASE(S, SHi(hi))
+                    CASE(T, THi(hi))
+                    default: {
+                        assert(false);
                     }
                 }
             } else {
