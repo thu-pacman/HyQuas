@@ -31,7 +31,7 @@ extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qindex blockBias;
 
-__device__ __constant__ double recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
+__device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
 
 

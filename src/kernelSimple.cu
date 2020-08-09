@@ -480,6 +480,9 @@ Complex kernelGetAmp(ComplexArray& deviceStateVec, qindex idx) {
 void kernelDeviceToHost(ComplexArray hostStateVec, ComplexArray deviceStateVec, int numQubits) {
     cudaMemcpy(hostStateVec.real, deviceStateVec.real, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
     cudaMemcpy(hostStateVec.imag, deviceStateVec.imag, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
+}
+
+void kernelDestroy(ComplexArray deviceStateVec) {
     cudaFree(deviceStateVec.real);
     cudaFree(deviceStateVec.imag);
 }

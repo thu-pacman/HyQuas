@@ -9,7 +9,7 @@
 #include "logger.h"
 using namespace std;
 
-void Circuit::run() {
+int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
     auto start = chrono::system_clock::now();
 #ifdef USE_GROUP
@@ -27,7 +27,11 @@ void Circuit::run() {
     Logger::add("Time Cost: %d ms", int(duration.count()));
     resultReal.resize(1ll << numQubits);
     resultImag.resize(1ll << numQubits);
-    kernelDeviceToHost((ComplexArray){resultReal.data(), resultImag.data()}, deviceStateVec, numQubits);
+    if (copy_back) {
+        kernelDeviceToHost((ComplexArray){resultReal.data(), resultImag.data()}, deviceStateVec, numQubits);
+    }
+    kernelDestroy(deviceStateVec);
+    return duration.count();
 }
 
 void Circuit::dumpGates() {

@@ -12,3 +12,4 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
 qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit);
 Complex kernelGetAmp(ComplexArray& deviceStateVec, qindex idx);
 void kernelDeviceToHost(ComplexArray hostStateVec, ComplexArray deviceStateVec, int numQubits);
+void kernelDestroy(ComplexArray deviceStateVec);

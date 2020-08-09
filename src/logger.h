@@ -26,6 +26,7 @@ public:
         for (auto& s: instance -> infos) {
             std::cout << "Logger: " << s << std::endl;
         }
+        instance -> infos.clear();
 #endif
     }
 

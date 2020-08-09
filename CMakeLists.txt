@@ -3,12 +3,13 @@ project(QCSimulatorRoot)
 find_package(CUDA REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-std=c++0x -O2 -g -Wall")
-set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v")
+set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo")
 
 option(USE_GROUP "Grouping the gates before execution" ON)
 option(SHOW_SCHEDULE "Print the schedule" ON)
 option(SHOW_SUMMARY "Show the running details" ON)
 option(MEASURE_STAGE "Measure time of each stage" OFF)
+option(MICRO_BENCH "Compile micro-benchmarks" OFF)
 
 if (USE_GROUP)
     add_definitions(-DUSE_GROUP)
@@ -29,4 +30,10 @@ add_subdirectory("src")
 add_executable(main main.cpp)
 target_link_libraries(main QCSimulator)
 
-
+if (MICRO_BENCH)
+    set(BENCHMARKS local-gate)
+    foreach(BENCHMARK IN LISTS BENCHMARKS)
+        add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
+        target_link_libraries(${BENCHMARK} QCSimulator)
+    endforeach(BENCHMARK IN LISTS BENCHMARKS)
+endif(MICRO_BENCH)

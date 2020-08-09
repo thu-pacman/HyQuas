@@ -10,7 +10,7 @@ class Circuit {
 public:
     Circuit(int numQubits): numQubits(numQubits) {}
     void compile();
-    void run();
+    int run(bool copy_back = true);
     void addGate(const Gate& gate) {
         gates.push_back(gate);
     }

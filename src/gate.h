@@ -4,7 +4,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ
+    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ, TOTAL
 };
 
 struct Gate {
@@ -45,5 +45,7 @@ struct Gate {
     static Gate RX(int targetQubit, qreal angle);
     static Gate RY(int targetQubit, qreal angle);
     static Gate RZ(int targetQubit, qreal angle);
-
+    static Gate random(int lo, int hi);
+    static Gate random(int lo, int hi, GateType type);
+    static std::string get_name(GateType ty);
 };

@@ -243,3 +243,139 @@ Gate Gate::RZ(int targetQubit, qreal angle) {
     return g;
 }
 
+Gate Gate::random(int lo, int hi) {
+    int type = rand() % int(GateType::TOTAL);
+    return random(lo, hi, GateType(type));
+}
+
+Gate Gate::random(int lo, int hi, GateType type) {
+    auto gen_c2_id = [lo, hi](int &t, int &c1, int &c2) {
+        assert(hi - lo >= 3);
+        do {
+            c2 = rand() % (hi - lo) + lo;
+            c1 = rand() % (hi - lo) + lo;
+            t = rand() % (hi - lo) + lo;
+        } while (c2 == c1 || c2 == t || c1 == t);
+    };
+    auto gen_c1_id = [lo, hi](int &t, int &c1) {
+        assert(hi - lo >= 2);
+        do {
+            c1 = rand() % (hi - lo) + lo;
+            t = rand() % (hi - lo) + lo;
+        } while (c1 == t);
+    };
+    auto gen_single_id = [lo, hi](int &t) {
+        t = rand() % (hi - lo) + lo;
+    };
+    auto gen_01_float = []() {
+        return rand() * 1.0 / RAND_MAX;
+    };
+    auto gen_0_2pi_float = [gen_01_float]() {
+        return gen_01_float() * acos(-1) * 2;
+    };
+    switch (type) {
+        case GateType::CCX: {
+            int t, c1, c2;
+            gen_c2_id(t, c1, c2);
+            return CCX(c1, c2, t);
+        }
+        case GateType::CNOT: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CNOT(c1, t);
+        }
+        case GateType::CY: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CY(c1, t);
+        }
+        case GateType::CZ: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CZ(c1, t);
+        }
+        case GateType::CRX: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CRX(c1, t, gen_0_2pi_float());
+        }
+        case GateType::CRY: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CRY(t, c1, gen_0_2pi_float());
+        }
+        case GateType::CRZ: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CRZ(t, c1, gen_0_2pi_float());
+        }
+        case GateType::U1: {
+            int t;
+            gen_single_id(t);
+            return U1(t, gen_0_2pi_float());
+        }
+        case GateType::U2: {
+            int t;
+            gen_single_id(t);
+            return U2(t, gen_0_2pi_float(), gen_0_2pi_float());
+        }
+        case GateType::U3: {
+            int t;
+            gen_single_id(t);
+            return U3(t, gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float());
+        }
+        case GateType::H: {
+            int t;
+            gen_single_id(t);
+            return H(t);
+        }
+        case GateType::X: {
+            int t;
+            gen_single_id(t);
+            return X(t);
+        }
+        case GateType::Y: {
+            int t;
+            gen_single_id(t);
+            return Y(t);
+        }
+        case GateType::Z: {
+            int t;
+            gen_single_id(t);
+            return Z(t);
+        }
+        case GateType::S: {
+            int t;
+            gen_single_id(t);
+            return S(t);
+        }
+        case GateType::T: {
+            int t;
+            gen_single_id(t);
+            return T(t);
+        }
+        case GateType::RX: {
+            int t;
+            gen_single_id(t);
+            return RX(t, gen_0_2pi_float());
+        }
+        case GateType::RY: {
+            int t;
+            gen_single_id(t);
+            return RY(t, gen_0_2pi_float());
+        }
+        case GateType::RZ: {
+            int t;
+            gen_single_id(t);
+            return RZ(t, gen_0_2pi_float());
+        }
+        default: {
+            printf("invalid %d\n", type);
+            assert(false);
+        }
+    }
+}
+
+std::string Gate::get_name(GateType ty) {
+    return random(0, 10, ty).name;
+}
