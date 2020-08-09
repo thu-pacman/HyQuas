@@ -153,12 +153,22 @@ __device__ inline void THi(int hi) {
     imag[hi] = recRoot2 * (hiReal + hiImag);
 }
 
-// `CCASE(a) CASE(b, op)` means applying op on both a and b
-
-#define CCASE(TYPE) \
+#define FOLLOW_NEXT(TYPE) \
 case GateType::TYPE: // no break
 
-#define CASE(TYPE, OP) \
+#define CASE_CONTROL(TYPE, OP) \
+case GateType::TYPE: { \
+    for (int j = threadIdx.x; j < m; j += blockSize) { \
+        int lo = ((j >> smallQubit) << (smallQubit + 1)) | (j & maskSmall); \
+        lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge); \
+        lo |= 1 << controlQubit; \
+        int hi = lo | (1 << targetQubit); \
+        OP; \
+    } \
+    break; \
+}
+
+#define CASE_SINGLE(TYPE, OP) \
 case GateType::TYPE: { \
     for (int j = threadIdx.x; j < m; j += blockSize) { \
         int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
@@ -166,6 +176,31 @@ case GateType::TYPE: { \
         OP; \
     } \
     break;\
+}
+
+#define CASE_LO_HI(TYPE, OP_LO, OP_HI) \
+case GateType::TYPE: { \
+    int m = 1 << LOCAL_QUBIT_SIZE; \
+    if (!isHighBlock){ \
+        for (int j = threadIdx.x; j < m; j += blockSize) { \
+            OP_LO; \
+        } \
+    } else { \
+        for (int j = threadIdx.x; j < m; j += blockSize) { \
+            OP_HI; \
+        } \
+    } \
+    break; \
+}
+
+#define CASE_SKIPLO_HI(TYPE, OP_HI) \
+case GateType::TYPE: { \
+    if (!isHighBlock) continue; \
+    int m = 1 << LOCAL_QUBIT_SIZE; \
+    for (int j = threadIdx.x; j < m; j += blockSize) { \
+        OP_HI; \
+    } \
+    break; \
 }
 
 template <unsigned int blockSize>
@@ -199,46 +234,19 @@ __device__ void doCompute(int numGates) {
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 2);
-                int maskTarget = (1 << targetQubit) - 1;
-                int maskControl = (1 << controlQubit) - 1;
-                for (int j = threadIdx.x; j < m; j += blockSize) {
-                    int lo;
-                    if (controlQubit > targetQubit) {
-                        lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
-                        lo = ((lo >> controlQubit) << (controlQubit + 1)) | (lo & maskControl) | (1 << controlQubit);
-                    } else {
-                        lo = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                        lo = ((lo >> targetQubit) << (targetQubit + 1)) | (lo & maskTarget);
-                    }
-                    int hi = lo | (1 << targetQubit);
-                    switch (deviceGates[i].type) {
-                        case GateType::CNOT: {
-                            XSingle(lo, hi);
-                            break;
-                        }
-                        case GateType::CY: {
-                            YSingle(lo, hi);
-                            break;
-                        }
-                        case GateType::CZ: {
-                            ZHi(hi);
-                            break;
-                        }
-                        case GateType::CRX: {
-                            RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01);
-                            break;
-                        }
-                        case GateType::CRY: {
-                            RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10);
-                            break;
-                        }
-                        case GateType::CRZ: {
-                            RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00);
-                            break;
-                        }
-                        default: {
-                            assert(false);
-                        }
+                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+                int maskSmall = (1 << smallQubit) - 1;
+                int maskLarge = (1 << largeQubit) - 1;
+                switch (deviceGates[i].type) {
+                    CASE_CONTROL(CNOT, XSingle(lo, hi))
+                    CASE_CONTROL(CY, YSingle(lo, hi))
+                    CASE_CONTROL(CZ, ZHi(hi))
+                    CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                    CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                    CASE_CONTROL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                    default: {
+                        assert(false);
                     }
                 }
             } else {
@@ -254,11 +262,14 @@ __device__ void doCompute(int numGates) {
                         }
                     }
                 } else {
-                    for (int j = threadIdx.x; j < m; j += blockSize) {
-                        int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                        if (deviceGates[i].type == GateType::CRZ) {
+                    if (deviceGates[i].type == GateType::CRZ) {
+                        for (int j = threadIdx.x; j < m; j += blockSize) {
+                            int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
                             RZHi(x, deviceGates[i].r00, - deviceGates[i].i00);
-                        } else {
+                        }
+                    } else {
+                        for (int j = threadIdx.x; j < m; j += blockSize) {
+                            int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
                             ZHi(x);
                         }
                     }
@@ -272,25 +283,25 @@ __device__ void doCompute(int numGates) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskTarget = (1 << targetQubit) - 1;
                 switch (deviceGates[i].type) {
-                    CASE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
-                    CCASE(U2)
-                    CASE(U3, USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11))
-                    CASE(H, HSingle(lo, hi))
-                    CCASE(X)
-                    CCASE(CNOT)
-                    CASE(CCX, XSingle(lo, hi))
-                    CCASE(Y)
-                    CASE(CY, YSingle(lo, hi))
-                    CCASE(Z)
-                    CASE(CZ, ZHi(hi))
-                    CCASE(RX)
-                    CASE(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
-                    CCASE(RY)
-                    CASE(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
-                    CCASE(RZ)
-                    CASE(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
-                    CASE(S, SHi(hi))
-                    CASE(T, THi(hi))
+                    CASE_SINGLE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
+                    FOLLOW_NEXT(U2)
+                    CASE_SINGLE(U3, USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11))
+                    CASE_SINGLE(H, HSingle(lo, hi))
+                    FOLLOW_NEXT(X)
+                    FOLLOW_NEXT(CNOT)
+                    CASE_SINGLE(CCX, XSingle(lo, hi))
+                    FOLLOW_NEXT(Y)
+                    CASE_SINGLE(CY, YSingle(lo, hi))
+                    FOLLOW_NEXT(Z)
+                    CASE_SINGLE(CZ, ZHi(hi))
+                    FOLLOW_NEXT(RX)
+                    CASE_SINGLE(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
+                    FOLLOW_NEXT(RY)
+                    CASE_SINGLE(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                    FOLLOW_NEXT(RZ)
+                    CASE_SINGLE(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                    CASE_SINGLE(S, SHi(hi))
+                    CASE_SINGLE(T, THi(hi))
                     default: {
                         assert(false);
                     }
@@ -298,53 +309,13 @@ __device__ void doCompute(int numGates) {
             } else {
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 switch (deviceGates[i].type) {
-                    case GateType::RZ: // no break
-                    case GateType::CRZ: {
-                        int m = 1 << LOCAL_QUBIT_SIZE;
-                        if (!isHighBlock){
-                            for (int j = threadIdx.x; j < m; j += blockSize) {
-                                RZLo(j, deviceGates[i].i00, - deviceGates[i].r00);
-                            }
-                        } else {
-                            for (int j = threadIdx.x; j < m; j += blockSize) {
-                                RZHi(j, deviceGates[i].i00, - deviceGates[i].r00);
-                            }
-                        }
-                        break;
-                    }
-                    case GateType::Z: // no break
-                    case GateType::CZ: {
-                        if (!isHighBlock) continue;
-                        int m = 1 << LOCAL_QUBIT_SIZE;
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            ZHi(j);
-                        }
-                        break;
-                    }
-                    case GateType::S: {
-                        if (!isHighBlock) continue;
-                        int m = 1 << LOCAL_QUBIT_SIZE;
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            SHi(j);
-                        }
-                        break;
-                    }
-                    case GateType::T: {
-                        if (!isHighBlock) continue;
-                        int m = 1 << LOCAL_QUBIT_SIZE;
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            THi(j);
-                        }
-                        break;
-                    }
-                    case GateType::U1: {
-                        if (!isHighBlock) continue;
-                        int m = 1 << LOCAL_QUBIT_SIZE;
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            U1Hi(j, deviceGates[i].r11, deviceGates[i].i11);
-                        }
-                        break;
-                    }
+                    FOLLOW_NEXT(RZ)
+                    CASE_LO_HI(CRZ, RZLo(j, deviceGates[i].i00, - deviceGates[i].r00), RZHi(j, deviceGates[i].i00, - deviceGates[i].r00))
+                    FOLLOW_NEXT(Z)
+                    CASE_SKIPLO_HI(CZ, ZHi(j))
+                    CASE_SKIPLO_HI(S, SHi(j))
+                    CASE_SKIPLO_HI(T, THi(j))
+                    CASE_SKIPLO_HI(U1, U1Hi(j, deviceGates[i].r11, deviceGates[i].i11))
                     default: {
                         assert(false);
                     }
