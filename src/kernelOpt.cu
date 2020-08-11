@@ -163,6 +163,8 @@ case GateType::TYPE: { \
         lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge); \
         lo |= 1 << controlQubit; \
         int hi = lo | (1 << targetQubit); \
+        lo ^= lo >> 5; \
+        hi ^= hi >> 5; \
         OP; \
     } \
     break; \
@@ -170,23 +172,52 @@ case GateType::TYPE: { \
 
 #define CASE_SINGLE(TYPE, OP) \
 case GateType::TYPE: { \
-    for (int j = threadIdx.x; j < m; j += blockSize) { \
-        int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
-        int hi = lo | (1 << targetQubit); \
-        OP; \
+    if (targetQubit < 3) { \
+        int x_id = threadIdx.x / 32; \
+        int y_id = threadIdx.x % 16; \
+        switch (targetQubit) { \
+            case 0: x_id <<= 1; break; \
+            case 1: x_id = (x_id & 2) << 1 | (x_id & 1); break; \
+            case 2: x_id = x_id; break; \
+        } \
+        y_id = (y_id >> targetQubit) << (targetQubit + 1) | (y_id & maskTarget); \
+        int init = x_id << 5 | y_id; \
+        init += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit; \
+        for (int lo = init; lo < 1024; lo += 256) { \
+            int hi = lo ^ (1 << targetQubit); \
+            OP; \
+        } \
+    } else if (targetQubit < 5) { \
+        for (int j = threadIdx.x; j < m; j += blockSize) { \
+            int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
+            int hi = lo | (1 << targetQubit); \
+            lo ^= (lo >> 5); \
+            hi ^= (hi >> 5); \
+            OP; \
+        } \
+    } else { \
+        int bias = (1 << targetQubit) | (1 << (targetQubit - 5)); \
+        for (int j = threadIdx.x; j < m; j += blockSize) { \
+            int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
+            int hi = lo ^ bias; \
+            OP; \
+        } \
     } \
-    break;\
+    break; \
 }
+
 
 #define CASE_LO_HI(TYPE, OP_LO, OP_HI) \
 case GateType::TYPE: { \
     int m = 1 << LOCAL_QUBIT_SIZE; \
     if (!isHighBlock){ \
-        for (int j = threadIdx.x; j < m; j += blockSize) { \
+        for (int k = threadIdx.x; k < m; k += blockSize) { \
+            int j = k ^ (k >> 5); \
             OP_LO; \
         } \
     } else { \
-        for (int j = threadIdx.x; j < m; j += blockSize) { \
+        for (int k = threadIdx.x; k < m; k += blockSize) { \
+            int j = k ^ (k >> 5); \
             OP_HI; \
         } \
     } \
@@ -197,7 +228,8 @@ case GateType::TYPE: { \
 case GateType::TYPE: { \
     if (!isHighBlock) continue; \
     int m = 1 << LOCAL_QUBIT_SIZE; \
-    for (int j = threadIdx.x; j < m; j += blockSize) { \
+    for (int k = threadIdx.x; k < m; k += blockSize) { \
+        int j = k ^ (k >> 5); \
         OP_HI; \
     } \
     break; \
@@ -223,6 +255,7 @@ __device__ void doCompute(int numGates) {
                     if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
                         continue;
                     int hi = lo | (1 << targetQubit);
+                    lo = lo ^ (lo >> 5); hi = hi ^ (hi >> 5);
                     XSingle(lo, hi);
                 }
                 continue;
@@ -258,6 +291,7 @@ __device__ void doCompute(int numGates) {
                     if (deviceGates[i].type == GateType::CRZ) {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                            x ^= x >> 5;
                             RZLo(x, deviceGates[i].r00, - deviceGates[i].i00);
                         }
                     }
@@ -265,11 +299,13 @@ __device__ void doCompute(int numGates) {
                     if (deviceGates[i].type == GateType::CRZ) {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                            x ^= x >> 5;
                             RZHi(x, deviceGates[i].r00, - deviceGates[i].i00);
                         }
                     } else {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                            x ^= x >> 5;
                             ZHi(x);
                         }
                     }
@@ -345,8 +381,8 @@ __device__ void fetchData(ComplexArray a, qindex* threadBias,  qindex idx, qinde
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
             
-        real[x] = a.real[bias | y];
-        imag[x] = a.imag[bias | y];
+        real[x ^ (x >> 5)] = a.real[bias | y];
+        imag[x ^ (x >> 5)] = a.imag[bias | y];
     }
 }
 
@@ -356,8 +392,8 @@ __device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
-        a.real[bias | y] = real[x];
-        a.imag[bias | y] = imag[x];
+        a.real[bias | y] = real[x ^ (x >> 5)];
+        a.imag[bias | y] = imag[x ^ (x >> 5)];
     }
 }
 
