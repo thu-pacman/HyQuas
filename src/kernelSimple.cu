@@ -31,6 +31,7 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
     checkCudaErrors(cudaMemset(deviceStateVec.imag, 0, size));
     qreal one = 1;
     checkCudaErrors(cudaMemcpy(deviceStateVec.real, &one, sizeof(qreal), cudaMemcpyHostToDevice)); // state[0] = 1
+    checkCudaErrors(cudaDeviceSynchronize());
 }
 
 

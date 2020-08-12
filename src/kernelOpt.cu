@@ -35,7 +35,7 @@ __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // 
 __constant__ KernelGate deviceGates[MAX_GATE];
 
 
-__device__ inline void XSingle(int lo, int hi) {
+__device__ __forceinline__ void XSingle(int lo, int hi) {
     qreal Real = real[lo];
     qreal Imag = imag[lo];
     real[lo] = real[hi];
@@ -44,7 +44,7 @@ __device__ inline void XSingle(int lo, int hi) {
     imag[hi] = Imag;
 }
 
-__device__ inline void YSingle(int lo, int hi) {
+__device__ __forceinline__ void YSingle(int lo, int hi) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -55,13 +55,13 @@ __device__ inline void YSingle(int lo, int hi) {
     imag[hi] = loReal;
 }
 
-__device__ inline void ZHi(int hi) {
+__device__ __forceinline__ void ZHi(int hi) {
     real[hi] = -real[hi];
     imag[hi] = -imag[hi];
 }
 
 
-__device__ inline void RXSingle(int lo, int hi, qreal alpha, qreal beta) {
+__device__ __forceinline__ void RXSingle(int lo, int hi, qreal alpha, qreal beta) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -72,7 +72,7 @@ __device__ inline void RXSingle(int lo, int hi, qreal alpha, qreal beta) {
     imag[hi] = alpha * hiImag - beta * loReal;
 }
 
-__device__ inline void RYSingle(int lo, int hi, qreal alpha, qreal beta) {
+__device__ __forceinline__ void RYSingle(int lo, int hi, qreal alpha, qreal beta) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -83,7 +83,7 @@ __device__ inline void RYSingle(int lo, int hi, qreal alpha, qreal beta) {
     imag[hi] = beta * loImag + alpha * hiImag;
 }
 
-__device__ inline void RZSingle(int lo, int hi, qreal alpha, qreal beta){
+__device__ __forceinline__ void RZSingle(int lo, int hi, qreal alpha, qreal beta){
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -94,21 +94,21 @@ __device__ inline void RZSingle(int lo, int hi, qreal alpha, qreal beta){
     imag[hi] = alpha * hiImag + beta * hiReal;
 }
 
-__device__ inline void RZLo(int lo, qreal alpha, qreal beta) {
+__device__ __forceinline__ void RZLo(int lo, qreal alpha, qreal beta) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     real[lo] = alpha * loReal + beta * loImag;
     imag[lo] = alpha * loImag - beta * loReal;
 }
 
-__device__ inline void RZHi(int hi, qreal alpha, qreal beta){
+__device__ __forceinline__ void RZHi(int hi, qreal alpha, qreal beta){
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = alpha * hiReal - beta * hiImag;
     imag[hi] = alpha * hiImag + beta * hiReal;
 }
 
-__device__ inline void U1Hi(int hi, qreal alpha, qreal beta) {
+__device__ __forceinline__ void U1Hi(int hi, qreal alpha, qreal beta) {
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = alpha * hiReal - beta * hiImag;
@@ -117,7 +117,7 @@ __device__ inline void U1Hi(int hi, qreal alpha, qreal beta) {
 
 #define COMPLEX_MULTIPLY_REAL(i0, r0, i1, r1) (i0 * i1 - r0 * r1)
 #define COMPLEX_MULTIPLY_IMAG(i0, r0, i1, r1) (i0 * r1 + i1 * r0)
-__device__ inline void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+__device__ __forceinline__ void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -128,7 +128,7 @@ __device__ inline void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, 
     imag[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
 }
 
-__device__ inline void HSingle(int lo, int hi) {
+__device__ __forceinline__ void HSingle(int lo, int hi) {
     qreal loReal = real[lo];
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
@@ -139,14 +139,14 @@ __device__ inline void HSingle(int lo, int hi) {
     imag[hi] = recRoot2 * (loImag - hiImag);
 }
 
-__device__ inline void SHi(int hi) {
+__device__ __forceinline__ void SHi(int hi) {
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = -hiImag;
     imag[hi] = hiReal;
 }
 
-__device__ inline void THi(int hi) {
+__device__ __forceinline__ void THi(int hi) {
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
     real[hi] = recRoot2 * (hiReal - hiImag);
@@ -172,60 +172,55 @@ case GateType::TYPE: { \
 
 #define CASE_SINGLE(TYPE, OP) \
 case GateType::TYPE: { \
+    int x_id = threadIdx.x >> 5; \
+    switch (targetQubit) { \
+        case 0: case 5: x_id <<= 1; break; \
+        case 1: case 6: x_id = (x_id & 2) << 1 | (x_id & 1); break; \
+        default: break; \
+    } \
+    int lo, hi; \
     if (targetQubit < 5) { \
-        int x_id = threadIdx.x >> 5; \
         int y_id = threadIdx.x & 15; \
-        switch (targetQubit) { \
-            case 0: x_id <<= 1; break; \
-            case 1: x_id = (x_id & 2) << 1 | (x_id & 1); break; \
-            case 2: /* no break */ \
-            case 3: /* no break */ \
-            case 4: x_id = x_id; break; \
-        } \
         y_id = (y_id >> targetQubit) << (targetQubit + 1) | (y_id & maskTarget); \
-        int lo = x_id << 5 | y_id; \
+        lo = x_id << 5 | y_id; \
         lo += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit; \
-        int hi = lo ^ (1 << targetQubit); \
-        switch (targetQubit) { \
-            case 0: /* no break */ \
-            case 1: /* no break */ \
-            case 2: { \
-                OP; \
-                lo += 256; hi += 256; \
-                OP; \
-                lo += 256; hi += 256; \
-                OP; \
-                lo += 256; hi += 256; \
-                OP; \
-                break; \
-            } \
-            case 3: { \
-                OP; \
-                lo += 128; hi += 128; \
-                OP; \
-                lo += 384; hi += 384; \
-                OP; \
-                lo += 128; hi += 128; \
-                OP; \
-                break; \
-            } \
-            case 4: { \
-                OP; \
-                lo += 128; hi += 128; \
-                OP; \
-                lo += 128; hi += 128; \
-                OP; \
-                lo += 128; hi += 128; \
-                OP; \
-                break; \
-            } \
-        } \
+        hi = lo ^ (1 << targetQubit); \
     } else { \
-        int bias = (1 << targetQubit) | (1 << (targetQubit - 5)); \
-        for (int j = threadIdx.x; j < m; j += blockSize) { \
-            int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
-            int hi = lo ^ bias; \
+        int y_id = threadIdx.x & 31; \
+        lo = x_id << 5 | y_id; \
+        hi = lo ^ (1 << targetQubit); \
+    } \
+    switch (targetQubit) { \
+        case 0: case 1: case 2:   \
+        case 5: case 6: case 7: { \
             OP; \
+            lo += 256; hi += 256; \
+            OP; \
+            lo += 256; hi += 256; \
+            OP; \
+            lo += 256; hi += 256; \
+            OP; \
+            break; \
+        } \
+        case 3: case 8: { \
+            OP; \
+            lo += 128; hi += 128; \
+            OP; \
+            lo += 384; hi += 384; \
+            OP; \
+            lo += 128; hi += 128; \
+            OP; \
+            break; \
+        } \
+        case 4: case 9: { \
+            OP; \
+            lo += 128; hi += 128; \
+            OP; \
+            lo += 128; hi += 128; \
+            OP; \
+            lo += 128; hi += 128; \
+            OP; \
+            break; \
         } \
     } \
     break; \
