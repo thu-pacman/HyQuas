@@ -172,28 +172,53 @@ case GateType::TYPE: { \
 
 #define CASE_SINGLE(TYPE, OP) \
 case GateType::TYPE: { \
-    if (targetQubit < 3) { \
-        int x_id = threadIdx.x / 32; \
-        int y_id = threadIdx.x % 16; \
+    if (targetQubit < 5) { \
+        int x_id = threadIdx.x >> 5; \
+        int y_id = threadIdx.x & 15; \
         switch (targetQubit) { \
             case 0: x_id <<= 1; break; \
             case 1: x_id = (x_id & 2) << 1 | (x_id & 1); break; \
-            case 2: x_id = x_id; break; \
+            case 2: /* no break */ \
+            case 3: /* no break */ \
+            case 4: x_id = x_id; break; \
         } \
         y_id = (y_id >> targetQubit) << (targetQubit + 1) | (y_id & maskTarget); \
-        int init = x_id << 5 | y_id; \
-        init += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit; \
-        for (int lo = init; lo < 1024; lo += 256) { \
-            int hi = lo ^ (1 << targetQubit); \
-            OP; \
-        } \
-    } else if (targetQubit < 5) { \
-        for (int j = threadIdx.x; j < m; j += blockSize) { \
-            int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
-            int hi = lo | (1 << targetQubit); \
-            lo ^= (lo >> 5); \
-            hi ^= (hi >> 5); \
-            OP; \
+        int lo = x_id << 5 | y_id; \
+        lo += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit; \
+        int hi = lo ^ (1 << targetQubit); \
+        switch (targetQubit) { \
+            case 0: /* no break */ \
+            case 1: /* no break */ \
+            case 2: { \
+                OP; \
+                lo += 256; hi += 256; \
+                OP; \
+                lo += 256; hi += 256; \
+                OP; \
+                lo += 256; hi += 256; \
+                OP; \
+                break; \
+            } \
+            case 3: { \
+                OP; \
+                lo += 128; hi += 128; \
+                OP; \
+                lo += 384; hi += 384; \
+                OP; \
+                lo += 128; hi += 128; \
+                OP; \
+                break; \
+            } \
+            case 4: { \
+                OP; \
+                lo += 128; hi += 128; \
+                OP; \
+                lo += 128; hi += 128; \
+                OP; \
+                lo += 128; hi += 128; \
+                OP; \
+                break; \
+            } \
         } \
     } else { \
         int bias = (1 << targetQubit) | (1 << (targetQubit - 5)); \
