@@ -188,7 +188,7 @@ case GateType::TYPE: { \
     } else { \
         int y_id = threadIdx.x & 31; \
         lo = x_id << 5 | y_id; \
-        hi = lo ^ (1 << targetQubit); \
+        hi = lo ^ (33 << (targetQubit - 5)); \
     } \
     switch (targetQubit) { \
         case 0: case 1: case 2:   \
