@@ -31,7 +31,7 @@ add_executable(main main.cpp)
 target_link_libraries(main QCSimulator)
 
 if (MICRO_BENCH)
-    set(BENCHMARKS local-single)
+    set(BENCHMARKS local-single local-ctr)
     foreach(BENCHMARK IN LISTS BENCHMARKS)
         add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
         target_link_libraries(${BENCHMARK} QCSimulator)
