@@ -33,7 +33,9 @@ extern __shared__ qindex blockBias;
 
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
-
+#ifdef USE_GROUP
+__device__ int loIdx[5][5][128];
+#endif
 
 __device__ __forceinline__ void XSingle(int lo, int hi) {
     qreal Real = real[lo];
@@ -247,20 +249,7 @@ __device__ void doCompute(int numGates) {
                 int maskSmall = (1 << smallQubit) - 1;
                 int maskLarge = (1 << largeQubit) - 1;
                 if (controlQubit < 5 && targetQubit < 5) {
-                    int x_id = threadIdx.x >> 5;
-                    x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
-                    x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
-                    int y_id = threadIdx.x & 7;
-                    y_id = y_id >> smallQubit << (smallQubit + 1) | (y_id & maskSmall);
-                    y_id = y_id >> largeQubit << (largeQubit + 1) | (y_id & maskLarge);
-                    y_id |= 1 << controlQubit;
-                    int lo = x_id << 5 | y_id;
-                    if (threadIdx.x & (1 << 3)) {
-                        lo += 33 << targetQubit;
-                    }
-                    if (threadIdx.x & (1 << 4)) {
-                        lo += 31 << controlQubit;
-                    }
+                    int lo = loIdx[controlQubit][targetQubit][threadIdx.x];
                     int hi = lo ^ (1 << targetQubit);
                     int shift;
                     if (largeQubit == 4) {
@@ -291,9 +280,6 @@ __device__ void doCompute(int numGates) {
                     int hi = lo | (1 << targetQubit);
                     lo ^= lo >> 5;
                     hi ^= hi >> 5;
-                    // if (lo < 0 || lo + shift >= 1024 || hi < 0 || hi + shift >= 1024) {
-                    //     printf("%d (%d %d): %d %d %d\n", threadIdx.x, controlQubit, targetQubit, lo, hi, shift);
-                    // }
                     int shift;
                     if (largeQubit == 9) {
                         if (smallQubit == 8) {
@@ -473,6 +459,35 @@ __global__ void run(ComplexArray a, qindex* threadBias, int numQubits, int numGa
     doCompute<blockSize>(numGates);
     __syncthreads();
     saveData(a, threadBias, enumerate);
+}
+
+void initControlIdx() {
+    int loIdx_host[5][5][1 << THREAD_DEP];
+    for (int controlQubit = 0; controlQubit < 5; controlQubit ++)
+        for (int targetQubit = 0; targetQubit < 5; targetQubit ++)
+            for (int tid = 0; tid < (1 << THREAD_DEP); tid++) {
+                if (controlQubit == targetQubit) continue;
+                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+                int maskSmall = (1 << smallQubit) - 1;
+                int maskLarge = (1 << largeQubit) - 1;
+                int x_id = tid >> 5;
+                x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
+                x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
+                int y_id = tid & 7;
+                y_id = y_id >> smallQubit << (smallQubit + 1) | (y_id & maskSmall);
+                y_id = y_id >> largeQubit << (largeQubit + 1) | (y_id & maskLarge);
+                y_id |= 1 << controlQubit;
+                int lo = x_id << 5 | y_id;
+                if (tid & (1 << 3)) {
+                    lo += 33 << targetQubit;
+                }
+                if (tid & (1 << 4)) {
+                    lo += 31 << controlQubit;
+                }
+                loIdx_host[controlQubit][targetQubit][tid] = lo;
+            }
+    checkCudaErrors(cudaMemcpyToSymbol(loIdx[0][0], loIdx_host[0][0], sizeof(int) * 25 * (1 << THREAD_DEP)));
 }
 
 std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
