@@ -8,7 +8,7 @@ using namespace std;
 inline void __checkCudaErrors(cudaError_t err, const char *file, const int line) {
     if (cudaSuccess != err)
     {
-        fprintf(stderr, "checkCudaErrors() Driver API error = %04d \"%s\" from file <%s>, line %i.\n", err, cudaGetErrorString(err), file, line);
+        fprintf(stderr, "checkCudaErrors() Driver API error = %04d \"%s\" from file %s, line %i.\n", err, cudaGetErrorString(err), file, line);
         exit(EXIT_FAILURE);
     }
 }
@@ -34,7 +34,7 @@ extern __shared__ qindex blockBias;
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
 #ifdef USE_GROUP
-__device__ int loIdx[5][5][128];
+int* loIdx;
 #endif
 
 __device__ __forceinline__ void XSingle(int lo, int hi) {
@@ -214,7 +214,7 @@ case GateType::TYPE: { \
 }
 
 template <unsigned int blockSize>
-__device__ void doCompute(int numGates) {
+__device__ void doCompute(int numGates, int* loArr) {
     for (int i = 0; i < numGates; i++) {
         int controlQubit = deviceGates[i].controlQubit;
         int targetQubit = deviceGates[i].targetQubit;
@@ -249,7 +249,7 @@ __device__ void doCompute(int numGates) {
                 int maskSmall = (1 << smallQubit) - 1;
                 int maskLarge = (1 << largeQubit) - 1;
                 if (controlQubit < 5 && targetQubit < 5) {
-                    int lo = loIdx[controlQubit][targetQubit][threadIdx.x];
+                    int lo = loArr[(controlQubit * 5 + targetQubit) << THREAD_DEP | threadIdx.x];
                     int hi = lo ^ (1 << targetQubit);
                     int shift;
                     if (largeQubit == 4) {
@@ -452,16 +452,18 @@ __device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
 }
 
 template <unsigned int blockSize>
-__global__ void run(ComplexArray a, qindex* threadBias, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
+__global__ void run(ComplexArray a, qindex* threadBias, int* loArr, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     fetchData(a, threadBias, idx, blockHot, enumerate, numQubits);
     __syncthreads();
-    doCompute<blockSize>(numGates);
+    doCompute<blockSize>(numGates, loArr);
     __syncthreads();
     saveData(a, threadBias, enumerate);
 }
 
+#ifdef USE_GROUP
 void initControlIdx() {
+    cudaMalloc(&loIdx, sizeof(int) * 25 * (1 << THREAD_DEP));
     int loIdx_host[5][5][1 << THREAD_DEP];
     for (int controlQubit = 0; controlQubit < 5; controlQubit ++)
         for (int targetQubit = 0; targetQubit < 5; targetQubit ++)
@@ -487,8 +489,9 @@ void initControlIdx() {
                 }
                 loIdx_host[controlQubit][targetQubit][tid] = lo;
             }
-    checkCudaErrors(cudaMemcpyToSymbol(loIdx[0][0], loIdx_host[0][0], sizeof(int) * 25 * (1 << THREAD_DEP)));
+    checkCudaErrors(cudaMemcpy(loIdx, loIdx_host[0][0], sizeof(int) * 25 * (1 << THREAD_DEP), cudaMemcpyHostToDevice));
 }
+#endif
 
 std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
     assert(numQubits <= MAX_QUBIT);
@@ -590,7 +593,7 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
         // execute
         qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
         run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-            (deviceStateVec, threadBias, numQubits, gates.size(), blockHot, enumerate);
+            (deviceStateVec, threadBias, loIdx, numQubits, gates.size(), blockHot, enumerate);
 #ifdef MEASURE_STAGE
             cudaEventRecord(stop, 0);
             cudaEventSynchronize(stop);
