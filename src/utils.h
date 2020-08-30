@@ -2,9 +2,9 @@
 
 #include <cstdio>
 
-typedef double qreal;
+typedef float qreal;
 typedef int qindex;
-const int LOCAL_QUBIT_SIZE = 10; // TODO find the best value
+const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 
 struct Complex {
     qreal real;

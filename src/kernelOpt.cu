@@ -239,20 +239,45 @@ __device__ void doCompute(int numGates) {
         }
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
-                int m = 1 << (LOCAL_QUBIT_SIZE - 2);
-                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
-                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
-                int maskSmall = (1 << smallQubit) - 1;
-                int maskLarge = (1 << largeQubit) - 1;
-                switch (deviceGates[i].type) {
-                    CASE_CONTROL(CNOT, XSingle(lo, hi))
-                    CASE_CONTROL(CY, YSingle(lo, hi))
-                    CASE_CONTROL(CZ, ZHi(hi))
-                    CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
-                    CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
-                    CASE_CONTROL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
-                    default: {
-                        assert(false);
+                if (deviceGates[i].type == GateType::CNOT && controlQubit < 4 && targetQubit < 4) {
+                    int x_id = threadIdx.x >> 5;
+                    int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+                    int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+                    int maskSmall = (1 << smallQubit) - 1;
+                    int maskLarge = (1 << largeQubit) - 1;
+                    x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
+                    x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
+                    int y_id = threadIdx.x & 7;
+                    y_id = y_id >> smallQubit << (smallQubit + 1) | (y_id & maskSmall);
+                    y_id = y_id >> largeQubit << (largeQubit + 1) | (y_id & maskLarge);
+                    y_id |= 1 << controlQubit;
+                    int lo = x_id << 5 | y_id;
+                    if (threadIdx.x & (1 << 3)) {
+                        lo += 33 << targetQubit;
+                    }
+                    if (threadIdx.x & (1 << 4)) {
+                        lo += 31 << controlQubit;
+                    }
+                    int hi = lo ^ (1 << targetQubit);
+                    XSingle(lo, hi);
+                    lo += 512; hi += 512;
+                    XSingle(lo, hi);
+                } else {
+                    int m = 1 << (LOCAL_QUBIT_SIZE - 2);
+                    int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+                    int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+                    int maskSmall = (1 << smallQubit) - 1;
+                    int maskLarge = (1 << largeQubit) - 1;
+                    switch (deviceGates[i].type) {
+                        CASE_CONTROL(CNOT, XSingle(lo, hi))
+                        CASE_CONTROL(CY, YSingle(lo, hi))
+                        CASE_CONTROL(CZ, ZHi(hi))
+                        CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                        CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                        CASE_CONTROL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                        default: {
+                            assert(false);
+                        }
                     }
                 }
             } else {
