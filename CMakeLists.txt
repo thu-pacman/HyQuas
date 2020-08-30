@@ -3,13 +3,14 @@ project(QCSimulatorRoot)
 find_package(CUDA REQUIRED)
 
 set(CMAKE_CXX_FLAGS "-std=c++0x -O2 -g -Wall")
-set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo")
+set(CUDA_NVCC_FLAGS "-std=c++11 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo -keep")
 
 option(USE_GROUP "Grouping the gates before execution" ON)
 option(SHOW_SCHEDULE "Print the schedule" ON)
 option(SHOW_SUMMARY "Show the running details" ON)
 option(MEASURE_STAGE "Measure time of each stage" OFF)
 option(MICRO_BENCH "Compile micro-benchmarks" OFF)
+option(DISABLE_ASSERT "Use assert in cuda runtime" ON)
 
 if (USE_GROUP)
     add_definitions(-DUSE_GROUP)
@@ -23,7 +24,9 @@ endif(SHOW_SUMMARY)
 if (MEASURE_STAGE)
     add_definitions(-DMEASURE_STAGE)
 endif(MEASURE_STAGE)
-
+if (DISABLE_ASSERT)
+    add_definitions(-DNDEBUG)
+endif(DISABLE_ASSERT)
 
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
