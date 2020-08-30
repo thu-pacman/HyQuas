@@ -172,56 +172,9 @@ case GateType::TYPE: { \
 
 #define CASE_SINGLE(TYPE, OP) \
 case GateType::TYPE: { \
-    int x_id = threadIdx.x >> 5; \
-    switch (targetQubit) { \
-        case 0: case 5: x_id <<= 1; break; \
-        case 1: case 6: x_id = (x_id & 2) << 1 | (x_id & 1); break; \
-        default: break; \
-    } \
-    int lo, hi; \
-    if (targetQubit < 5) { \
-        int y_id = threadIdx.x & 15; \
-        y_id = (y_id >> targetQubit) << (targetQubit + 1) | (y_id & maskTarget); \
-        lo = x_id << 5 | y_id; \
-        lo += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit; \
-        hi = lo ^ (1 << targetQubit); \
-    } else { \
-        int y_id = threadIdx.x & 31; \
-        lo = x_id << 5 | y_id; \
-        hi = lo ^ (33 << (targetQubit - 5)); \
-    } \
-    switch (targetQubit) { \
-        case 0: case 1: case 2:   \
-        case 5: case 6: case 7: { \
-            OP; \
-            lo += 256; hi += 256; \
-            OP; \
-            lo += 256; hi += 256; \
-            OP; \
-            lo += 256; hi += 256; \
-            OP; \
-            break; \
-        } \
-        case 3: case 8: { \
-            OP; \
-            lo += 128; hi += 128; \
-            OP; \
-            lo += 384; hi += 384; \
-            OP; \
-            lo += 128; hi += 128; \
-            OP; \
-            break; \
-        } \
-        case 4: case 9: { \
-            OP; \
-            lo += 128; hi += 128; \
-            OP; \
-            lo += 128; hi += 128; \
-            OP; \
-            lo += 128; hi += 128; \
-            OP; \
-            break; \
-        } \
+    for (int task = 0; task < 4; task++) { \
+        OP; \
+        lo += add[task]; hi += add[task]; \
     } \
     break; \
 }
@@ -338,6 +291,40 @@ __device__ void doCompute(int numGates) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskTarget = (1 << targetQubit) - 1;
+                int x_id = threadIdx.x >> 5; \
+                switch (targetQubit) {
+                    case 0: case 5: x_id <<= 1; break;
+                    case 1: case 6: x_id = (x_id & 2) << 1 | (x_id & 1); break;
+                    default: break;
+                }
+                int lo, hi;
+                if (targetQubit < 5) {
+                    int y_id = threadIdx.x & 15;
+                    y_id = (y_id >> targetQubit) << (targetQubit + 1) | (y_id & maskTarget);
+                    lo = x_id << 5 | y_id;
+                    lo += (threadIdx.x & 31) < 16 ? 0 : 33 << targetQubit;
+                    hi = lo ^ (1 << targetQubit);
+                } else {
+                    int y_id = threadIdx.x & 31;
+                    lo = x_id << 5 | y_id;
+                    hi = lo ^ (33 << (targetQubit - 5));
+                }
+                int add[4];
+                switch (targetQubit) {
+                    case 0: case 1: case 2:
+                    case 5: case 6: case 7: {
+                        add[0] = add[1] = add[2] = 256;
+                        break;
+                    }
+                    case 3: case 8: {
+                        add[0] = 128; add[1] = 384; add[2] = 128;
+                        break;
+                    }
+                    case 4: case 9: {
+                        add[0] = 128; add[1] = 128; add[2] = 128;
+                        break;
+                    }
+                }
                 switch (deviceGates[i].type) {
                     CASE_SINGLE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
                     FOLLOW_NEXT(U2)
