@@ -158,15 +158,18 @@ case GateType::TYPE: // no break
 
 #define CASE_CONTROL(TYPE, OP) \
 case GateType::TYPE: { \
-    for (int j = threadIdx.x; j < m; j += blockSize) { \
-        int lo = ((j >> smallQubit) << (smallQubit + 1)) | (j & maskSmall); \
-        lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge); \
-        lo |= 1 << controlQubit; \
-        int hi = lo | (1 << targetQubit); \
-        lo ^= lo >> 5; \
-        hi ^= hi >> 5; \
-        OP; \
-    } \
+    OP; \
+    lo += shift; hi += shift; \
+    lo ^= shift >> 5; hi ^= shift >> 5; \
+    OP; \
+    break; \
+}
+
+#define CASE_CTR_SMALL_SMALL(TYPE, OP) \
+case GateType::TYPE: { \
+    OP; \
+    lo += shift; hi += shift; \
+    OP; \
     break; \
 }
 
@@ -239,12 +242,12 @@ __device__ void doCompute(int numGates) {
         }
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
-                if (deviceGates[i].type == GateType::CNOT && controlQubit < 4 && targetQubit < 4) {
+                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+                int maskSmall = (1 << smallQubit) - 1;
+                int maskLarge = (1 << largeQubit) - 1;
+                if (controlQubit < 5 && targetQubit < 5) {
                     int x_id = threadIdx.x >> 5;
-                    int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
-                    int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
-                    int maskSmall = (1 << smallQubit) - 1;
-                    int maskLarge = (1 << largeQubit) - 1;
                     x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
                     x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
                     int y_id = threadIdx.x & 7;
@@ -259,15 +262,48 @@ __device__ void doCompute(int numGates) {
                         lo += 31 << controlQubit;
                     }
                     int hi = lo ^ (1 << targetQubit);
-                    XSingle(lo, hi);
-                    lo += 512; hi += 512;
-                    XSingle(lo, hi);
+                    int shift;
+                    if (largeQubit == 4) {
+                        if (smallQubit == 3) {
+                            shift = 1 << 7;
+                        } else {
+                            shift = 1 << 8;
+                        }
+                    } else {
+                        shift = 1 << 9;
+                    }
+                    switch (deviceGates[i].type) {
+                        CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
+                        CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
+                        CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
+                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                        CASE_CTR_SMALL_SMALL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                        CASE_CTR_SMALL_SMALL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                        default: {
+                            assert(false);
+                        }
+                    }
                 } else {
                     int m = 1 << (LOCAL_QUBIT_SIZE - 2);
-                    int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
-                    int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
-                    int maskSmall = (1 << smallQubit) - 1;
-                    int maskLarge = (1 << largeQubit) - 1;
+                    int lo = ((threadIdx.x >> smallQubit) << (smallQubit + 1)) | (threadIdx.x & maskSmall);
+                    lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge);
+                    lo |= 1 << controlQubit;
+                    int hi = lo | (1 << targetQubit);
+                    lo ^= lo >> 5;
+                    hi ^= hi >> 5;
+                    // if (lo < 0 || lo + shift >= 1024 || hi < 0 || hi + shift >= 1024) {
+                    //     printf("%d (%d %d): %d %d %d\n", threadIdx.x, controlQubit, targetQubit, lo, hi, shift);
+                    // }
+                    int shift;
+                    if (largeQubit == 9) {
+                        if (smallQubit == 8) {
+                            shift = 1 << 7;
+                        } else {
+                            shift = 1 << 8;
+                        }
+                    } else {
+                        shift = 1 << 9;
+                    }
                     switch (deviceGates[i].type) {
                         CASE_CONTROL(CNOT, XSingle(lo, hi))
                         CASE_CONTROL(CY, YSingle(lo, hi))
