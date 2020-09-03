@@ -312,6 +312,48 @@ __device__ void doCompute(int numGates, int* loArr) {
                             assert(false);
                         }
                     }
+                } else if (controlQubit < 5 && targetQubit >= 5 && targetQubit - controlQubit != 5) {
+                    int tid = threadIdx.x;
+                    int smallQubit = controlQubit > targetQubit - 5 ? targetQubit - 5 : controlQubit;
+                    int largeQubit = controlQubit > targetQubit - 5 ? controlQubit : targetQubit - 5;
+                    int maskSmall = (1 << smallQubit) - 1;
+                    int maskLarge = (1 << largeQubit) - 1;
+                    int targetMod = (1 << targetQubit) - 1;
+                    int maskTarget = (1 << targetMod) - 1;
+                    int maskControl = (1 << controlQubit) - 1;
+                    int x_id = tid >> 5;
+                    x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
+                    x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
+                    int y_id = tid & 15;
+                    y_id = y_id >> controlQubit << (controlQubit + 1) | (y_id & maskControl);
+                    y_id |= 1 << controlQubit;
+                    y_id ^= x_id;
+                    int lo = x_id << 5 | y_id;
+                    if (tid & (1 << 4)) {
+                        lo += 31 << controlQubit;
+                    }
+                    int hi = lo ^ (1 << targetQubit) ^ (1 << (targetQubit - 5));
+                    int shift;
+                    if (largeQubit == 4) {
+                        if (smallQubit == 3) {
+                            shift = 1 << 7;
+                        } else {
+                            shift = 1 << 8;
+                        }
+                    } else {
+                        shift = 1 << 9;
+                    }
+                    switch (deviceGates[i].type) {
+                        CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
+                        CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
+                        CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
+                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                        CASE_CTR_SMALL_SMALL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                        CASE_CTR_SMALL_SMALL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
+                        default: {
+                            assert(false);
+                        }
+                    }
                 } else {
                     int m = 1 << (LOCAL_QUBIT_SIZE - 2);
                     int lo = ((threadIdx.x >> smallQubit) << (smallQubit + 1)) | (threadIdx.x & maskSmall);
