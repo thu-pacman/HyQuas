@@ -34,7 +34,8 @@ extern __shared__ qindex blockBias;
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
 #ifdef USE_GROUP
-int* loIdx;
+int* loIdx_device;
+int* shiftAt_device;
 #endif
 
 __device__ __forceinline__ void XSingle(int lo, int hi) {
@@ -214,7 +215,7 @@ case GateType::TYPE: { \
 }
 
 template <unsigned int blockSize>
-__device__ void doCompute(int numGates, int* loArr) {
+__device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
     for (int i = 0; i < numGates; i++) {
         int controlQubit = deviceGates[i].controlQubit;
         int targetQubit = deviceGates[i].targetQubit;
@@ -248,101 +249,13 @@ __device__ void doCompute(int numGates, int* loArr) {
                 int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
                 int maskSmall = (1 << smallQubit) - 1;
                 int maskLarge = (1 << largeQubit) - 1;
-                if (controlQubit < 5 && targetQubit < 5) {
-                    int lo = loArr[(controlQubit * 5 + targetQubit) << THREAD_DEP | threadIdx.x];
+                if ((controlQubit < 5 || targetQubit < 5) && (controlQubit - targetQubit != 5) && (targetQubit - controlQubit != 5)) {
+                    int lo = loArr[(controlQubit * 10 + targetQubit) << THREAD_DEP | threadIdx.x];
                     int hi = lo ^ (1 << targetQubit);
-                    int shift;
-                    if (largeQubit == 4) {
-                        if (smallQubit == 3) {
-                            shift = 1 << 7;
-                        } else {
-                            shift = 1 << 8;
-                        }
-                    } else {
-                        shift = 1 << 9;
+                    if (targetQubit >= 5) {
+                        hi ^= 1 << (targetQubit - 5);
                     }
-                    switch (deviceGates[i].type) {
-                        CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
-                        CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
-                        CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
-                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
-                        CASE_CTR_SMALL_SMALL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
-                        CASE_CTR_SMALL_SMALL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
-                        default: {
-                            assert(false);
-                        }
-                    }
-                } else if (controlQubit >= 5 && targetQubit < 5 && controlQubit - targetQubit != 5) {
-                    int tid = threadIdx.x;
-                    int smallQubit = controlQubit - 5 > targetQubit ? targetQubit : controlQubit - 5;
-                    int largeQubit = controlQubit - 5 > targetQubit ? controlQubit - 5 : targetQubit;
-                    int maskSmall = (1 << smallQubit) - 1;
-                    int maskLarge = (1 << largeQubit) - 1;
-                    int maskTarget = (1 << targetQubit) - 1;
-                    int x_id = tid >> 5;
-                    x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
-                    x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
-                    x_id |= (1 << controlQubit - 5);
-                    int y_id = tid & 15;
-                    y_id = y_id >> targetQubit << (targetQubit + 1) | (y_id & maskTarget);
-                    y_id ^= x_id;
-                    int lo = x_id << 5 | y_id;
-                    if (tid & (1 << 4)) {
-                        lo += 33 << targetQubit;
-                    }
-                    int hi = lo ^ (1 << targetQubit);
-                    int shift;
-                    if (largeQubit == 4) {
-                        if (smallQubit == 3) {
-                            shift = 1 << 7;
-                        } else {
-                            shift = 1 << 8;
-                        }
-                    } else {
-                        shift = 1 << 9;
-                    }
-                    switch (deviceGates[i].type) {
-                        CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
-                        CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
-                        CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
-                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
-                        CASE_CTR_SMALL_SMALL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
-                        CASE_CTR_SMALL_SMALL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
-                        default: {
-                            assert(false);
-                        }
-                    }
-                } else if (controlQubit < 5 && targetQubit >= 5 && targetQubit - controlQubit != 5) {
-                    int tid = threadIdx.x;
-                    int smallQubit = controlQubit > targetQubit - 5 ? targetQubit - 5 : controlQubit;
-                    int largeQubit = controlQubit > targetQubit - 5 ? controlQubit : targetQubit - 5;
-                    int maskSmall = (1 << smallQubit) - 1;
-                    int maskLarge = (1 << largeQubit) - 1;
-                    int targetMod = (1 << targetQubit) - 1;
-                    int maskTarget = (1 << targetMod) - 1;
-                    int maskControl = (1 << controlQubit) - 1;
-                    int x_id = tid >> 5;
-                    x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
-                    x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
-                    int y_id = tid & 15;
-                    y_id = y_id >> controlQubit << (controlQubit + 1) | (y_id & maskControl);
-                    y_id |= 1 << controlQubit;
-                    y_id ^= x_id;
-                    int lo = x_id << 5 | y_id;
-                    if (tid & (1 << 4)) {
-                        lo += 31 << controlQubit;
-                    }
-                    int hi = lo ^ (1 << targetQubit) ^ (1 << (targetQubit - 5));
-                    int shift;
-                    if (largeQubit == 4) {
-                        if (smallQubit == 3) {
-                            shift = 1 << 7;
-                        } else {
-                            shift = 1 << 8;
-                        }
-                    } else {
-                        shift = 1 << 9;
-                    }
+                    int shift = shiftAt[controlQubit * 10 + targetQubit];
                     switch (deviceGates[i].type) {
                         CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
                         CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
@@ -534,27 +447,40 @@ __device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
 }
 
 template <unsigned int blockSize>
-__global__ void run(ComplexArray a, qindex* threadBias, int* loArr, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
+__global__ void run(ComplexArray a, qindex* threadBias, int* loArr, int* shiftAt, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     fetchData(a, threadBias, idx, blockHot, enumerate, numQubits);
     __syncthreads();
-    doCompute<blockSize>(numGates, loArr);
+    doCompute<blockSize>(numGates, loArr, shiftAt);
     __syncthreads();
     saveData(a, threadBias, enumerate);
 }
 
 #ifdef USE_GROUP
 void initControlIdx() {
-    cudaMalloc(&loIdx, sizeof(int) * 25 * (1 << THREAD_DEP));
-    int loIdx_host[5][5][1 << THREAD_DEP];
+    int loIdx_host[10][10][1 << THREAD_DEP];
+    int shiftAt_host[10][10];
+    cudaMalloc(&loIdx_device, sizeof(loIdx_host));
+    cudaMalloc(&shiftAt_device, sizeof(shiftAt_host));
     for (int controlQubit = 0; controlQubit < 5; controlQubit ++)
-        for (int targetQubit = 0; targetQubit < 5; targetQubit ++)
+        for (int targetQubit = 0; targetQubit < 5; targetQubit ++) {
+            if (controlQubit == targetQubit) continue;
+            int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+            int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+            int maskSmall = (1 << smallQubit) - 1;
+            int maskLarge = (1 << largeQubit) - 1;
+            int shift;
+            if (largeQubit == 4) {
+                if (smallQubit == 3) {
+                    shift = 1 << 7;
+                } else {
+                    shift = 1 << 8;
+                }
+            } else {
+                shift = 1 << 9;
+            }
+            shiftAt_host[controlQubit][targetQubit] = shift;
             for (int tid = 0; tid < (1 << THREAD_DEP); tid++) {
-                if (controlQubit == targetQubit) continue;
-                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
-                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
-                int maskSmall = (1 << smallQubit) - 1;
-                int maskLarge = (1 << largeQubit) - 1;
                 int x_id = tid >> 5;
                 x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
                 x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
@@ -571,7 +497,79 @@ void initControlIdx() {
                 }
                 loIdx_host[controlQubit][targetQubit][tid] = lo;
             }
-    checkCudaErrors(cudaMemcpy(loIdx, loIdx_host[0][0], sizeof(int) * 25 * (1 << THREAD_DEP), cudaMemcpyHostToDevice));
+        }
+
+    for (int controlQubit = 5; controlQubit < 10; controlQubit ++)
+        for (int targetQubit = 0; targetQubit < 5; targetQubit ++) {
+            if (targetQubit - controlQubit == 5) continue;
+            int smallQubit = controlQubit - 5 > targetQubit ? targetQubit : controlQubit - 5;
+            int largeQubit = controlQubit - 5 > targetQubit ? controlQubit - 5 : targetQubit;
+            int maskSmall = (1 << smallQubit) - 1;
+            int maskLarge = (1 << largeQubit) - 1;
+            int maskTarget = (1 << targetQubit) - 1;
+            int shift;
+            if (largeQubit == 4) {
+                if (smallQubit == 3) {
+                    shift = 1 << 7;
+                } else {
+                    shift = 1 << 8;
+                }
+            } else {
+                shift = 1 << 9;
+            }
+            shiftAt_host[controlQubit][targetQubit] = shift;
+            for (int tid = 0; tid < (1 << THREAD_DEP); tid++) {
+                int x_id = tid >> 5;
+                x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
+                x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
+                x_id |= (1 << controlQubit - 5);
+                int y_id = tid & 15;
+                y_id = y_id >> targetQubit << (targetQubit + 1) | (y_id & maskTarget);
+                y_id ^= x_id;
+                int lo = x_id << 5 | y_id;
+                if (tid & (1 << 4)) {
+                    lo += 33 << targetQubit;
+                }
+                loIdx_host[controlQubit][targetQubit][tid] = lo;
+            }
+        }
+    for (int controlQubit = 0; controlQubit < 5; controlQubit ++)
+        for (int targetQubit = 5; targetQubit < 10; targetQubit ++) {
+            int smallQubit = controlQubit > targetQubit - 5 ? targetQubit - 5 : controlQubit;
+            int largeQubit = controlQubit > targetQubit - 5 ? controlQubit : targetQubit - 5;
+            int maskSmall = (1 << smallQubit) - 1;
+            int maskLarge = (1 << largeQubit) - 1;
+            int targetMod = (1 << targetQubit) - 1;
+            int maskTarget = (1 << targetMod) - 1;
+            int maskControl = (1 << controlQubit) - 1;
+            int shift;
+            if (largeQubit == 4) {
+                if (smallQubit == 3) {
+                    shift = 1 << 7;
+                } else {
+                    shift = 1 << 8;
+                }
+            } else {
+                shift = 1 << 9;
+            }
+            shiftAt_host[controlQubit][targetQubit] = shift;
+            for (int tid = 0; tid < (1 << THREAD_DEP); tid++) {
+                int x_id = tid >> 5;
+                x_id = x_id >> smallQubit << (smallQubit + 1) | (x_id & maskSmall);
+                x_id = x_id >> largeQubit << (largeQubit + 1) | (x_id & maskLarge);
+                int y_id = tid & 15;
+                y_id = y_id >> controlQubit << (controlQubit + 1) | (y_id & maskControl);
+                y_id |= 1 << controlQubit;
+                y_id ^= x_id;
+                int lo = x_id << 5 | y_id;
+                if (tid & (1 << 4)) {
+                    lo += 31 << controlQubit;
+                }
+                loIdx_host[controlQubit][targetQubit][tid] = lo;
+            }        
+        }
+    checkCudaErrors(cudaMemcpy(loIdx_device, loIdx_host[0][0], sizeof(loIdx_host), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(shiftAt_device, shiftAt_host[0], sizeof(shiftAt_host), cudaMemcpyHostToDevice));
 }
 #endif
 
@@ -675,7 +673,7 @@ std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, co
         // execute
         qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
         run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-            (deviceStateVec, threadBias, loIdx, numQubits, gates.size(), blockHot, enumerate);
+            (deviceStateVec, threadBias, loIdx_device, shiftAt_device, numQubits, gates.size(), blockHot, enumerate);
 #ifdef MEASURE_STAGE
             cudaEventRecord(stop, 0);
             cudaEventSynchronize(stop);
