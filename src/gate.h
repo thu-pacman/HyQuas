@@ -47,5 +47,6 @@ struct Gate {
     static Gate RZ(int targetQubit, qreal angle);
     static Gate random(int lo, int hi);
     static Gate random(int lo, int hi, GateType type);
+    static Gate control(int controlQubit, int targetQubit, GateType type);
     static std::string get_name(GateType ty);
 };

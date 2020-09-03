@@ -243,6 +243,13 @@ Gate Gate::RZ(int targetQubit, qreal angle) {
     return g;
 }
 
+auto gen_01_float = []() {
+    return rand() * 1.0 / RAND_MAX;
+};
+auto gen_0_2pi_float = []() {
+        return gen_01_float() * acos(-1) * 2;
+};
+
 Gate Gate::random(int lo, int hi) {
     int type = rand() % int(GateType::TOTAL);
     return random(lo, hi, GateType(type));
@@ -266,12 +273,6 @@ Gate Gate::random(int lo, int hi, GateType type) {
     };
     auto gen_single_id = [lo, hi](int &t) {
         t = rand() % (hi - lo) + lo;
-    };
-    auto gen_01_float = []() {
-        return rand() * 1.0 / RAND_MAX;
-    };
-    auto gen_0_2pi_float = [gen_01_float]() {
-        return gen_01_float() * acos(-1) * 2;
     };
     switch (type) {
         case GateType::CCX: {
@@ -302,12 +303,12 @@ Gate Gate::random(int lo, int hi, GateType type) {
         case GateType::CRY: {
             int t, c1;
             gen_c1_id(t, c1);
-            return CRY(t, c1, gen_0_2pi_float());
+            return CRY(c1, t, gen_0_2pi_float());
         }
         case GateType::CRZ: {
             int t, c1;
             gen_c1_id(t, c1);
-            return CRZ(t, c1, gen_0_2pi_float());
+            return CRZ(c1, t, gen_0_2pi_float());
         }
         case GateType::U1: {
             int t;
@@ -371,6 +372,32 @@ Gate Gate::random(int lo, int hi, GateType type) {
         }
         default: {
             printf("invalid %d\n", type);
+            assert(false);
+        }
+    }
+}
+
+Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
+    switch (type) {
+        case GateType::CNOT: {
+            return CNOT(controlQubit, targetQubit);
+        }
+        case GateType::CY: {
+            return CY(controlQubit, targetQubit);
+        }
+        case GateType::CZ: {
+            return CZ(controlQubit, targetQubit);
+        }
+        case GateType::CRX: {
+            return CRX(controlQubit, targetQubit, gen_0_2pi_float());
+        }
+        case GateType::CRY: {
+            return CRY(controlQubit, targetQubit, gen_0_2pi_float());
+        }
+        case GateType::CRZ: {
+            return CRZ(controlQubit, targetQubit, gen_0_2pi_float());
+        }
+        default: {
             assert(false);
         }
     }

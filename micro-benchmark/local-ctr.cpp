@@ -10,19 +10,22 @@ using namespace std;
 int main(int argc, char* argv[]) {
     int n = 28;
     int num_gates = 512;
-    for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
-        for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
-            if (i == j) { printf("    "); continue; }
-            Circuit c(n);
-            for (int k = 0; k < num_gates; k++) {
-                c.addGate(Gate::CNOT(i, j));
+    for (int g = int(GateType::CNOT); g <= int(GateType::CRZ); g++) {
+        printf("%s\n", Gate::get_name(GateType(g)).c_str());
+        for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
+            for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
+                if (i == j) { printf("    "); continue; }
+                Circuit c(n);
+                for (int k = 0; k < num_gates; k++) {
+                    c.addGate(Gate::control(i, j, GateType(g)));
+                }
+                c.compile();
+                int time = c.run(false);
+                printf("%d ", time);
+                fflush(stdout);
             }
-            c.compile();
-            int time = c.run(false);
-            printf("%d ", time);
-            fflush(stdout);
+            printf("\n");
         }
-        printf("\n");
     }
     return 0;
 }
