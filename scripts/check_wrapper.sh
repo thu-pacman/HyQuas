@@ -17,3 +17,5 @@ for test in ${tests[*]}; do
     echo $test
     diff -B <(head -n $line $std_dir/$test.log) <(head -n $line $1/$test.log) || true
 done
+
+grep -r "Time Cost" $1/*.log 
