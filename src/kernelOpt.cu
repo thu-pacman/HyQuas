@@ -411,7 +411,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
     }
 }
 
-__device__ void fetchData(ComplexArray a, qindex* threadBias,  qindex idx, qindex blockHot, qindex enumerate, int numQubits) {
+__device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex blockHot, qindex enumerate, int numQubits) {
     if (threadIdx.x == 0) {
         int bid = blockIdx.x;
         qindex bias = 0;
@@ -429,25 +429,26 @@ __device__ void fetchData(ComplexArray a, qindex* threadBias,  qindex idx, qinde
     for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
-            
-        real[x ^ (x >> 5)] = a.real[bias | y];
-        imag[x ^ (x >> 5)] = a.imag[bias | y];
+        
+        qComplex data = a[bias | y];
+        real[x ^ (x >> 5)] = data.x;
+        imag[x ^ (x >> 5)] = data.y;
     }
 }
 
-__device__ void saveData(ComplexArray a, qindex* threadBias, qindex enumerate) {
+__device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
     qindex bias = blockBias | threadBias[threadIdx.x];
     for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
-        a.real[bias | y] = real[x ^ (x >> 5)];
-        a.imag[bias | y] = imag[x ^ (x >> 5)];
+        qComplex result = make_qComplex(real[x ^ (x >> 5)], imag[x ^ x >> 5]);
+        a[bias | y] = result;
     }
 }
 
 template <unsigned int blockSize>
-__global__ void run(ComplexArray a, qindex* threadBias, int* loArr, int* shiftAt, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
+__global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     fetchData(a, threadBias, idx, blockHot, enumerate, numQubits);
     __syncthreads();
@@ -540,7 +541,6 @@ void initControlIdx() {
             int maskSmall = (1 << smallQubit) - 1;
             int maskLarge = (1 << largeQubit) - 1;
             int targetMod = (1 << targetQubit) - 1;
-            int maskTarget = (1 << targetMod) - 1;
             int maskControl = (1 << controlQubit) - 1;
             int shift;
             if (largeQubit == 4) {
@@ -573,7 +573,7 @@ void initControlIdx() {
 }
 #endif
 
-std::vector<qreal> kernelExecOpt(ComplexArray& deviceStateVec, int numQubits, const Schedule& schedule) {
+std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const Schedule& schedule) {
     assert(numQubits <= MAX_QUBIT);
     qindex hostThreadBias[1 << THREAD_DEP];
     qindex* threadBias;

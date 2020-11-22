@@ -20,8 +20,7 @@ public:
 private:
     int numQubits;
     std::vector<Gate> gates;
-    ComplexArray deviceStateVec;
+    qComplex* deviceStateVec;
     Schedule schedule;
-    std::vector<qreal> resultReal;
-    std::vector<qreal> resultImag;
+    std::vector<qComplex> result;
 };

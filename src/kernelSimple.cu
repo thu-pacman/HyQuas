@@ -16,21 +16,18 @@ const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
-void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
+void kernelInit(qComplex* &deviceStateVec, int numQubits) {
     cudaError_t cuda_status;
 	cuda_status = cudaSetDevice(0);
 	if (cuda_status != cudaSuccess) {
         printf("cudaSetDevice failed! ");
         exit(1);
 	}
-    assert(numQubits < 31);
-    size_t size = sizeof(qreal) << numQubits;
-    checkCudaErrors(cudaMalloc(&deviceStateVec.real, size));
-    checkCudaErrors(cudaMalloc(&deviceStateVec.imag, size));
-    checkCudaErrors(cudaMemset(deviceStateVec.real, 0, size));
-    checkCudaErrors(cudaMemset(deviceStateVec.imag, 0, size));
-    qreal one = 1;
-    checkCudaErrors(cudaMemcpy(deviceStateVec.real, &one, sizeof(qreal), cudaMemcpyHostToDevice)); // state[0] = 1
+    size_t size = sizeof(qComplex) << numQubits;
+    checkCudaErrors(cudaMalloc(&deviceStateVec, size));
+    checkCudaErrors(cudaMemset(deviceStateVec, 0, size));
+    qComplex one = make_qComplex(1.0, 0.0);
+    checkCudaErrors(cudaMemcpy(deviceStateVec, &one, sizeof(qComplex), cudaMemcpyHostToDevice)); // state[0] = 1
 #ifdef USE_GROUP
     initControlIdx();
 #endif
@@ -73,101 +70,101 @@ void kernelInit(ComplexArray& deviceStateVec, int numQubits) {
 
 
 template <unsigned int blockSize>
-__global__ void CCXKernel(ComplexArray a, int numQubit_, int c1, int c2, int targetQubit) {
+__global__ void CCXKernel(qComplex* a, int numQubit_, int c1, int c2, int targetQubit) {
     CC_GATE_BEGIN {
-        qreal real = a.real[lo];
-        qreal imag = a.imag[lo];
-        a.real[lo] = a.real[hi];
-        a.imag[lo] = a.imag[hi];
-        a.real[hi] = real;
-        a.imag[hi] = imag;
+        qreal real = a[lo].x;
+        qreal imag = a[lo].y;
+        a[lo].x = a[hi].x;
+        a[lo].y = a[hi].y;
+        a[hi].x = real;
+        a[hi].y = imag;
     } CC_GATE_END
 }
 
 
 template <unsigned int blockSize>
-__global__ void CNOTKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+__global__ void CNOTKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
-        qreal real = a.real[lo];
-        qreal imag = a.imag[lo];
-        a.real[lo] = a.real[hi];
-        a.imag[lo] = a.imag[hi];
-        a.real[hi] = real;
-        a.imag[hi] = imag;
+        qreal real = a[lo].x;
+        qreal imag = a[lo].y;
+        a[lo].x = a[hi].x;
+        a[lo].y = a[hi].y;
+        a[hi].x = real;
+        a[hi].y = imag;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void CYKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+__global__ void CYKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = hiImag;
-        a.imag[lo] = -hiReal;
-        a.real[hi] = -loImag;
-        a.imag[hi] = loReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = hiImag;
+        a[lo].y = -hiReal;
+        a[hi].x = -loImag;
+        a[hi].y = loReal;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void CZKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit) {
+__global__ void CZKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit) {
     CONTROL_GATE_BEGIN {
-        a.real[hi] = -a.real[hi];
-        a.imag[hi] = -a.imag[hi];
+        a[hi].x = -a[hi].x;
+        a[hi].y = -a[hi].y;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void CRXKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CRXKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal + beta * hiImag;
-        a.imag[lo] = alpha * loImag - beta * hiReal;
-        a.real[hi] = alpha * hiReal + beta * loImag;
-        a.imag[hi] = alpha * hiImag - beta * loReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal + beta * hiImag;
+        a[lo].y = alpha * loImag - beta * hiReal;
+        a[hi].x = alpha * hiReal + beta * loImag;
+        a[hi].y = alpha * hiImag - beta * loReal;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void CRYKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CRYKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal - beta * hiReal;
-        a.imag[lo] = alpha * loImag - beta * hiImag;
-        a.real[hi] = beta * loReal + alpha * hiReal;
-        a.imag[hi] = beta * loImag + alpha * hiImag;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal - beta * hiReal;
+        a[lo].y = alpha * loImag - beta * hiImag;
+        a[hi].x = beta * loReal + alpha * hiReal;
+        a[hi].y = beta * loImag + alpha * hiImag;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void CRZKernel(ComplexArray a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+__global__ void CRZKernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
     CONTROL_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal + beta * loImag;
-        a.imag[lo] = alpha * loImag - beta * loReal;
-        a.real[hi] = alpha * hiReal - beta * hiImag;
-        a.imag[hi] = alpha * hiImag + beta * hiReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal + beta * loImag;
+        a[lo].y = alpha * loImag - beta * loReal;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
     } CONTROL_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void U1Kernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void U1Kernel(qComplex* a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[hi] = alpha * hiReal - beta * hiImag;
-        a.imag[hi] = alpha * hiImag + beta * hiReal;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
     } SINGLE_GATE_END
 }
 
@@ -175,16 +172,16 @@ __global__ void U1Kernel(ComplexArray a, int numQubit_, int targetQubit, qreal a
 #define COMPLEX_MULTIPLY_IMAG(i0, r0, i1, r1) (i0 * r1 + i1 * r0)
 
 template <unsigned int blockSize>
-__global__ void UKernel(ComplexArray a, int numQubit_, int targetQubit, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+__global__ void UKernel(qComplex* a, int numQubit_, int targetQubit, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
-        a.imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
-        a.real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
-        a.imag[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
+        a[lo].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
+        a[hi].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
+        a[hi].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
     } SINGLE_GATE_END
 }
 
@@ -192,118 +189,118 @@ __global__ void UKernel(ComplexArray a, int numQubit_, int targetQubit, qreal r0
 #undef COMPLEX_MULTIPLY_IMAG
 
 template <unsigned int blockSize>
-__global__ void HKernel(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+__global__ void HKernel(qComplex* a, int numQubit_, int targetQubit, qreal recRoot2) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = recRoot2 * (loReal + hiReal);
-        a.imag[lo] = recRoot2 * (loImag + hiImag);
-        a.real[hi] = recRoot2 * (loReal - hiReal);
-        a.imag[hi] = recRoot2 * (loImag - hiImag);
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = recRoot2 * (loReal + hiReal);
+        a[lo].y = recRoot2 * (loImag + hiImag);
+        a[hi].x = recRoot2 * (loReal - hiReal);
+        a[hi].y = recRoot2 * (loImag - hiImag);
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void XKernel(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void XKernel(qComplex* a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
-        qreal real = a.real[lo];
-        qreal imag = a.imag[lo];
-        a.real[lo] = a.real[hi];
-        a.imag[lo] = a.imag[hi];
-        a.real[hi] = real;
-        a.imag[hi] = imag;
+        qreal real = a[lo].x;
+        qreal imag = a[lo].y;
+        a[lo].x = a[hi].x;
+        a[lo].y = a[hi].y;
+        a[hi].x = real;
+        a[hi].y = imag;
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void YKernel(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void YKernel(qComplex* a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = hiImag;
-        a.imag[lo] = -hiReal;
-        a.real[hi] = -loImag;
-        a.imag[hi] = loReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = hiImag;
+        a[lo].y = -hiReal;
+        a[hi].x = -loImag;
+        a[hi].y = loReal;
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void ZKernel(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void ZKernel(qComplex* a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
-        a.real[hi] = -a.real[hi];
-        a.imag[hi] = -a.imag[hi];
+        a[hi].x = -a[hi].x;
+        a[hi].y = -a[hi].y;
     } SINGLE_GATE_END
 }
 
 
 template <unsigned int blockSize>
-__global__ void SKernel(ComplexArray a, int numQubit_, int targetQubit) {
+__global__ void SKernel(qComplex* a, int numQubit_, int targetQubit) {
     SINGLE_GATE_BEGIN {
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[hi] = -hiImag;
-        a.imag[hi] = hiReal;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = -hiImag;
+        a[hi].y = hiReal;
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void TKernel(ComplexArray a, int numQubit_, int targetQubit, qreal recRoot2) {
+__global__ void TKernel(qComplex* a, int numQubit_, int targetQubit, qreal recRoot2) {
     SINGLE_GATE_BEGIN {
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[hi] = recRoot2 * (hiReal - hiImag);
-        a.imag[hi] = recRoot2 * (hiReal + hiImag);
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = recRoot2 * (hiReal - hiImag);
+        a[hi].y = recRoot2 * (hiReal + hiImag);
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void RXKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void RXKernel(qComplex* a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal + beta * hiImag;
-        a.imag[lo] = alpha * loImag - beta * hiReal;
-        a.real[hi] = alpha * hiReal + beta * loImag;
-        a.imag[hi] = alpha * hiImag - beta * loReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal + beta * hiImag;
+        a[lo].y = alpha * loImag - beta * hiReal;
+        a[hi].x = alpha * hiReal + beta * loImag;
+        a[hi].y = alpha * hiImag - beta * loReal;
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void RYKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void RYKernel(qComplex* a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal - beta * hiReal;
-        a.imag[lo] = alpha * loImag - beta * hiImag;
-        a.real[hi] = beta * loReal + alpha * hiReal;
-        a.imag[hi] = beta * loImag + alpha * hiImag;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal - beta * hiReal;
+        a[lo].y = alpha * loImag - beta * hiImag;
+        a[hi].x = beta * loReal + alpha * hiReal;
+        a[hi].y = beta * loImag + alpha * hiImag;
     } SINGLE_GATE_END
 }
 
 template <unsigned int blockSize>
-__global__ void RZKernel(ComplexArray a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
+__global__ void RZKernel(qComplex* a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        qreal hiReal = a.real[hi];
-        qreal hiImag = a.imag[hi];
-        a.real[lo] = alpha * loReal + beta * loImag;
-        a.imag[lo] = alpha * loImag - beta * loReal;
-        a.real[hi] = alpha * hiReal - beta * hiImag;
-        a.imag[hi] = alpha * hiImag + beta * hiReal;
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = alpha * loReal + beta * loImag;
+        a[lo].y = alpha * loImag - beta * loReal;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
     } SINGLE_GATE_END
 }
 
 
-void kernelExecSimple(ComplexArray& deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
+void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
     for (auto& gate: gates) {
@@ -436,7 +433,7 @@ __global__ void reduce(qreal* g_idata, qreal *g_odata, unsigned int n, unsigned 
 }
 
 template <unsigned int blockSize>
-__global__ void measure(ComplexArray a, qreal* ans, int numQubit_, int targetQubit) {
+__global__ void measure(qComplex* a, qreal* ans, int numQubit_, int targetQubit) {
     __shared__ qreal sdata[blockSize];
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     int tid = threadIdx.x;
@@ -444,16 +441,14 @@ __global__ void measure(ComplexArray a, qreal* ans, int numQubit_, int targetQub
     sdata[tid] = 0;
     for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
-        qreal loReal = a.real[lo];
-        qreal loImag = a.imag[lo];
-        sdata[tid] += loReal * loReal + loImag * loImag;
+        sdata[tid] += a[lo].x * a[lo].x + a[lo].y * a[lo].y;
     }
     __syncthreads();
     blockReduce<blockSize>(sdata, tid);
     if (tid == 0) ans[blockIdx.x] = sdata[0];
 }
 
-qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit) {
+qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit) {
     int numQubit_ = numQubits - 1;
     qindex nVec = 1 << numQubit_;
     qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
@@ -474,19 +469,16 @@ qreal kernelMeasure(ComplexArray& deviceStateVec, int numQubits, int targetQubit
     return ret;
 }
 
-Complex kernelGetAmp(ComplexArray& deviceStateVec, qindex idx) {
-    Complex ret;
-    cudaMemcpy(&ret.real, deviceStateVec.real + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&ret.imag, deviceStateVec.imag + idx, sizeof(qreal), cudaMemcpyDeviceToHost);
-    return ret;
+Complex kernelGetAmp(qComplex* deviceStateVec, qindex idx) {
+    qComplex ret;
+    cudaMemcpy(&ret, deviceStateVec + idx, sizeof(qComplex), cudaMemcpyDeviceToHost);
+    return Complex(ret);
 }
 
-void kernelDeviceToHost(ComplexArray hostStateVec, ComplexArray deviceStateVec, int numQubits) {
-    cudaMemcpy(hostStateVec.real, deviceStateVec.real, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
-    cudaMemcpy(hostStateVec.imag, deviceStateVec.imag, sizeof(qreal) << numQubits, cudaMemcpyDeviceToHost);
+void kernelDeviceToHost(qComplex* hostStateVec, qComplex* deviceStateVec, int numQubits) {
+    cudaMemcpy(hostStateVec, deviceStateVec, sizeof(qComplex) << numQubits, cudaMemcpyDeviceToHost);
 }
 
-void kernelDestroy(ComplexArray deviceStateVec) {
-    cudaFree(deviceStateVec.real);
-    cudaFree(deviceStateVec.imag);
+void kernelDestroy(qComplex* deviceStateVec) {
+    cudaFree(deviceStateVec);
 }

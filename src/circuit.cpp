@@ -25,10 +25,9 @@ int Circuit::run(bool copy_back) {
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
-    resultReal.resize(1ll << numQubits);
-    resultImag.resize(1ll << numQubits);
+    result.resize(1ll << numQubits);
     if (copy_back) {
-        kernelDeviceToHost((ComplexArray){resultReal.data(), resultImag.data()}, deviceStateVec, numQubits);
+        kernelDeviceToHost((qComplex*)result.data(), deviceStateVec, numQubits);
     }
     kernelDestroy(deviceStateVec);
     return duration.count();
@@ -57,7 +56,7 @@ void Circuit::dumpGates() {
 }
 
 Complex Circuit::ampAt(qindex idx) {
-    return Complex(resultReal[idx], resultImag[idx]);
+    return Complex(result[idx].x, result[idx].y);
 }
 
 void Circuit::compile() {
