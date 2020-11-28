@@ -164,18 +164,21 @@ int main(int argc, char* argv[]) {
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 2);
                 c->addGate(Gate::CRX(qid[0], qid[1], gate.second[0]));
+                // printf("crx %d %d %f\n", qid[0], qid[1], gate.second[0]);
             } else if (gate.first == "cry") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 2);
                 c->addGate(Gate::CRY(qid[0], qid[1], gate.second[0]));
+                // printf("cry %d %d %f\n", qid[0], qid[1], gate.second[0]);
             } else if (gate.first == "crz") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 2);
                 c->addGate(Gate::CRZ(qid[0], qid[1], gate.second[0]));
+                // printf("crz %d %d %f\n", qid[0], qid[1], gate.second[0]);
             } else if (gate.first == "u1") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
