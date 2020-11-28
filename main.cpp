@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
             auto qid = parse_qid(buffer);
             assert(qid.size() == 1);
             c->addGate(Gate::S(qid[0]));
-            // printf("t %d\n", qid[0]);
+            // printf("s %d\n", qid[0]);
         } else if (strcmp(buffer, "t") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
