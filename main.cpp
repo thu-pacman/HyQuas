@@ -108,6 +108,12 @@ int main(int argc, char* argv[]) {
             assert(qid.size() == 3);
             c->addGate(Gate::CCX(qid[0], qid[1], qid[2]));
             // printf("ccx %d %d %d\n", qid[0], qid[1], qid[2]);
+        } else if (strcmp(buffer, "cy") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 2);
+            c->addGate(Gate::CY(qid[0], qid[1]));
+            // printf("cy %d %d\n", qid[0], qid[1]);
         } else if (strcmp(buffer, "cz") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
@@ -125,7 +131,31 @@ int main(int argc, char* argv[]) {
             auto qid = parse_qid(buffer);
             assert(qid.size() == 1);
             c->addGate(Gate::X(qid[0]));
-            // pritnf("x %d\n", qid[0]);
+            // printf("x %d\n", qid[0]);
+        } else if (strcmp(buffer, "y") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::Y(qid[0]));
+            // printf("y %d\n", qid[0]);
+        } else if (strcmp(buffer, "z") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::Z(qid[0]));
+            // printf("z %d\n", qid[0]);
+        } else if (strcmp(buffer, "s") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::S(qid[0]));
+            // printf("t %d\n", qid[0]);
+        } else if (strcmp(buffer, "t") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::T(qid[0]));
+            // printf("t %d\n", qid[0]);
         } else {
             auto gate = parse_gate(buffer);
             if (gate.first == "crx") {
