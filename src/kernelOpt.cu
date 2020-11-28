@@ -33,10 +33,10 @@ extern __shared__ qindex blockBias;
 
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
-#ifdef USE_GROUP
+
 int* loIdx_device;
 int* shiftAt_device;
-#endif
+
 
 __device__ __forceinline__ void XSingle(int lo, int hi) {
     qreal Real = real[lo];
@@ -260,7 +260,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
                         CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
                         CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
-                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                        CASE_CTR_SMALL_SMALL(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
                         CASE_CTR_SMALL_SMALL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
                         CASE_CTR_SMALL_SMALL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
                         default: {
@@ -289,7 +289,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         CASE_CONTROL(CNOT, XSingle(lo, hi))
                         CASE_CONTROL(CY, YSingle(lo, hi))
                         CASE_CONTROL(CZ, ZHi(hi))
-                        CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i01))
+                        CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
                         CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
                         CASE_CONTROL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
                         default: {
