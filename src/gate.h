@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include "utils.h"
 
 enum class GateType {
@@ -49,4 +50,6 @@ struct Gate {
     static Gate random(int lo, int hi, GateType type);
     static Gate control(int controlQubit, int targetQubit, GateType type);
     static std::string get_name(GateType ty);
+    std::vector<unsigned char> serialize() const;
+    static Gate deserialize(const unsigned char* arr, int& cur);
 };

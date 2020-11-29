@@ -1,6 +1,7 @@
 #include "gate.h"
 
 #include <cmath>
+#include <cstring>
 #include <assert.h>
 
 static int globalGateID = 0;
@@ -405,4 +406,37 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
 
 std::string Gate::get_name(GateType ty) {
     return random(0, 10, ty).name;
+}
+
+std::vector<unsigned char> Gate::serialize() const {
+    auto name_len = name.length();
+    int len =
+        sizeof(name_len) + name.length() + 1 + sizeof(gateID) + sizeof(type) + sizeof(mat)
+        + sizeof(targetQubit) + sizeof(controlQubit) + sizeof(controlQubit2);
+    std::vector<unsigned char> ret; ret.resize(len);
+    unsigned char* arr = ret.data();
+    int cur = 0;
+    SERIALIZE_STEP(gateID);
+    SERIALIZE_STEP(type);
+    memcpy(arr + cur, mat, sizeof(mat)); cur += sizeof(Complex) * 4;
+    SERIALIZE_STEP(name_len);
+    strcpy(reinterpret_cast<char*>(arr) + cur, name.c_str()); cur += name_len + 1;
+    SERIALIZE_STEP(targetQubit);
+    SERIALIZE_STEP(controlQubit);
+    SERIALIZE_STEP(controlQubit2);
+    assert(cur == len);
+    return ret;
+}
+
+Gate Gate::deserialize(const unsigned char* arr, int& cur) {
+    Gate g;
+    DESERIALIZE_STEP(g.gateID);
+    DESERIALIZE_STEP(g.type);
+    memcpy(g.mat, arr + cur, sizeof(g.mat)); cur += sizeof(Complex) * 4;
+    decltype(g.name.length()) name_len; DESERIALIZE_STEP(name_len);
+    g.name = std::string(reinterpret_cast<const char*>(arr) + cur, name_len); cur += name_len + 1;
+    DESERIALIZE_STEP(g.targetQubit);
+    DESERIALIZE_STEP(g.controlQubit);
+    DESERIALIZE_STEP(g.controlQubit2);
+    return g;
 }

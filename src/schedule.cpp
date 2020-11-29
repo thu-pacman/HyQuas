@@ -58,3 +58,54 @@ std::vector<int> GateGroup::toID() const {
     }
     return ret;
 }
+
+std::vector<unsigned char> GateGroup::serialize() const {
+    auto num_gates = gates.size();
+    std::vector<unsigned char> result;
+    result.resize(sizeof(relatedQubits) + sizeof(num_gates));
+    auto arr = result.data();
+    int cur = 0;
+    SERIALIZE_STEP(relatedQubits);
+    SERIALIZE_STEP(num_gates);
+    for (auto& gate: gates) {
+        auto g = gate.serialize();
+        result.insert(result.end(), g.begin(), g.end());
+    }
+    return result;
+}
+
+GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
+    GateGroup gg;
+    DESERIALIZE_STEP(gg.relatedQubits);
+    decltype(gg.gates.size()) num_gates;
+    DESERIALIZE_STEP(num_gates);
+    for (int i = 0; i < num_gates; i++) {
+        gg.gates.push_back(Gate::deserialize(arr, cur));
+    }
+    return gg;
+}
+
+std::vector<unsigned char> Schedule::serialize() const {
+    auto num_gg = gateGroups.size();
+    std::vector<unsigned char> result;
+    result.resize(sizeof(num_gg));
+    auto arr = result.data();
+    int cur = 0;
+    SERIALIZE_STEP(num_gg);
+    for (auto& gateGroup: gateGroups) {
+        auto gg = gateGroup.serialize();
+        result.insert(result.end(), gg.begin(), gg.end());
+    }
+    return result;
+}
+
+
+Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
+    Schedule s;
+    decltype(s.gateGroups.size()) num_gg;
+    DESERIALIZE_STEP(num_gg);
+    for (int i = 0; i < num_gg; i++) {
+        s.gateGroups.push_back(GateGroup::deserialize(arr, cur));
+    }
+    return s;
+}

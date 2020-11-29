@@ -8,6 +8,9 @@ typedef int qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 
+#define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
+#define DESERIALIZE_STEP(x) { x = *reinterpret_cast<const decltype(x)*>(arr + cur); cur += sizeof(x); }
+
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 
 struct Complex {
