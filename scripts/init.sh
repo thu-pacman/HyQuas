@@ -2,9 +2,20 @@
 set -u
 set -e
 
-source /usr/local/Modules/init/bash
-module load cuda-10.2/cuda
-module load cmake-3.12.3
+case $(hostname -s) in
+  nico*)
+    echo "nico cluster"
+    source /opt/spack/share/spack/setup-env.sh
+    spack load cuda@10.2.89 /v5oqq5n
+    ;;
+  gorgon*)
+    echo "gorgon cluster"
+    source /usr/local/Modules/init/bash
+    module load cuda-10.2/cuda
+    module load cmake-3.12.3
+    ;;
+esac
+
 cd $HOME/QCSimulator/build
 rm CMakeCache.txt || true
 cmake $* ..
