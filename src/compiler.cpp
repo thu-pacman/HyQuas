@@ -1,21 +1,18 @@
 #include "compiler.h"
+
 #include <cstring>
 #include <algorithm>
 #include <assert.h>
 
-Compiler::Compiler(int numQubits, int localSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), remainGates(inputGates) { }
+Compiler::Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), shareSize(shareSize), gates(inputGates) {}
 
 Schedule Compiler::run() {
-    schedule.gateGroups.clear();
-    int cnt = 0;
-    while (true) {
-        GateGroup gg = getGroup();
-        schedule.gateGroups.push_back(gg);
-        removeFromSchedule(gg);
-        if (remainGates.size() == 0)
-            break;
-        cnt ++;
-        assert(cnt < 100);
+    OneLayerCompiler localCompiler(numQubits, localSize, gates);
+    LocalGroup localGroup = localCompiler.run();
+    Schedule schedule;
+    for (auto& gg: localGroup.gateGroups) {
+        OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates);
+        schedule.localGroups.push_back(shareCompiler.run());
     }
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
@@ -23,7 +20,26 @@ Schedule Compiler::run() {
     return schedule;
 }
 
-GateGroup Compiler::getGroup() {
+OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), remainGates(inputGates) { }
+
+LocalGroup OneLayerCompiler::run() {
+    LocalGroup lg;
+    lg.relatedQubits = 0;
+    int cnt = 0;
+    while (true) {
+        GateGroup gg = getGroup();
+        lg.gateGroups.push_back(gg);
+        lg.relatedQubits |= gg.relatedQubits;
+        remove(gg);
+        if (remainGates.size() == 0)
+            break;
+        cnt ++;
+        assert(cnt < 100);
+    }
+    return lg;
+}
+
+GateGroup OneLayerCompiler::getGroup() {
     GateGroup cur[numQubits];
     bool full[numQubits];
     memset(full, 0, sizeof(full));
@@ -107,7 +123,7 @@ GateGroup Compiler::getGroup() {
     return selected;
 }
 
-void Compiler::removeFromSchedule(GateGroup& gg) {
+void OneLayerCompiler::remove(GateGroup& gg) {
     std::vector<int> usedID = gg.toID();
     std::sort(usedID.begin(), usedID.end());
     auto temp = remainGates;

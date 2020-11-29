@@ -1,6 +1,5 @@
 #pragma once
 #include <vector>
-#include "schedule.h"
 #include "utils.h"
 #include "gate.h"
 
@@ -17,8 +16,16 @@ struct GateGroup {
     static GateGroup deserialize(const unsigned char* arr, int& cur);
 };
 
-struct Schedule {
+struct LocalGroup {
     std::vector<GateGroup> gateGroups;
+    qindex relatedQubits;
+    bool contains(int i) { return (relatedQubits >> i) & 1; }
+    std::vector<unsigned char> serialize() const;
+    static LocalGroup deserialize(const unsigned char* arr, int& cur);
+};
+
+struct Schedule {
+    std::vector<LocalGroup> localGroups;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);

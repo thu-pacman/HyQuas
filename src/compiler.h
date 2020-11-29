@@ -6,13 +6,23 @@
 
 class Compiler {
 public:
-    Compiler(int numQubits, int localSize, std::vector<Gate> inputGates);
+    Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates);
     Schedule run();
+private:
+    int numQubits;
+    int localSize;
+    int shareSize;
+    std::vector<Gate> gates;
+};
+
+class OneLayerCompiler {
+public:
+    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates);
+    LocalGroup run();
 private:
     int numQubits;
     int localSize;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
-    void removeFromSchedule(GateGroup& gg);
-    Schedule schedule;
+    void remove(GateGroup& gg);
 };

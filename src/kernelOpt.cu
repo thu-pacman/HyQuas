@@ -540,7 +540,6 @@ void initControlIdx() {
             int largeQubit = controlQubit > targetQubit - 5 ? controlQubit : targetQubit - 5;
             int maskSmall = (1 << smallQubit) - 1;
             int maskLarge = (1 << largeQubit) - 1;
-            int targetMod = (1 << targetQubit) - 1;
             int maskControl = (1 << controlQubit) - 1;
             int shift;
             if (largeQubit == 4) {
@@ -579,16 +578,22 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
     qindex* threadBias;
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));
     std::vector<qreal> ret;
-    for (size_t g = 0; g < schedule.gateGroups.size(); g++) {
+    std::vector<GateGroup> gateGroups;
+    for (auto& lg: schedule.localGroups) {
+        for (auto& gg: lg.gateGroups) {
+            gateGroups.push_back(gg);
+        }
+    } 
+    for (size_t g = 0; g < gateGroups.size(); g++) {
 #ifdef MEASURE_STAGE
         cudaEvent_t start, stop;
             checkCudaErrors(cudaEventCreate(&start));
             checkCudaErrors(cudaEventCreate(&stop));
             checkCudaErrors(cudaEventRecord(start, 0));
 #endif
-        auto& gates = schedule.gateGroups[g].gates;
+        auto& gates = gateGroups[g].gates;
         // initialize blockHot, enumerate, threadBias
-        qindex relatedQubits = schedule.gateGroups[g].relatedQubits;
+        qindex relatedQubits = gateGroups[g].relatedQubits;
         int cnt = bitCount(relatedQubits);
         if (cnt < LOCAL_QUBIT_SIZE) {
             int cnt = bitCount(relatedQubits);

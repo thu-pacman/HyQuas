@@ -62,9 +62,17 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    Compiler compiler(numQubits, LOCAL_QUBIT_SIZE, gates);
+    Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
-    Logger::add("Total Groups: %d", int(schedule.gateGroups.size()));
+    int totalGroups = 0;
+    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
+    // TODO MPI_BCAST
+    printf("Start Serialize\n");
+    auto s = schedule.serialize();
+    int cur = 0;
+    schedule = Schedule::deserialize(s.data(), cur);
+    printf("End Serialize\n");
     fflush(stdout);
 #endif
 }

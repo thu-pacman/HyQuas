@@ -4,7 +4,7 @@
 #include <vector>
 #include "utils.h"
 #include "gate.h"
-#include "compiler.h"
+#include "schedule.h"
 
 class Circuit {
 public:
