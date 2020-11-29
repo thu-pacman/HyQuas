@@ -307,7 +307,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
                             x ^= x >> 5;
-                            RZLo(x, deviceGates[i].r00, - deviceGates[i].i00);
+                            RZLo(x, deviceGates[i].r00, -deviceGates[i].i00);
                         }
                     }
                 } else {
@@ -315,7 +315,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
                             int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
                             x ^= x >> 5;
-                            RZHi(x, deviceGates[i].r00, - deviceGates[i].i00);
+                            RZHi(x, deviceGates[i].r00, -deviceGates[i].i00);
                         }
                     } else {
                         for (int j = threadIdx.x; j < m; j += blockSize) {
@@ -395,7 +395,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 switch (deviceGates[i].type) {
                     FOLLOW_NEXT(RZ)
-                    CASE_LO_HI(CRZ, RZLo(j, deviceGates[i].i00, - deviceGates[i].r00), RZHi(j, deviceGates[i].i00, - deviceGates[i].r00))
+                    CASE_LO_HI(CRZ, RZLo(j, deviceGates[i].r00, -deviceGates[i].i00), RZHi(j, deviceGates[i].r00, -deviceGates[i].i00))
                     FOLLOW_NEXT(Z)
                     CASE_SKIPLO_HI(CZ, ZHi(j))
                     CASE_SKIPLO_HI(S, SHi(j))
