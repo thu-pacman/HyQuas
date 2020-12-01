@@ -14,6 +14,13 @@ case $(hostname -s) in
     source /usr/local/Modules/init/bash
     module load cuda-10.2/cuda
     module load cmake-3.12.3
+    module load openmpi-3.0.0
+    ;;
+  i*)
+    echo "scc cluster"
+    source /opt/spack/share/spack/setup-env.sh
+    spack load cuda@10.2.89 /odirgft
+    spack load openmpi@3.1.5 /vblaz63
     ;;
 esac
 
