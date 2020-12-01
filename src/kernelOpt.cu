@@ -26,7 +26,6 @@ struct KernelGate {
 
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int MAX_GATE = 600;
-const int MAX_QUBIT = 30;
 extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qindex blockBias;
@@ -268,7 +267,6 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         }
                     }
                 } else {
-                    int m = 1 << (LOCAL_QUBIT_SIZE - 2);
                     int lo = ((threadIdx.x >> smallQubit) << (smallQubit + 1)) | (threadIdx.x & maskSmall);
                     lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge);
                     lo |= 1 << controlQubit;
@@ -331,7 +329,6 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 continue;
             }
             if (!targetIsGlobal) {
-                int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskTarget = (1 << targetQubit) - 1;
                 int x_id = threadIdx.x >> 5; \
                 switch (targetQubit) {
@@ -573,7 +570,6 @@ void initControlIdx() {
 #endif
 
 std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const Schedule& schedule) {
-    assert(numQubits <= MAX_QUBIT);
     qindex hostThreadBias[1 << THREAD_DEP];
     qindex* threadBias;
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));

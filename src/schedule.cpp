@@ -87,7 +87,7 @@ GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
     DESERIALIZE_STEP(gg.relatedQubits);
     decltype(gg.gates.size()) num_gates;
     DESERIALIZE_STEP(num_gates);
-    for (int i = 0; i < num_gates; i++) {
+    for (decltype(num_gates) i = 0; i < num_gates; i++) {
         gg.gates.push_back(Gate::deserialize(arr, cur));
     }
     return gg;
@@ -112,7 +112,7 @@ LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     LocalGroup s;
     decltype(s.gateGroups.size()) num_gg;
     DESERIALIZE_STEP(num_gg);
-    for (int i = 0; i < num_gg; i++) {
+    for (decltype(num_gg) i = 0; i < num_gg; i++) {
         s.gateGroups.push_back(GateGroup::deserialize(arr, cur));
     }
     return s;
@@ -137,7 +137,7 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
     Schedule s;
     decltype(s.localGroups.size()) num_lg;
     DESERIALIZE_STEP(num_lg);
-    for (int i = 0; i < num_lg; i++) {
+    for (decltype(num_lg) i = 0; i < num_lg; i++) {
         s.localGroups.push_back(LocalGroup::deserialize(arr, cur));
     }
     return s;

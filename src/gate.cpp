@@ -372,10 +372,11 @@ Gate Gate::random(int lo, int hi, GateType type) {
             return RZ(t, gen_0_2pi_float());
         }
         default: {
-            printf("invalid %d\n", type);
+            printf("invalid %d\n", (int) type);
             assert(false);
         }
     }
+    exit(1);
 }
 
 Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
@@ -402,6 +403,7 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
             assert(false);
         }
     }
+    exit(1);
 }
 
 std::string Gate::get_name(GateType ty) {
