@@ -33,16 +33,15 @@ if (DISABLE_ASSERT)
     add_definitions(-DNDEBUG)
 endif(DISABLE_ASSERT)
 
-
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
 add_executable(main main.cpp)
-target_link_libraries(main QCSimulator ${CUTT} ${MPI_C_LIBRARIES})
+target_link_libraries(main QCSimulator ${CUTT} ${MPI_CXX_LIBRARIES})
 
 if (MICRO_BENCH)
     set(BENCHMARKS local-single local-ctr)
     foreach(BENCHMARK IN LISTS BENCHMARKS)
         add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
-        target_link_libraries(${BENCHMARK} QCSimulator ${CUTT} ${MPI_C_LIBRARIES})
+        target_link_libraries(${BENCHMARK} QCSimulator ${CUTT} ${MPI_CXX_LIBRARIES})
     endforeach(BENCHMARK IN LISTS BENCHMARKS)
 endif(MICRO_BENCH)

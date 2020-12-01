@@ -63,9 +63,7 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    int myRank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
-    if (myRank == 0) {
+    if (MyMPI::rank == 0) {
         Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
         schedule = compiler.run();
         int totalGroups = 0;
@@ -83,7 +81,7 @@ void Circuit::compile() {
         int cur = 0;
         schedule = Schedule::deserialize(buffer, cur);
         delete[] buffer;
-        printf("proc %d: %d\n", myRank, schedule.localGroups.size());
+        printf("proc %d: %d\n", MyMPI::rank, schedule.localGroups.size());
         fflush(stdout);
     }
 #endif

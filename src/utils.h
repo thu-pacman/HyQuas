@@ -14,6 +14,13 @@ typedef cuFloatComplex qComplex;
 
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 
+namespace MyMPI {
+    extern int rank;
+    extern int commSize;
+    extern int CommBit;
+    void init();
+};
+
 struct Complex {
     qreal real;
     qreal imag;
