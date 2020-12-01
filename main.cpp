@@ -68,34 +68,30 @@ qreal zero_wrapper(qreal x) {
     }
 }
 
-void show(Circuit* c, qindex idx) {
+void show(std::unique_ptr<Circuit>& c, qindex idx) {
     Complex x = c->ampAt(idx);
     printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
 }
 
-void conditionShow(Circuit* c, qindex idx) {
+void conditionShow(std::unique_ptr<Circuit>& c, qindex idx) {
     Complex x = c->ampAt(idx);
     if (x.len() > 0.001) 
         printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        printf("./parser qasmfile\n");
-        exit(1);
-    }
-    FILE* f = NULL;
-    if ((f = fopen(argv[1], "r")) == NULL) {
-        printf("fail to open %s\n", argv[1]);
+std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
+    FILE* f = nullptr;
+    if ((f = fopen(filename.c_str(), "r")) == NULL) {
+        printf("fail to open %s\n", filename.c_str());
         exit(1);
     }
     int n = -1;
-    Circuit* c;
+    std::unique_ptr<Circuit> c = nullptr;
     while (fscanf(f, "%s", buffer) != EOF) {
         if (strcmp(buffer, "//") == 0 || strcmp(buffer, "OPENQASM") == 0 || strcmp(buffer, "include") == 0) {
         } else if (strcmp(buffer, "qreg") == 0) {
             fscanf(f, "%*c%*c%*c%d", &n);
-            c = new Circuit(n);
+            c = std::make_unique<Circuit>(n);
         } else if (strcmp(buffer, "cx") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
@@ -221,14 +217,34 @@ int main(int argc, char* argv[]) {
         }
         fgets(buffer, BUFFER_SIZE, f);
     }
+    fclose(f);
+    if (c == nullptr) {
+        printf("fail to load circuit\n");
+        exit(1);
+    }
+    return std::move(c);
+}
+
+int main(int argc, char* argv[]) {
+    MPI_Init(&argc, &argv);
+    std::unique_ptr<Circuit> c;
+    if (argc != 2) {
+        printf("./parser qasmfile\n");
+        exit(1);
+    }
+    c = parse_circuit(std::string(argv[1]));
     c->compile();
-    c->run();
-    for (int i = 0; i < 128; i++) {
-        show(c, i);
-    }
-    for (int i = 128; i < (1 << n); i++) {
-        conditionShow(c, i);
-    }
-    Logger::print();
+    // c->run();
+    // int myRank; MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    // if (myRank == 0) {
+    //     for (int i = 0; i < 128; i++) {
+    //         show(c, i);
+    //     }
+    //     for (int i = 128; i < (1 << n); i++) {
+    //         conditionShow(c, i);
+    //     }
+    //     Logger::print();
+    // }
+    MPI_Finalize();
     return 0;
 }

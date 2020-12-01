@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cuComplex.h>
+#include <mpi.h>
 
 typedef float qreal;
 typedef int qindex;

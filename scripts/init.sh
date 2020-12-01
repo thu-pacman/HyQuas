@@ -7,6 +7,7 @@ case $(hostname -s) in
     echo "nico cluster"
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /v5oqq5n
+    spack load openmpi@4.0.4 /24my3rr
     ;;
   gorgon*)
     echo "gorgon cluster"

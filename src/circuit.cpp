@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <assert.h>
 #include <chrono>
+#include <mpi.h>
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
@@ -62,17 +63,28 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
-    schedule = compiler.run();
-    int totalGroups = 0;
-    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
-    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
-    // TODO MPI_BCAST
-    printf("Start Serialize\n");
-    auto s = schedule.serialize();
-    int cur = 0;
-    schedule = Schedule::deserialize(s.data(), cur);
-    printf("End Serialize\n");
-    fflush(stdout);
+    int myRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+    if (myRank == 0) {
+        Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
+        schedule = compiler.run();
+        int totalGroups = 0;
+        for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+        Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
+        auto s = schedule.serialize();
+        int bufferSize = (int) s.size();
+        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    } else {
+        int bufferSize;
+        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        unsigned char* buffer = new unsigned char [bufferSize];
+        MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        int cur = 0;
+        schedule = Schedule::deserialize(buffer, cur);
+        delete[] buffer;
+        printf("proc %d: %d\n", myRank, schedule.localGroups.size());
+        fflush(stdout);
+    }
 #endif
 }
