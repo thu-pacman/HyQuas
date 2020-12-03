@@ -239,7 +239,7 @@ int main(int argc, char* argv[]) {
     //     for (int i = 0; i < 128; i++) {
     //         show(c, i);
     //     }
-    //     for (int i = 128; i < (1 << n); i++) {
+    //     for (int i = 128; i < (1 << c->numQubits); i++) {
     //         conditionShow(c, i);
     //     }
     //     Logger::print();

@@ -11,7 +11,9 @@
 using namespace std;
 
 int Circuit::run(bool copy_back) {
-    kernelInit(deviceStateVec, numQubits);
+    kernelInit(deviceStateVec, numQubits + (int)(MyMPI::commSize > 1));
+    return 0;
+    MPI_Barrier(MPI_COMM_WORLD);
     auto start = chrono::system_clock::now();
 #ifdef USE_GROUP
     kernelExecOpt(deviceStateVec, numQubits, schedule);
@@ -81,8 +83,13 @@ void Circuit::compile() {
         int cur = 0;
         schedule = Schedule::deserialize(buffer, cur);
         delete[] buffer;
-        printf("proc %d: %d\n", MyMPI::rank, schedule.localGroups.size());
         fflush(stdout);
     }
+    schedule.initCuttPlans(numQubits);
+#ifdef SHOW_SCHEDULE
+    if (MyMPI::rank == 0) {
+        schedule.dump(numQubits);
+    }
+#endif
 #endif
 }

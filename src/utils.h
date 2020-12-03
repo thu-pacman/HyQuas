@@ -14,10 +14,26 @@ typedef cuFloatComplex qComplex;
 
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 
+#define checkCudaErrors(stmt) {                                 \
+    cudaError_t err = stmt;                            \
+    if (err != cudaSuccess) {                          \
+      fprintf(stderr, "%s in file %s, function %s, line %i.\n", #stmt, __FILE__, __FUNCTION__, __LINE__); \
+      exit(1); \
+    }                                                  \
+}
+
+#define checkCuttErrors(stmt) {                                 \
+    cuttResult err = stmt;                            \
+    if (err != CUTT_SUCCESS) {                          \
+      fprintf(stderr, "%s in file %s, function %s, line %i.\n", #stmt, __FILE__, __FUNCTION__, __LINE__); \
+      exit(1); \
+    }                                                  \
+}
+
 namespace MyMPI {
     extern int rank;
     extern int commSize;
-    extern int CommBit;
+    extern int commBit;
     void init();
 };
 

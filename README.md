@@ -17,3 +17,5 @@ unroll
 把对同一个qubit的操作fuse成一个矩阵乘
 
 X Gate 可以不算
+
+写多卡时只考虑了 global qubit 不重叠的情况

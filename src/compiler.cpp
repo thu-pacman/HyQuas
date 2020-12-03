@@ -14,9 +14,6 @@ Schedule Compiler::run() {
         OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates);
         schedule.localGroups.push_back(shareCompiler.run());
     }
-#ifdef SHOW_SCHEDULE
-    schedule.dump(numQubits);
-#endif
     return schedule;
 }
 

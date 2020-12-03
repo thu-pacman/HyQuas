@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <cutt.h>
 #include "utils.h"
 #include "gate.h"
 
@@ -13,7 +14,7 @@ struct GateGroup {
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     std::vector<int> toID() const;
     std::vector<unsigned char> serialize() const;
-    static GateGroup deserialize(const unsigned char* arr, int& cur);
+    static GateGroup deserialize(const unsigned char* arr, int& cur);\
 };
 
 struct LocalGroup {
@@ -26,7 +27,10 @@ struct LocalGroup {
 
 struct Schedule {
     std::vector<LocalGroup> localGroups;
+    std::vector<cuttHandle> cuttPlans;
+    std::vector<std::vector<int>> midPos;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);
+    void initCuttPlans(int numQubits);
 };

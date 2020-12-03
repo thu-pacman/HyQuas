@@ -3,31 +3,27 @@
 #include <assert.h>
 using namespace std;
 
-#define checkCudaErrors(err)  __checkCudaErrors (err, __FILE__, __LINE__)
-inline void __checkCudaErrors(cudaError_t err, const char *file, const int line) {
-    if (cudaSuccess != err)
-    {
-        fprintf(stderr, "checkCudaErrors() Driver API error = %04d \"%s\" from file <%s>, line %i.\n", err, cudaGetErrorString(err), file, line);
-        exit(EXIT_FAILURE);
-    }
-}
-
 const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(qComplex* &deviceStateVec, int numQubits) {
     cudaError_t cuda_status;
-	cuda_status = cudaSetDevice(0);
+	cuda_status = cudaSetDevice(MyMPI::rank);
 	if (cuda_status != cudaSuccess) {
         printf("cudaSetDevice failed! ");
         exit(1);
-	}
-    size_t size = sizeof(qComplex) << numQubits;
+    }
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    printf("[%d] %s\n", MyMPI::rank, prop.name);
+    size_t size = sizeof(qComplex) << numQubits >> MyMPI::commBit;
     checkCudaErrors(cudaMalloc(&deviceStateVec, size));
     checkCudaErrors(cudaMemset(deviceStateVec, 0, size));
-    qComplex one = make_qComplex(1.0, 0.0);
-    checkCudaErrors(cudaMemcpy(deviceStateVec, &one, sizeof(qComplex), cudaMemcpyHostToDevice)); // state[0] = 1
+    if (MyMPI::rank == 0) {
+        qComplex one = make_qComplex(1.0, 0.0);
+        checkCudaErrors(cudaMemcpy(deviceStateVec, &one, sizeof(qComplex), cudaMemcpyHostToDevice)); // state[0] = 1
+    }
 #ifdef USE_GROUP
     initControlIdx();
 #endif

@@ -4,15 +4,6 @@
 #include <map>
 using namespace std;
 
-#define checkCudaErrors(err)  __checkCudaErrors (err, __FILE__, __LINE__)
-inline void __checkCudaErrors(cudaError_t err, const char *file, const int line) {
-    if (cudaSuccess != err)
-    {
-        fprintf(stderr, "checkCudaErrors() Driver API error = %04d \"%s\" from file %s, line %i.\n", err, cudaGetErrorString(err), file, line);
-        exit(EXIT_FAILURE);
-    }
-}
-
 struct KernelGate {
     int targetQubit;
     int controlQubit;
@@ -575,11 +566,6 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));
     std::vector<qreal> ret;
     std::vector<GateGroup> gateGroups;
-    for (auto& lg: schedule.localGroups) {
-        for (auto& gg: lg.gateGroups) {
-            gateGroups.push_back(gg);
-        }
-    } 
     for (size_t g = 0; g < gateGroups.size(); g++) {
 #ifdef MEASURE_STAGE
         cudaEvent_t start, stop;
@@ -690,4 +676,3 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
     checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
     return ret;
 }
-

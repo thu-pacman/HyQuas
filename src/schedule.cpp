@@ -57,6 +57,29 @@ void Schedule::dump(int numQubits) {
         printf("\n\n");
     }
     fflush(stdout);
+    printf("%d %d\n", (int) cuttPlans.size(), (int) midPos.size());
+    for (int i = 0; i < localGroups.size(); i++) {
+        printf("Global: ");
+        for (int j = 0; j < numQubits; j++) {
+            if (!(localGroups[i].relatedQubits >> j & 1)) {
+                printf("%d ", j);
+            }
+        }
+        printf("\n");
+        std::vector<int> layout; layout.resize(numQubits);
+        printf("pos: ");
+        for (int j = 0; j < numQubits; j++) {
+            printf("[%d: %d] ", i, midPos[i][j]);
+            layout[midPos[i][j]] = j;
+        }
+        printf("\n");
+        printf("layout: ");
+        for (int j = 0; j < numQubits; j++) {
+            printf("[%d: %d] ", j, layout[j]);
+        }
+        printf("\n\n");
+    }
+    fflush(stdout);
 }
 
 std::vector<int> GateGroup::toID() const {
@@ -96,9 +119,10 @@ GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
 std::vector<unsigned char> LocalGroup::serialize() const {
     auto num_gg = gateGroups.size();
     std::vector<unsigned char> result;
-    result.resize(sizeof(num_gg));
+    result.resize(sizeof(relatedQubits) + sizeof(num_gg));
     auto arr = result.data();
     int cur = 0;
+    SERIALIZE_STEP(relatedQubits);
     SERIALIZE_STEP(num_gg);
     for (auto& gateGroup: gateGroups) {
         auto gg = gateGroup.serialize();
@@ -111,6 +135,7 @@ std::vector<unsigned char> LocalGroup::serialize() const {
 LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     LocalGroup s;
     decltype(s.gateGroups.size()) num_gg;
+    DESERIALIZE_STEP(s.relatedQubits);
     DESERIALIZE_STEP(num_gg);
     for (decltype(num_gg) i = 0; i < num_gg; i++) {
         s.gateGroups.push_back(GateGroup::deserialize(arr, cur));
@@ -141,4 +166,66 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
         s.localGroups.push_back(LocalGroup::deserialize(arr, cur));
     }
     return s;
+}
+
+void Schedule::initCuttPlans(int numQubits) {
+    cudaError_t cuda_status;
+	cuda_status = cudaSetDevice(MyMPI::rank);
+	if (cuda_status != cudaSuccess) {
+        printf("cudaSetDevice failed! ");
+        exit(1);
+    }
+    auto gen_perm_vector = [](int len) {
+        std::vector<int> ret;
+        for (int i = 0; i < len; i++)
+            ret.push_back(i);
+        return ret;
+    };
+    int numLocalQubits = numQubits - MyMPI::commBit;
+    std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
+    std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
+    std::vector<int> dim(numLocalQubits, 2);
+    // printf("len %d\n", dim.size());
+    cuttPlans.clear();
+    for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
+        auto& localGroup = localGroups[lgID];
+        std::vector<int> newGlobals;
+        std::vector<int> newLocals;
+        // printf("rank %d related %x\n", MyMPI::rank, localGroup.relatedQubits);
+        for (int i = 0; i < numQubits; i++) {
+            if ((localGroup.relatedQubits >> i & 1) == 0 && (lgID == 0 || std::find(layout.data() + numLocalQubits, layout.data() + numQubits, i) == layout.data() + numQubits)) {
+                newGlobals.push_back(i);
+            }
+        }
+        // printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
+        if (newGlobals.size() < MyMPI::commBit) {
+            printf("Overlapped global qubit\n");
+            exit(1);
+        }
+        std::vector<int> perm = gen_perm_vector(numLocalQubits);
+        for (int i = 0; i < MyMPI::commBit; i++) {
+            std::swap(perm[pos[newGlobals[i]]], perm[i + numLocalQubits - MyMPI::commBit]);
+            int swappedQid = layout[i + numLocalQubits - MyMPI::commBit];
+            pos[swappedQid] = pos[newGlobals[i]];
+            pos[newGlobals[i]] = i + numLocalQubits - MyMPI::commBit;
+            layout[pos[newGlobals[i]]] = newGlobals[i];
+            layout[pos[swappedQid]] = swappedQid;
+        }
+
+        for (int i = 0; i < MyMPI::commBit; i++) {
+            int a = i + numLocalQubits;
+            int b = a - MyMPI::commBit;
+            int qa = layout[a], qb = layout[b];
+            layout[a] = qb; pos[qb] = a;
+            layout[b] = qa; pos[qa] = b;
+        }
+        // printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+        // printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+        // printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
+        cuttHandle plan;
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), 0));
+        cuttPlans.push_back(plan);
+        midPos.push_back(pos);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
 }

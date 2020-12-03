@@ -16,9 +16,9 @@ public:
     }
     void dumpGates();
     Complex ampAt(qindex idx);
+    const int numQubits;
 
 private:
-    int numQubits;
     std::vector<Gate> gates;
     qComplex* deviceStateVec;
     Schedule schedule;
