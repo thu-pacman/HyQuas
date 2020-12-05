@@ -226,7 +226,7 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
 }
 
 int main(int argc, char* argv[]) {
-    MyMPI::init();
+    MyGlobalVars::init();
     std::unique_ptr<Circuit> c;
     if (argc != 2) {
         printf("./parser qasmfile\n");
@@ -235,15 +235,12 @@ int main(int argc, char* argv[]) {
     c = parse_circuit(std::string(argv[1]));
     c->compile();
     c->run();
-    if (MyMPI::rank == 0) {
-    //     for (int i = 0; i < 128; i++) {
-    //         show(c, i);
-    //     }
-    //     for (int i = 128; i < (1 << c->numQubits); i++) {
-    //         conditionShow(c, i);
-    //     }
-        Logger::print();
+    for (int i = 0; i < 128; i++) {
+        show(c, i);
     }
-    MPI_Finalize();
+    for (int i = 128; i < (1 << c->numQubits); i++) {
+        conditionShow(c, i);
+    }
+    Logger::print();
     return 0;
 }

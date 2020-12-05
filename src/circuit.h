@@ -20,7 +20,7 @@ public:
 
 private:
     std::vector<Gate> gates;
-    qComplex* deviceStateVec;
+    std::vector<qComplex*> deviceStateVec;
     Schedule schedule;
     std::vector<qComplex> result;
 };

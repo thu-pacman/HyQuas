@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <cuComplex.h>
 #include <mpi.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <memory>
 
 typedef float qreal;
 typedef int qindex;
@@ -18,7 +21,7 @@ const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 #define checkCudaErrors(stmt) {                                 \
     cudaError_t err = stmt;                            \
     if (err != cudaSuccess) {                          \
-      fprintf(stderr, "[%d] %s in file %s, function %s, line %i.\n", MyMPI::rank, #stmt, __FILE__, __FUNCTION__, __LINE__); \
+      fprintf(stderr, "%s in file %s, function %s, line %i: %04d %s\n", #stmt, __FILE__, __FUNCTION__, __LINE__, err, cudaGetErrorString(err)); \
       exit(1); \
     }                                                  \
 }
@@ -26,15 +29,15 @@ const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 #define checkCuttErrors(stmt) {                                 \
     cuttResult err = stmt;                            \
     if (err != CUTT_SUCCESS) {                          \
-      fprintf(stderr, "[%d] %s in file %s, function %s, line %i.\n", MyMPI::rank, #stmt, __FILE__, __FUNCTION__, __LINE__); \
+      fprintf(stderr, "%s in file %s, function %s, line %i.\n", #stmt, __FILE__, __FUNCTION__, __LINE__); \
       exit(1); \
     }                                                  \
 }
 
-namespace MyMPI {
-    extern int rank;
-    extern int commSize;
-    extern int commBit;
+namespace MyGlobalVars {
+    extern int numGPUs;
+    extern int bit;
+    extern std::unique_ptr<cudaStream_t[]> streams;
     void init();
 };
 

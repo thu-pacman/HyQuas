@@ -27,7 +27,7 @@ struct LocalGroup {
 
 struct Schedule {
     std::vector<LocalGroup> localGroups;
-    std::vector<cuttHandle> cuttPlans;
+    std::vector<std::vector<cuttHandle>> cuttPlans;
     std::vector<std::vector<int>> midPos;
     std::vector<std::vector<int>> midLayout;
     void dump(int numQubits);

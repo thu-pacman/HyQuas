@@ -24,8 +24,8 @@ extern __shared__ qindex blockBias;
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
 __constant__ KernelGate deviceGates[MAX_GATE];
 
-int* loIdx_device;
-int* shiftAt_device;
+std::vector<int*> loIdx_device;
+std::vector<int*> shiftAt_device;
 
 
 __device__ __forceinline__ void XSingle(int lo, int hi) {
@@ -449,8 +449,13 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
 void initControlIdx() {
     int loIdx_host[10][10][1 << THREAD_DEP];
     int shiftAt_host[10][10];
-    cudaMalloc(&loIdx_device, sizeof(loIdx_host));
-    cudaMalloc(&shiftAt_device, sizeof(shiftAt_host));
+    loIdx_device.resize(MyGlobalVars::numGPUs);
+    shiftAt_device.resize(MyGlobalVars::numGPUs);
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        cudaSetDevice(i);
+        cudaMalloc(&loIdx_device[i], sizeof(loIdx_host));
+        cudaMalloc(&shiftAt_device[i], sizeof(shiftAt_host));
+    }
     for (int controlQubit = 0; controlQubit < 5; controlQubit ++)
         for (int targetQubit = 0; targetQubit < 5; targetQubit ++) {
             if (controlQubit == targetQubit) continue;
@@ -555,19 +560,31 @@ void initControlIdx() {
                 loIdx_host[controlQubit][targetQubit][tid] = lo;
             }        
         }
-    checkCudaErrors(cudaMemcpy(loIdx_device, loIdx_host[0][0], sizeof(loIdx_host), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(shiftAt_device, shiftAt_host[0], sizeof(shiftAt_host), cudaMemcpyHostToDevice));
+    loIdx_device.resize(MyGlobalVars::numGPUs);
+    shiftAt_device.resize(MyGlobalVars::numGPUs);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaMemcpyAsync(loIdx_device[g], loIdx_host[0][0], sizeof(loIdx_host), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
+        checkCudaErrors(cudaMemcpyAsync(shiftAt_device[g], shiftAt_host[0], sizeof(shiftAt_host), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
+    }
 }
 #endif
 
-std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const Schedule& schedule) {
+std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule) {
     qindex hostThreadBias[1 << THREAD_DEP];
-    qindex* threadBias;
-    checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));
+    std::vector<qindex*> threadBias;
+    threadBias.resize(MyGlobalVars::numGPUs);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCudaErrors(cudaMalloc(&threadBias[g], sizeof(hostThreadBias)));
+    }
     std::vector<qreal> ret;
-    int numLocalQubits = numQubits - MyMPI::commBit;
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
     int numElements = 1 << numLocalQubits;
-    qComplex* deviceBuffer = deviceStateVec + numElements;
+    std::vector<qComplex*> deviceBuffer;
+    deviceBuffer.resize(MyGlobalVars::numGPUs);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        deviceBuffer[g] = deviceStateVec[g] + numElements;        
+    }
     auto toPhyQubit = [numQubits](const std::vector<int> pos, qindex relatedQubits) {
         qindex ret = 0;
         for (int i = 0; i < numQubits; i++)
@@ -578,10 +595,23 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
 
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
         if (lgID > 0) {
-            checkCuttErrors(cuttExecute(schedule.cuttPlans[lgID], deviceStateVec, deviceBuffer));
-            MPI_Alltoall(deviceBuffer, numElements >> MyMPI::commBit, MPI_Complex,
-                         deviceStateVec, numElements >> MyMPI::commBit, MPI_Complex,
-                         MPI_COMM_WORLD);
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+            }
+            // for (int g = 0; g < MyGlobalVars::numGPUs; g++) { // is it in parallel?
+            //     cudaSetDevice(g);
+            //     checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
+            // }
+            int partSize =  numElements >> MyGlobalVars::bit;
+            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                for (int b = 0; b < MyGlobalVars::numGPUs; b++) {
+                    checkCudaErrors(cudaMemcpyAsync(deviceBuffer[a] + b * partSize, deviceStateVec[b] + a * partSize,
+                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
+                }
+            }
+            // MPI_Alltoall(deviceBuffer, numElements >> MyGlobalVars::bit, MPI_Complex,
+            //              deviceStateVec, numElements >> MyGlobalVars::bit, MPI_Complex,
+            //              MPI_COMM_WORLD);
         }
 
         auto pos = schedule.midPos[lgID];
@@ -589,9 +619,8 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
         auto& gateGroups = schedule.localGroups[lgID].gateGroups;
         
         for (size_t g = 0; g < gateGroups.size(); g++) {
-            printf("[%d] g = %d\n", MyMPI::rank, (int) g);
-            checkCudaErrors(cudaDeviceSynchronize());
 #ifdef MEASURE_STAGE
+                // TODO multistream
                 cudaEvent_t start, stop;
                 checkCudaErrors(cudaEventCreate(&start));
                 checkCudaErrors(cudaEventCreate(&stop));
@@ -625,7 +654,9 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
             for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
                 hostThreadBias[i] = j;
             }
-            checkCudaErrors(cudaMemcpy(threadBias, hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice));
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaMemcpyAsync(threadBias[g], hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
+            }
             // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
     
             // initialize gates
@@ -680,26 +711,33 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
                 
                 hostGates[i].type = gates[i].type;
             }
-            checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, sizeof(hostGates)));
-    
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                cudaSetDevice(g);
+                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+                checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates, sizeof(hostGates)));
+            }
             // execute
             qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
-            run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-                (deviceStateVec, threadBias, loIdx_device, shiftAt_device, numQubits, gates.size(), blockHot, enumerate);
-    #ifdef MEASURE_STAGE
-                cudaEventRecord(stop, 0);
-                cudaEventSynchronize(stop);
-                float time;
-                cudaEventElapsedTime(&time, start, stop);
-                cudaEventDestroy(start);
-                cudaEventDestroy(stop);
-                printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
-    #endif
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, MyGlobalVars::streams[g]>>>
+                    (deviceStateVec[g], threadBias[g], loIdx_device[g], shiftAt_device[g], numQubits, gates.size(), blockHot, enumerate);
+            }
+#ifdef MEASURE_STAGE
+            // TODO multistream support
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(stop);
+            float time;
+            cudaEventElapsedTime(&time, start, stop);
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
+            printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
+#endif
             // printf("Group End\n");
         }
     }
-    checkCudaErrors(cudaFree(threadBias));
-    checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
-    MPI_Barrier(MPI_COMM_WORLD); // WARNINIG: for time measure!
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g])); // warning: for time measure!
+        checkCudaErrors(cudaFree(threadBias[g]));
+    }
     return ret;
 }

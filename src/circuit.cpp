@@ -12,7 +12,6 @@ using namespace std;
 
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
-    MPI_Barrier(MPI_COMM_WORLD);
     auto start = chrono::system_clock::now();
 #ifdef USE_GROUP
     kernelExecOpt(deviceStateVec, numQubits, schedule);
@@ -29,9 +28,12 @@ int Circuit::run(bool copy_back) {
     Logger::add("Time Cost: %d ms", int(duration.count()));
     result.resize(1ll << numQubits);
     if (copy_back) {
-        kernelDeviceToHost((qComplex*)result.data(), deviceStateVec, numQubits);
+        int elements = 1ll << (numQubits - MyGlobalVars::bit);
+        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+            kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
+            kernelDestroy(deviceStateVec[g]);
+        }
     }
-    kernelDestroy(deviceStateVec);
     return duration.count();
 }
 
@@ -64,26 +66,11 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    if (MyMPI::rank == 0) {
-        Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
-        schedule = compiler.run();
-        int totalGroups = 0;
-        for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
-        Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
-        auto s = schedule.serialize();
-        int bufferSize = (int) s.size();
-        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-    } else {
-        int bufferSize;
-        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        unsigned char* buffer = new unsigned char [bufferSize];
-        MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-        int cur = 0;
-        schedule = Schedule::deserialize(buffer, cur);
-        delete[] buffer;
-        fflush(stdout);
-    }
+    Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
+    schedule = compiler.run();
+    int totalGroups = 0;
+    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
     schedule.initCuttPlans(numQubits);
 #ifdef SHOW_SCHEDULE
     if (MyMPI::rank == 0) {

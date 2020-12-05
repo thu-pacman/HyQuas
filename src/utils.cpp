@@ -1,22 +1,31 @@
 #include "utils.h"
 
-namespace MyMPI {
-int rank;
-int commSize;
-int commBit;
+namespace MyGlobalVars {
+int numGPUs;
+int bit;
+std::unique_ptr<cudaStream_t[]> streams;
+
 void init() {
-    MPI_Init(nullptr, nullptr);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &commSize);
-    commBit = -1;
-    int x = commSize;
+    checkCudaErrors(cudaGetDeviceCount(&numGPUs));
+    printf("Total GPU: %d\n", numGPUs);
+    bit = -1;
+    int x = numGPUs;
     while (x) {
-        commBit ++;
+        bit ++;
         x >>= 1;
     }
-    if ((1 << commBit) != commSize) {
-        printf("Invalid Comm Size! %d %d\n", commBit, commSize);
+    if ((1 << bit) != numGPUs) {
+        printf("GPU num must be power of two! %d %d\n", numGPUs, bit);
         exit(1);
+    }
+
+    streams = std::make_unique<cudaStream_t[]>(MyGlobalVars::numGPUs);
+    for (int i = 0; i < numGPUs; i++) {
+        checkCudaErrors(cudaSetDevice(i));
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, i);
+        printf("[%d] %s\n", i, prop.name);
+        checkCudaErrors(cudaStreamCreate(&streams[i]);)
     }
 }
 };

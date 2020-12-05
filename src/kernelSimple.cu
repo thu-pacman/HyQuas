@@ -7,25 +7,25 @@ const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
-void kernelInit(qComplex* &deviceStateVec, int numQubits) {
-	checkCudaErrors(cudaDeviceSynchronize());
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    printf("[%d] %s\n", MyMPI::rank, prop.name);
-    size_t size = (sizeof(qComplex) << numQubits) >> MyMPI::commBit;
-    if (MyMPI::commSize > 1) {
+void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
+    size_t size = (sizeof(qComplex) << numQubits) >> MyGlobalVars::bit;
+    if (MyGlobalVars::numGPUs > 1) {
         size <<= 1;
     }
-    checkCudaErrors(cudaMalloc(&deviceStateVec, size));
-    checkCudaErrors(cudaMemset(deviceStateVec, 0, size));
-    if (MyMPI::rank == 0) {
-        qComplex one = make_qComplex(1.0, 0.0);
-        checkCudaErrors(cudaMemcpy(deviceStateVec, &one, sizeof(qComplex), cudaMemcpyHostToDevice)); // state[0] = 1
+    deviceStateVec.resize(MyGlobalVars::numGPUs);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        cudaSetDevice(g);
+        checkCudaErrors(cudaMalloc(&deviceStateVec[g], size));
+        checkCudaErrors(cudaMemsetAsync(deviceStateVec[g], 0, size, MyGlobalVars::streams[g]));
     }
+    qComplex one = make_qComplex(1.0, 0.0);
+    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
 #ifdef USE_GROUP
     initControlIdx();
 #endif
-    checkCudaErrors(cudaDeviceSynchronize());
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+    }
 }
 
 

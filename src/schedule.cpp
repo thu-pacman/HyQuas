@@ -169,20 +169,19 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
 }
 
 void Schedule::initCuttPlans(int numQubits) {
-    cudaError_t cuda_status;
     auto gen_perm_vector = [](int len) {
         std::vector<int> ret;
         for (int i = 0; i < len; i++)
             ret.push_back(i);
         return ret;
     };
-    int numLocalQubits = numQubits - MyMPI::commBit;
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
     std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
     std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
     std::vector<int> dim(numLocalQubits, 2);
     midPos.clear();
     midLayout.clear();
-    cuttPlans.clear();
+    cuttPlans.clear(); cuttPlans.resize(MyGlobalVars::numGPUs);
     // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
         auto& localGroup = localGroups[lgID];
@@ -195,23 +194,23 @@ void Schedule::initCuttPlans(int numQubits) {
             }
         }
         // printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
-        if ((int)newGlobals.size() < MyMPI::commBit) {
+        if ((int)newGlobals.size() < MyGlobalVars::bit) {
             printf("Overlapped global qubit\n");
             exit(1);
         }
         std::vector<int> perm = gen_perm_vector(numLocalQubits);
-        for (int i = 0; i < MyMPI::commBit; i++) {
-            std::swap(perm[pos[newGlobals[i]]], perm[i + numLocalQubits - MyMPI::commBit]);
-            int swappedQid = layout[i + numLocalQubits - MyMPI::commBit];
+        for (int i = 0; i < MyGlobalVars::bit; i++) {
+            std::swap(perm[pos[newGlobals[i]]], perm[i + numLocalQubits - MyGlobalVars::bit]);
+            int swappedQid = layout[i + numLocalQubits - MyGlobalVars::bit];
             pos[swappedQid] = pos[newGlobals[i]];
-            pos[newGlobals[i]] = i + numLocalQubits - MyMPI::commBit;
+            pos[newGlobals[i]] = i + numLocalQubits - MyGlobalVars::bit;
             layout[pos[newGlobals[i]]] = newGlobals[i];
             layout[pos[swappedQid]] = swappedQid;
         }
 
-        for (int i = 0; i < MyMPI::commBit; i++) {
+        for (int i = 0; i < MyGlobalVars::bit; i++) {
             int a = i + numLocalQubits;
-            int b = a - MyMPI::commBit;
+            int b = a - MyGlobalVars::bit;
             int qa = layout[a], qb = layout[b];
             layout[a] = qb; pos[qb] = a;
             layout[b] = qa; pos[qa] = b;
@@ -219,11 +218,12 @@ void Schedule::initCuttPlans(int numQubits) {
         // printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
         // printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
         // printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
-        cuttHandle plan;
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), 0));
-        cuttPlans.push_back(plan);
+        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+            cuttHandle plan;
+            checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
+            cuttPlans[g].push_back(plan);
+        }
         midPos.push_back(pos);
         midLayout.push_back(layout);
-        MPI_Barrier(MPI_COMM_WORLD);
     }
 }
