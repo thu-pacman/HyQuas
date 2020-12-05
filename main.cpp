@@ -234,16 +234,16 @@ int main(int argc, char* argv[]) {
     }
     c = parse_circuit(std::string(argv[1]));
     c->compile();
-    // c->run();
-    // if (MyMPI::rank == 0) {
+    c->run();
+    if (MyMPI::rank == 0) {
     //     for (int i = 0; i < 128; i++) {
     //         show(c, i);
     //     }
     //     for (int i = 128; i < (1 << c->numQubits); i++) {
     //         conditionShow(c, i);
     //     }
-    //     Logger::print();
-    // }
+        Logger::print();
+    }
     MPI_Finalize();
     return 0;
 }

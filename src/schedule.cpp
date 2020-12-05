@@ -58,7 +58,7 @@ void Schedule::dump(int numQubits) {
     }
     fflush(stdout);
     printf("%d %d\n", (int) cuttPlans.size(), (int) midPos.size());
-    for (int i = 0; i < localGroups.size(); i++) {
+    for (size_t i = 0; i < localGroups.size(); i++) {
         printf("Global: ");
         for (int j = 0; j < numQubits; j++) {
             if (!(localGroups[i].relatedQubits >> j & 1)) {
@@ -69,7 +69,7 @@ void Schedule::dump(int numQubits) {
         std::vector<int> layout; layout.resize(numQubits);
         printf("pos: ");
         for (int j = 0; j < numQubits; j++) {
-            printf("[%d: %d] ", i, midPos[i][j]);
+            printf("[%d: %d] ",(int) i, midPos[i][j]);
             layout[midPos[i][j]] = j;
         }
         printf("\n");
@@ -185,8 +185,10 @@ void Schedule::initCuttPlans(int numQubits) {
     std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
     std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
     std::vector<int> dim(numLocalQubits, 2);
-    // printf("len %d\n", dim.size());
+    midPos.clear();
+    midLayout.clear();
     cuttPlans.clear();
+    // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
         auto& localGroup = localGroups[lgID];
         std::vector<int> newGlobals;
@@ -198,7 +200,7 @@ void Schedule::initCuttPlans(int numQubits) {
             }
         }
         // printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
-        if (newGlobals.size() < MyMPI::commBit) {
+        if ((int)newGlobals.size() < MyMPI::commBit) {
             printf("Overlapped global qubit\n");
             exit(1);
         }
@@ -226,6 +228,7 @@ void Schedule::initCuttPlans(int numQubits) {
         checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), 0));
         cuttPlans.push_back(plan);
         midPos.push_back(pos);
+        midLayout.push_back(layout);
         MPI_Barrier(MPI_COMM_WORLD);
     }
 }

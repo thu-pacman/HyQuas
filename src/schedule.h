@@ -29,6 +29,7 @@ struct Schedule {
     std::vector<LocalGroup> localGroups;
     std::vector<cuttHandle> cuttPlans;
     std::vector<std::vector<int>> midPos;
+    std::vector<std::vector<int>> midLayout;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);

@@ -565,114 +565,148 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
     qindex* threadBias;
     checkCudaErrors(cudaMalloc(&threadBias, sizeof(hostThreadBias)));
     std::vector<qreal> ret;
-    std::vector<GateGroup> gateGroups;
-    for (size_t g = 0; g < gateGroups.size(); g++) {
+    int numLocalQubits = numQubits - MyMPI::commBit;
+    int numElements = 1 << numLocalQubits;
+    qComplex* deviceBuffer = deviceStateVec + numElements;
+    auto toPhyQubit = [numQubits](const std::vector<int> pos, qindex relatedQubits) {
+        qindex ret = 0;
+        for (int i = 0; i < numQubits; i++)
+            if (relatedQubits >> i & 1)
+                ret |= qindex(1) << pos[i];
+        return ret;
+    };
+
+    for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
+        if (lgID > 0) {
+            checkCuttErrors(cuttExecute(schedule.cuttPlans[lgID], deviceStateVec, deviceBuffer));
+            checkCudaErrors(cudaDeviceSynchronize());
+            printf("start\n");
+            // MPI_Alltoall(deviceBuffer, numElements >> MyMPI::commBit, MPI_Complex,
+            //              deviceStateVec, numElements >> MyMPI::commBit, MPI_Complex,
+            //              MPI_COMM_WORLD);
+            MPI_Alltoall(deviceStateVec, 1, MPI_Complex,
+                         deviceStateVec, 1, MPI_Complex,
+                         MPI_COMM_WORLD);
+            printf("end\n");
+            exit(1);
+        }
+
+        auto pos = schedule.midPos[lgID];
+        auto layout = schedule.midLayout[lgID];
+        auto& gateGroups = schedule.localGroups[lgID].gateGroups;
+        
+        for (size_t g = 0; g < gateGroups.size(); g++) {
+            printf("[%d] g = %d\n", MyMPI::rank, (int) g);
+            checkCudaErrors(cudaDeviceSynchronize());
 #ifdef MEASURE_STAGE
-        cudaEvent_t start, stop;
-            checkCudaErrors(cudaEventCreate(&start));
-            checkCudaErrors(cudaEventCreate(&stop));
-            checkCudaErrors(cudaEventRecord(start, 0));
+                cudaEvent_t start, stop;
+                checkCudaErrors(cudaEventCreate(&start));
+                checkCudaErrors(cudaEventCreate(&stop));
+                checkCudaErrors(cudaEventRecord(start, 0));
 #endif
-        auto& gates = gateGroups[g].gates;
-        // initialize blockHot, enumerate, threadBias
-        qindex relatedQubits = gateGroups[g].relatedQubits;
-        int cnt = bitCount(relatedQubits);
-        if (cnt < LOCAL_QUBIT_SIZE) {
+            auto& gates = gateGroups[g].gates;
+            // initialize blockHot, enumerate, threadBias
+            qindex relatedLogicQb = gateGroups[g].relatedQubits;
+            qindex relatedQubits = toPhyQubit(pos, gateGroups[g].relatedQubits);
             int cnt = bitCount(relatedQubits);
-            for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
-                if (!(relatedQubits & (1 << i))) {
-                    cnt++;
-                    relatedQubits |= (1 << i);
-                    if (cnt == LOCAL_QUBIT_SIZE)
-                        break;
+            if (cnt < LOCAL_QUBIT_SIZE) {
+                int cnt = bitCount(relatedQubits);
+                for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
+                    if (!(relatedQubits & (1 << i))) {
+                        cnt++;
+                        relatedQubits |= (1 << i);
+                        if (cnt == LOCAL_QUBIT_SIZE)
+                            break;
+                    }
                 }
             }
-        }
-        qindex blockHot = (qindex(1) << numQubits) - 1 - relatedQubits;
-        qindex enumerate = relatedQubits;
-        qindex threadHot = 0;
-        for (int i = 0; i < THREAD_DEP; i++) {
-            qindex x = enumerate & (-enumerate);
-            threadHot += x;
-            enumerate -= x;
-        }
-        assert((threadHot | enumerate) == relatedQubits);
-        for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
-            hostThreadBias[i] = j;
-        }
-        checkCudaErrors(cudaMemcpy(threadBias, hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice));
-        // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
-
-        // initialize gates
-        std::map<int, int> toID;
-        int localCnt = 0;
-        int globalCnt = 0;
-        for (int i = 0; i < numQubits; i++) {
-            if (relatedQubits & (qindex(1) << i)) {
-                toID[i] = localCnt++;
-            } else {
-                toID[i] = globalCnt++;
+            qindex blockHot = (qindex(1) << numLocalQubits) - 1 - relatedQubits;
+            qindex enumerate = relatedQubits;
+            qindex threadHot = 0;
+            for (int i = 0; i < THREAD_DEP; i++) {
+                qindex x = enumerate & (-enumerate);
+                threadHot += x;
+                enumerate -= x;
             }
-        }
-        auto isLocalQubit = [relatedQubits] (int x) {
-            return relatedQubits >> x & 1;
-        };
-        KernelGate hostGates[gates.size()];
-        assert(gates.size() < MAX_GATE);
-        for (size_t i = 0; i < gates.size(); i++) {
-            hostGates[i].r00 = gates[i].mat[0][0].real;
-            hostGates[i].i00 = gates[i].mat[0][0].imag;
-            hostGates[i].r01 = gates[i].mat[0][1].real;
-            hostGates[i].i01 = gates[i].mat[0][1].imag;
-            hostGates[i].r10 = gates[i].mat[1][0].real;
-            hostGates[i].i10 = gates[i].mat[1][0].imag;
-            hostGates[i].r11 = gates[i].mat[1][1].real;
-            hostGates[i].i11 = gates[i].mat[1][1].imag;
-            if (gates[i].controlQubit2 != -1) {
-                int c1 = gates[i].controlQubit;
-                int c2 = gates[i].controlQubit2;
-                if (isLocalQubit(c2) && !isLocalQubit(c1)) {
-                    int c = c1; c1 = c2; c2 = c;
+            assert((threadHot | enumerate) == relatedQubits);
+            for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
+                hostThreadBias[i] = j;
+            }
+            checkCudaErrors(cudaMemcpy(threadBias, hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice));
+            // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
+    
+            // initialize gates
+            std::map<int, int> toID; // logic -> share
+            int localCnt = 0;
+            int globalCnt = 0;
+            for (int i = 0; i < numQubits; i++) {
+                if (relatedQubits & (qindex(1) << i)) {
+                    toID[layout[i]] = localCnt++;
+                } else {
+                    toID[layout[i]] = globalCnt++;
                 }
-                hostGates[i].controlQubit2 = toID[c2];
-                hostGates[i].control2IsGlobal = 1 - isLocalQubit(c2);
-                hostGates[i].controlQubit = toID[c1];
-                hostGates[i].controlIsGlobal = 1 - isLocalQubit(c1);
-            } else if (gates[i].controlQubit != -1) {
-                hostGates[i].controlQubit2 = -1;
-                hostGates[i].control2IsGlobal = 2;
-                hostGates[i].controlQubit = toID[gates[i].controlQubit];
-                hostGates[i].controlIsGlobal = 1 - isLocalQubit(gates[i].controlQubit);
-            } else {
-                hostGates[i].controlQubit2 = -1;
-                hostGates[i].control2IsGlobal = 2;
-                hostGates[i].controlQubit = -1;
-                hostGates[i].controlIsGlobal = 2;
             }
-
-            hostGates[i].targetQubit = toID[gates[i].targetQubit];
-            hostGates[i].targetIsGlobal = 1 - isLocalQubit(gates[i].targetQubit);
-            
-            hostGates[i].type = gates[i].type;
+            auto isLocalQubit = [relatedLogicQb] (int logicIdx) {
+                return relatedLogicQb >> logicIdx & 1;
+            };
+            KernelGate hostGates[gates.size()];
+            assert(gates.size() < MAX_GATE);
+            for (size_t i = 0; i < gates.size(); i++) {
+                hostGates[i].r00 = gates[i].mat[0][0].real;
+                hostGates[i].i00 = gates[i].mat[0][0].imag;
+                hostGates[i].r01 = gates[i].mat[0][1].real;
+                hostGates[i].i01 = gates[i].mat[0][1].imag;
+                hostGates[i].r10 = gates[i].mat[1][0].real;
+                hostGates[i].i10 = gates[i].mat[1][0].imag;
+                hostGates[i].r11 = gates[i].mat[1][1].real;
+                hostGates[i].i11 = gates[i].mat[1][1].imag;
+                if (gates[i].controlQubit2 != -1) {
+                    int c1 = gates[i].controlQubit;
+                    int c2 = gates[i].controlQubit2;
+                    if (isLocalQubit(c2) && !isLocalQubit(c1)) {
+                        int c = c1; c1 = c2; c2 = c;
+                    }
+                    hostGates[i].controlQubit2 = toID[c2];
+                    hostGates[i].control2IsGlobal = 1 - isLocalQubit(c2);
+                    hostGates[i].controlQubit = toID[c1];
+                    hostGates[i].controlIsGlobal = 1 - isLocalQubit(c1);
+                } else if (gates[i].controlQubit != -1) {
+                    hostGates[i].controlQubit2 = -1;
+                    hostGates[i].control2IsGlobal = 2;
+                    hostGates[i].controlQubit = toID[gates[i].controlQubit];
+                    hostGates[i].controlIsGlobal = 1 - isLocalQubit(gates[i].controlQubit);
+                } else {
+                    hostGates[i].controlQubit2 = -1;
+                    hostGates[i].control2IsGlobal = 2;
+                    hostGates[i].controlQubit = -1;
+                    hostGates[i].controlIsGlobal = 2;
+                }
+    
+                hostGates[i].targetQubit = toID[gates[i].targetQubit];
+                hostGates[i].targetIsGlobal = 1 - isLocalQubit(gates[i].targetQubit);
+                
+                hostGates[i].type = gates[i].type;
+            }
+            checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, sizeof(hostGates)));
+    
+            // execute
+            qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
+            run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
+                (deviceStateVec, threadBias, loIdx_device, shiftAt_device, numQubits, gates.size(), blockHot, enumerate);
+    #ifdef MEASURE_STAGE
+                cudaEventRecord(stop, 0);
+                cudaEventSynchronize(stop);
+                float time;
+                cudaEventElapsedTime(&time, start, stop);
+                cudaEventDestroy(start);
+                cudaEventDestroy(stop);
+                printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
+    #endif
+            // printf("Group End\n");
         }
-        checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, sizeof(hostGates)));
-
-        // execute
-        qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
-        run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
-            (deviceStateVec, threadBias, loIdx_device, shiftAt_device, numQubits, gates.size(), blockHot, enumerate);
-#ifdef MEASURE_STAGE
-            cudaEventRecord(stop, 0);
-            cudaEventSynchronize(stop);
-            float time;
-            cudaEventElapsedTime(&time, start, stop);
-            cudaEventDestroy(start);
-            cudaEventDestroy(stop);
-            printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
-#endif
-        // printf("Group End\n");
     }
     checkCudaErrors(cudaFree(threadBias));
     checkCudaErrors(cudaDeviceSynchronize()); // WARNING: for time measure!
+    MPI_Barrier(MPI_COMM_WORLD); // WARNINIG: for time measure!
     return ret;
 }

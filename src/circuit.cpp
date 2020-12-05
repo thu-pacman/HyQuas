@@ -11,8 +11,7 @@
 using namespace std;
 
 int Circuit::run(bool copy_back) {
-    kernelInit(deviceStateVec, numQubits + (int)(MyMPI::commSize > 1));
-    return 0;
+    kernelInit(deviceStateVec, numQubits);
     MPI_Barrier(MPI_COMM_WORLD);
     auto start = chrono::system_clock::now();
 #ifdef USE_GROUP

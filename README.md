@@ -19,3 +19,4 @@ unroll
 X Gate 可以不算
 
 写多卡时只考虑了 global qubit 不重叠的情况
+多机对角线待处理
