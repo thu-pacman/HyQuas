@@ -17,7 +17,10 @@ void kernelInit(qComplex* &deviceStateVec, int numQubits) {
     cudaDeviceProp prop;
     cudaGetDeviceProperties(&prop, 0);
     printf("[%d] %s\n", MyMPI::rank, prop.name);
-    size_t size = sizeof(qComplex) << numQubits >> MyMPI::commBit;
+    size_t size = (sizeof(qComplex) << numQubits) >> MyMPI::commBit;
+    if (MyMPI::commSize > 1) {
+        size <<= 1;
+    }
     checkCudaErrors(cudaMalloc(&deviceStateVec, size));
     checkCudaErrors(cudaMemset(deviceStateVec, 0, size));
     if (MyMPI::rank == 0) {
