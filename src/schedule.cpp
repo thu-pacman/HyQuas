@@ -170,11 +170,6 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
 
 void Schedule::initCuttPlans(int numQubits) {
     cudaError_t cuda_status;
-	cuda_status = cudaSetDevice(MyMPI::rank);
-	if (cuda_status != cudaSuccess) {
-        printf("cudaSetDevice failed! ");
-        exit(1);
-    }
     auto gen_perm_vector = [](int len) {
         std::vector<int> ret;
         for (int i = 0; i < len; i++)

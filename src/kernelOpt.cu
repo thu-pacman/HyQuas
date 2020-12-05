@@ -579,16 +579,9 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
         if (lgID > 0) {
             checkCuttErrors(cuttExecute(schedule.cuttPlans[lgID], deviceStateVec, deviceBuffer));
-            checkCudaErrors(cudaDeviceSynchronize());
-            printf("start\n");
-            // MPI_Alltoall(deviceBuffer, numElements >> MyMPI::commBit, MPI_Complex,
-            //              deviceStateVec, numElements >> MyMPI::commBit, MPI_Complex,
-            //              MPI_COMM_WORLD);
-            MPI_Alltoall(deviceStateVec, 1, MPI_Complex,
-                         deviceStateVec, 1, MPI_Complex,
+            MPI_Alltoall(deviceBuffer, numElements >> MyMPI::commBit, MPI_Complex,
+                         deviceStateVec, numElements >> MyMPI::commBit, MPI_Complex,
                          MPI_COMM_WORLD);
-            printf("end\n");
-            exit(1);
         }
 
         auto pos = schedule.midPos[lgID];
@@ -690,7 +683,7 @@ std::vector<qreal> kernelExecOpt(qComplex* deviceStateVec, int numQubits, const 
             checkCudaErrors(cudaMemcpyToSymbol(deviceGates, hostGates, sizeof(hostGates)));
     
             // execute
-            qindex gridDim = (1 << numQubits) >> LOCAL_QUBIT_SIZE;
+            qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
             run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP>>>
                 (deviceStateVec, threadBias, loIdx_device, shiftAt_device, numQubits, gates.size(), blockHot, enumerate);
     #ifdef MEASURE_STAGE
