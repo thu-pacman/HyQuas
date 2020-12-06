@@ -30,6 +30,7 @@ struct Schedule {
     std::vector<std::vector<cuttHandle>> cuttPlans;
     std::vector<std::vector<int>> midPos;
     std::vector<std::vector<int>> midLayout;
+    std::vector<int> finalPos;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);

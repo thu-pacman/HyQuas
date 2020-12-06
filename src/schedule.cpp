@@ -184,12 +184,19 @@ void Schedule::initCuttPlans(int numQubits) {
     cuttPlans.clear(); cuttPlans.resize(MyGlobalVars::numGPUs);
     // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
+        if (lgID == 0) {
+            midPos.push_back(pos);
+            midLayout.push_back(layout);
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                cuttPlans[g].push_back(cuttHandle());
+            }
+            continue;
+        }
         auto& localGroup = localGroups[lgID];
         std::vector<int> newGlobals;
         std::vector<int> newLocals;
-        // printf("rank %d related %x\n", MyMPI::rank, localGroup.relatedQubits);
         for (int i = 0; i < numQubits; i++) {
-            if ((localGroup.relatedQubits >> i & 1) == 0 && (lgID == 0 || std::find(layout.data() + numLocalQubits, layout.data() + numQubits, i) == layout.data() + numQubits)) {
+            if ((localGroup.relatedQubits >> i & 1) == 0 && std::find(layout.data() + numLocalQubits, layout.data() + numQubits, i) == layout.data() + numQubits) {
                 newGlobals.push_back(i);
             }
         }
@@ -207,7 +214,6 @@ void Schedule::initCuttPlans(int numQubits) {
             layout[pos[newGlobals[i]]] = newGlobals[i];
             layout[pos[swappedQid]] = swappedQid;
         }
-
         for (int i = 0; i < MyGlobalVars::bit; i++) {
             int a = i + numLocalQubits;
             int b = a - MyGlobalVars::bit;
@@ -220,10 +226,12 @@ void Schedule::initCuttPlans(int numQubits) {
         // printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
         for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
             cuttHandle plan;
+            checkCudaErrors(cudaSetDevice(g));
             checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
             cuttPlans[g].push_back(plan);
         }
         midPos.push_back(pos);
         midLayout.push_back(layout);
+        finalPos = pos;
     }
 }
