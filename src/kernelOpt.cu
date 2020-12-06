@@ -602,13 +602,11 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
             }
             int partSize = numElements >> MyGlobalVars::bit;
-            for (int xr = 1; xr < MyGlobalVars::numGPUs; xr++) {
+            for (int xr = 0; xr < MyGlobalVars::numGPUs; xr++) {
                 for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                     int b = a ^ xr;
                     checkCudaErrors(cudaMemcpyAsync(deviceStateVec[a] + b * partSize, deviceBuffer[b] + a * partSize,
                         partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
-                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[b] + a * partSize, deviceBuffer[a] + b * partSize,
-                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
                 }
             }
         }
