@@ -60,6 +60,11 @@ void Circuit::dumpGates() {
 }
 
 Complex Circuit::ampAt(qindex idx) {
+    int id = 0;
+    for (int i = 0; i < numQubits; i++) {
+        if (idx >> i & 1)
+            id |= qindex(1) << schedule.finalPos[i];
+    }
     return Complex(result[idx].x, result[idx].y);
 }
 
