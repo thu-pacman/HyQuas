@@ -597,7 +597,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
             }
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) { // is it in parallel?
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 cudaSetDevice(g);
                 checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
             }
@@ -605,31 +605,31 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
             for (int xr = 1; xr < MyGlobalVars::numGPUs; xr++) {
                 for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                     int b = a ^ xr;
-                    checkCudaErrors(cudaMemcpyAsync(deviceBuffer[a] + b * partSize, deviceStateVec[b] + a * partSize,
+                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[a] + b * partSize, deviceBuffer[b] + a * partSize,
                         partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
-                        checkCudaErrors(cudaMemcpyAsync(deviceBuffer[b] + a * partSize, deviceStateVec[a] + b * partSize,
-                            partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
-                        }
-                    }
+                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[b] + a * partSize, deviceBuffer[a] + b * partSize,
+                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
                 }
+            }
+        }
                 
-                auto pos = schedule.midPos[lgID];
-                auto layout = schedule.midLayout[lgID];
-                auto& gateGroups = schedule.localGroups[lgID].gateGroups;
-                
-                for (size_t g = 0; g < gateGroups.size(); g++) {
-                    #ifdef MEASURE_STAGE
-                    // TODO multistream
-                    cudaEvent_t start, stop;
-                    checkCudaErrors(cudaEventCreate(&start));
-                    checkCudaErrors(cudaEventCreate(&stop));
-                    checkCudaErrors(cudaEventRecord(start, 0));
-                    #endif
-                    auto& gates = gateGroups[g].gates;
-                    // initialize blockHot, enumerate, threadBias
-                    qindex relatedLogicQb = gateGroups[g].relatedQubits;
-                    qindex relatedQubits = toPhyQubit(pos, gateGroups[g].relatedQubits);
-                    int cnt = bitCount(relatedQubits);
+        auto pos = schedule.midPos[lgID];
+        auto layout = schedule.midLayout[lgID];
+        auto& gateGroups = schedule.localGroups[lgID].gateGroups;
+        
+        for (size_t g = 0; g < gateGroups.size(); g++) {
+            #ifdef MEASURE_STAGE
+            // TODO multistream
+            cudaEvent_t start, stop;
+            checkCudaErrors(cudaEventCreate(&start));
+            checkCudaErrors(cudaEventCreate(&stop));
+            checkCudaErrors(cudaEventRecord(start, 0));
+            #endif
+            auto& gates = gateGroups[g].gates;
+            // initialize blockHot, enumerate, threadBias
+            qindex relatedLogicQb = gateGroups[g].relatedQubits;
+            qindex relatedQubits = toPhyQubit(pos, relatedLogicQb);
+            int cnt = bitCount(relatedQubits);
             if (cnt < LOCAL_QUBIT_SIZE) {
                 int cnt = bitCount(relatedQubits);
                 for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
