@@ -602,16 +602,15 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
             //     cudaSetDevice(g);
             //     checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
             // }
-            int partSize =  numElements >> MyGlobalVars::bit;
-            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
-                for (int b = 0; b < MyGlobalVars::numGPUs; b++) {
+            int partSize = numElements >> MyGlobalVars::bit;
+            for (int xr = 1; xr < MyGlobalVars::numGPUs; xr++) {
+                for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                    int b = a ^ xr;
+                    if (a > b) continue;
                     checkCudaErrors(cudaMemcpyAsync(deviceBuffer[a] + b * partSize, deviceStateVec[b] + a * partSize,
                         partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
                 }
             }
-            // MPI_Alltoall(deviceBuffer, numElements >> MyGlobalVars::bit, MPI_Complex,
-            //              deviceStateVec, numElements >> MyGlobalVars::bit, MPI_Complex,
-            //              MPI_COMM_WORLD);
         }
 
         auto pos = schedule.midPos[lgID];
