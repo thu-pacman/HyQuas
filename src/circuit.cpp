@@ -28,7 +28,7 @@ int Circuit::run(bool copy_back) {
     Logger::add("Time Cost: %d ms", int(duration.count()));
     result.resize(1ll << numQubits);
     if (copy_back) {
-        int elements = 1ll << (numQubits - MyGlobalVars::bit);
+        qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
         for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
             kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
             kernelDestroy(deviceStateVec[g]);
@@ -65,7 +65,7 @@ Complex Circuit::ampAt(qindex idx) {
         if (idx >> i & 1)
             id |= qindex(1) << schedule.finalPos[i];
     }
-    return Complex(result[idx].x, result[idx].y);
+    return Complex(result[id].x, result[id].y);
 }
 
 void Circuit::compile() {
@@ -78,9 +78,7 @@ void Circuit::compile() {
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
     schedule.initCuttPlans(numQubits);
 #ifdef SHOW_SCHEDULE
-    if (MyMPI::rank == 0) {
-        schedule.dump(numQubits);
-    }
+    schedule.dump(numQubits);
 #endif
 #endif
 }
