@@ -570,12 +570,11 @@ void initControlIdx() {
 #endif
 
 std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule) {
-    qindex hostThreadBias[1 << THREAD_DEP];
     std::vector<qindex*> threadBias;
     threadBias.resize(MyGlobalVars::numGPUs);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        checkCudaErrors(cudaMalloc(&threadBias[g], sizeof(hostThreadBias)));
+        checkCudaErrors(cudaMalloc(&threadBias[g], sizeof(qindex) << THREAD_DEP));
     }
     std::vector<qreal> ret;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
@@ -588,48 +587,49 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
     auto toPhyQubit = [numQubits](const std::vector<int> pos, qindex relatedQubits) {
         qindex ret = 0;
         for (int i = 0; i < numQubits; i++)
-            if (relatedQubits >> i & 1)
-                ret |= qindex(1) << pos[i];
+        if (relatedQubits >> i & 1)
+        ret |= qindex(1) << pos[i];
         return ret;
     };
-
+    
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
         if (lgID > 0) {
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
             }
-            // for (int g = 0; g < MyGlobalVars::numGPUs; g++) { // is it in parallel?
-            //     cudaSetDevice(g);
-            //     checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
-            // }
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) { // is it in parallel?
+                cudaSetDevice(g);
+                checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
+            }
             int partSize = numElements >> MyGlobalVars::bit;
             for (int xr = 1; xr < MyGlobalVars::numGPUs; xr++) {
                 for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                     int b = a ^ xr;
-                    if (a > b) continue;
                     checkCudaErrors(cudaMemcpyAsync(deviceBuffer[a] + b * partSize, deviceStateVec[b] + a * partSize,
                         partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
+                        checkCudaErrors(cudaMemcpyAsync(deviceBuffer[b] + a * partSize, deviceStateVec[a] + b * partSize,
+                            partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
+                        }
+                    }
                 }
-            }
-        }
-
-        auto pos = schedule.midPos[lgID];
-        auto layout = schedule.midLayout[lgID];
-        auto& gateGroups = schedule.localGroups[lgID].gateGroups;
-        
-        for (size_t g = 0; g < gateGroups.size(); g++) {
-#ifdef MEASURE_STAGE
-                // TODO multistream
-                cudaEvent_t start, stop;
-                checkCudaErrors(cudaEventCreate(&start));
-                checkCudaErrors(cudaEventCreate(&stop));
-                checkCudaErrors(cudaEventRecord(start, 0));
-#endif
-            auto& gates = gateGroups[g].gates;
-            // initialize blockHot, enumerate, threadBias
-            qindex relatedLogicQb = gateGroups[g].relatedQubits;
-            qindex relatedQubits = toPhyQubit(pos, gateGroups[g].relatedQubits);
-            int cnt = bitCount(relatedQubits);
+                
+                auto pos = schedule.midPos[lgID];
+                auto layout = schedule.midLayout[lgID];
+                auto& gateGroups = schedule.localGroups[lgID].gateGroups;
+                
+                for (size_t g = 0; g < gateGroups.size(); g++) {
+                    #ifdef MEASURE_STAGE
+                    // TODO multistream
+                    cudaEvent_t start, stop;
+                    checkCudaErrors(cudaEventCreate(&start));
+                    checkCudaErrors(cudaEventCreate(&stop));
+                    checkCudaErrors(cudaEventRecord(start, 0));
+                    #endif
+                    auto& gates = gateGroups[g].gates;
+                    // initialize blockHot, enumerate, threadBias
+                    qindex relatedLogicQb = gateGroups[g].relatedQubits;
+                    qindex relatedQubits = toPhyQubit(pos, gateGroups[g].relatedQubits);
+                    int cnt = bitCount(relatedQubits);
             if (cnt < LOCAL_QUBIT_SIZE) {
                 int cnt = bitCount(relatedQubits);
                 for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
@@ -637,7 +637,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                         cnt++;
                         relatedQubits |= (1 << i);
                         if (cnt == LOCAL_QUBIT_SIZE)
-                            break;
+                        break;
                     }
                 }
             }
@@ -650,6 +650,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 enumerate -= x;
             }
             assert((threadHot | enumerate) == relatedQubits);
+            qindex hostThreadBias[1 << THREAD_DEP];
             for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
                 hostThreadBias[i] = j;
             }
@@ -711,13 +712,13 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 hostGates[i].type = gates[i].type;
             }
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                cudaSetDevice(g);
-                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
-                checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates, sizeof(hostGates)));
+                checkCudaErrors(cudaSetDevice(g));
+                checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates, sizeof(hostGates), 0, cudaMemcpyDefault, MyGlobalVars::streams[g]));
             }
             // execute
             qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaSetDevice(g));
                 run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, MyGlobalVars::streams[g]>>>
                     (deviceStateVec[g], threadBias[g], loIdx_device[g], shiftAt_device[g], numQubits, gates.size(), blockHot, enumerate);
             }
