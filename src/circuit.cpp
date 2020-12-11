@@ -71,7 +71,7 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #ifdef USE_GROUP
-    Compiler compiler(numQubits, numQubits - 3, LOCAL_QUBIT_SIZE, gates);
+    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
