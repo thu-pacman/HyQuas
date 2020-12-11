@@ -25,6 +25,13 @@ void GateGroup::addGate(const Gate& gate) {
     if (!gate.isDiagonal()) {
         relatedQubits |= qindex(1) << gate.targetQubit;
     }
+    // TODO DELETE
+    if (gate.controlQubit != -1) {
+        relatedQubits |= qindex(1) << gate.controlQubit;
+    }
+    if (gate.controlQubit2 != -1) {
+        relatedQubits |= qindex(1) << gate.controlQubit2;
+    }
 }
 
 void Schedule::dump(int numQubits) {
@@ -257,6 +264,6 @@ void Schedule::initCuttPlans(int numQubits) {
         }
         midPos.push_back(pos);
         midLayout.push_back(layout);
-        finalPos = pos;
     }
+    finalPos = pos;
 }

@@ -399,11 +399,11 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
     }
 }
 
-__device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex blockHot, qindex enumerate, int numQubits) {
+__device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex blockHot, qindex enumerate, int numLocalQubits) {
     if (threadIdx.x == 0) {
         int bid = blockIdx.x;
         qindex bias = 0;
-        for (qindex bit = 1; bit < (qindex(1) << numQubits); bit <<= 1) {
+        for (qindex bit = 1; bit < (qindex(1) << numLocalQubits); bit <<= 1) {
             if (blockHot & bit) {
                 if (bid & 1)
                     bias |= bit;
@@ -436,9 +436,9 @@ __device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
 }
 
 template <unsigned int blockSize>
-__global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, int numQubits, int numGates, qindex blockHot, qindex enumerate) {
+__global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate) {
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
-    fetchData(a, threadBias, idx, blockHot, enumerate, numQubits);
+    fetchData(a, threadBias, idx, blockHot, enumerate, numLocalQubits);
     __syncthreads();
     doCompute<blockSize>(numGates, loArr, shiftAt);
     __syncthreads();
@@ -587,8 +587,8 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
     auto toPhyQubit = [numQubits](const std::vector<int> pos, qindex relatedQubits) {
         qindex ret = 0;
         for (int i = 0; i < numQubits; i++)
-        if (relatedQubits >> i & 1)
-        ret |= qindex(1) << pos[i];
+            if (relatedQubits >> i & 1)
+                ret |= qindex(1) << pos[i];
         return ret;
     };
     
@@ -606,7 +606,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                     int b = a ^ xr;
                     checkCudaErrors(cudaMemcpyAsync(deviceStateVec[a] + b * partSize, deviceBuffer[b] + a * partSize,
-                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[a]));
+                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
                 }
             }
         }
@@ -634,8 +634,9 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                     if (!(relatedQubits & (1 << i))) {
                         cnt++;
                         relatedQubits |= (1 << i);
+                        relatedLogicQb |= (1 << layout[i]);
                         if (cnt == LOCAL_QUBIT_SIZE)
-                        break;
+                            break;
                     }
                 }
             }
@@ -718,7 +719,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaSetDevice(g));
                 run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, MyGlobalVars::streams[g]>>>
-                    (deviceStateVec[g], threadBias[g], loIdx_device[g], shiftAt_device[g], numQubits, gates.size(), blockHot, enumerate);
+                    (deviceStateVec[g], threadBias[g], loIdx_device[g], shiftAt_device[g], numLocalQubits, gates.size(), blockHot, enumerate);
             }
 #ifdef MEASURE_STAGE
             // TODO multistream support
