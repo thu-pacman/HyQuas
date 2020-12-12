@@ -609,6 +609,9 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                         partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
                 }
             }
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+            }
         }
                 
         auto pos = schedule.midPos[lgID];
