@@ -2,6 +2,7 @@
 #include <cstring>
 #include <algorithm>
 #include <assert.h>
+#include <tuple>
 
 GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     GateGroup ret;
@@ -187,22 +188,42 @@ void Schedule::initCuttPlans(int numQubits) {
     midPos.clear();
     midLayout.clear();
     cuttPlans.clear(); cuttPlans.resize(MyGlobalVars::numGPUs);
+    a2aComm.clear();
+    a2aCommSize.clear();
     // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
         auto& localGroup = localGroups[lgID];
         std::vector<int> newGlobals;
         std::vector<int> newLocals;
         for (int i = 0; i < numQubits; i++) {
-            if ((localGroup.relatedQubits >> i & 1) == 0 && (lgID == 0 || std::find(layout.data() + numLocalQubits, layout.data() + numQubits, i) == layout.data() + numQubits)) {
+            if (! (localGroup.relatedQubits >> i & 1)) {
                 newGlobals.push_back(i);
             }
         }
-        printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
-        if ((int)newGlobals.size() < MyGlobalVars::bit) {
-            printf("Overlapped global qubit\n");
-            exit(1);
+        
+        auto globalPos = [numQubits, numLocalQubits](const std::vector<int>& layout, int x) {
+            auto pos = std::find(layout.data() + numLocalQubits, layout.data() + numQubits, x);
+            return std::make_tuple(pos != layout.data() + numQubits, pos - layout.data() - numLocalQubits);
+        };
+
+        int overlapGlobals = 0;
+        int overlapCnt = 0;
+        // put overlapped global qubit into the previous
+        for (size_t i = 0; i < newGlobals.size(); i++) {
+            bool isGlobal;
+            int p;
+            std::tie(isGlobal, p) = globalPos(layout, newGlobals[i]);
+            if (isGlobal) {
+                std::swap(newGlobals[p], newGlobals[i]);
+                overlapGlobals |= qindex(1) << p;
+                overlapCnt ++;
+            }
         }
+
+        printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
+        assert(newGlobals.size() >= MyGlobalVars::bit);
         newGlobals.resize(MyGlobalVars::bit);
+
         if (lgID == 0) {
             for (size_t i = 0; i < newGlobals.size(); i++) {
                 int x = newGlobals[i];
@@ -222,38 +243,61 @@ void Schedule::initCuttPlans(int numQubits) {
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 cuttPlans[g].push_back(cuttHandle());
             }
+            a2aCommSize.push_back(-1);
+            a2aComm.emplace_back();
             printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
             printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
             printf("------------------------------------------------------\n");
             continue;
         }
         std::vector<int> perm = gen_perm_vector(numLocalQubits);
+        int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
         for (int i = 0; i < MyGlobalVars::bit; i++) {
-            std::swap(perm[pos[newGlobals[i]]], perm[i + numLocalQubits - MyGlobalVars::bit]);
-            int swappedQid = layout[i + numLocalQubits - MyGlobalVars::bit];
+            if (overlapGlobals >> i & 1) continue;
+            std::swap(perm[pos[newGlobals[i]]], perm[c]);
+            int swappedQid = layout[c];
             pos[swappedQid] = pos[newGlobals[i]];
-            pos[newGlobals[i]] = i + numLocalQubits - MyGlobalVars::bit;
+            pos[newGlobals[i]] = c;
             layout[pos[newGlobals[i]]] = newGlobals[i];
             layout[pos[swappedQid]] = swappedQid;
+            c++;
         }
         printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
         printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
         printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
+        
+        // complex have two floats
         perm.push_back(0);
         for (int i = perm.size() - 1; i; i--) {
             perm[i] = perm[i-1] + 1;
         }
         perm[0] = 0;
+
+        c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
         for (int i = 0; i < MyGlobalVars::bit; i++) {
+            if (overlapGlobals >> i & 1) continue;
             int a = i + numLocalQubits;
-            int b = a - MyGlobalVars::bit;
-            int qa = layout[a], qb = layout[b];
-            layout[a] = qb; pos[qb] = a;
-            layout[b] = qa; pos[qa] = b;
+            int qa = layout[a], qc = layout[c];
+            layout[a] = qc; pos[qc] = a;
+            layout[c] = qa; pos[qa] = c;
+            c++;
         }
         printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
         printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
         printf("------------------------------------------------------\n");
+
+        std::vector<std::pair<int, int>> newCommPair;
+        for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+            newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
+        }
+        std::sort(newCommPair.begin(), newCommPair.end());
+        std::vector<int> newComm;
+        for (auto x: newCommPair) {
+            newComm.push_back(x.second);
+        }
+        a2aComm.push_back(newComm);
+        a2aCommSize.push_back(MyGlobalVars::numGPUs >> overlapCnt);
+
         for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
             cuttHandle plan;
             checkCudaErrors(cudaSetDevice(g));

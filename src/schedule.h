@@ -30,6 +30,8 @@ struct Schedule {
     std::vector<std::vector<cuttHandle>> cuttPlans;
     std::vector<std::vector<int>> midPos;
     std::vector<std::vector<int>> midLayout;
+    std::vector<int> a2aCommSize;
+    std::vector<std::vector<int>> a2aComm;
     std::vector<int> finalPos;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;

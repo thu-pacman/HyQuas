@@ -601,12 +601,14 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 cudaSetDevice(g);
                 checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
             }
-            int partSize = numElements >> MyGlobalVars::bit;
-            for (int xr = 0; xr < MyGlobalVars::numGPUs; xr++) {
+            int commSize = schedule.a2aCommSize[lgID];
+            int partSize = numElements / commSize;
+            auto& comm = schedule.a2aComm[lgID];
+            for (int xr = 0; xr < commSize; xr++) {
                 for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                     int b = a ^ xr;
-                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[a] + b * partSize, deviceBuffer[b] + a * partSize,
-                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[b]));
+                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[comm[a]] + b % commSize * partSize, deviceBuffer[comm[b]] + a % commSize * partSize,
+                        partSize * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[comm[b]]));
                 }
             }
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
