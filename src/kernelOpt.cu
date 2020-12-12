@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <assert.h>
 #include <map>
+#include <omp.h>
 using namespace std;
 
 struct KernelGate {
@@ -13,6 +14,34 @@ struct KernelGate {
     char controlIsGlobal; // 0-local 1-global 2-not control 
     char control2IsGlobal; // 0-local 1-global 2-not control
     qreal r00, i00, r01, i01, r10, i10, r11, i11;
+
+    KernelGate(
+        GateType type_,
+        char control2IsGlobal_, int controlQubit2_,
+        char controlIsGlobal_, int controlQubit_,
+        char targetIsGlobal_, int targetQubit_,
+        const Complex mat[2][2]
+    ):
+        targetQubit(targetQubit_), controlQubit(controlQubit_), controlQubit2(controlQubit2_),
+        type(type_),
+        targetIsGlobal(targetIsGlobal_), controlIsGlobal(controlIsGlobal_), control2IsGlobal(control2IsGlobal_),
+        r00(mat[0][0].real), i00(mat[0][0].imag), r01(mat[0][1].real), i01(mat[0][1].imag),
+        r10(mat[1][0].real), i10(mat[1][0].imag), r11(mat[1][1].real), i11(mat[1][1].imag) {}
+    
+    KernelGate(
+        GateType type_,
+        char controlIsGlobal_, int controlQubit_,
+        char targetIsGlobal_, int targetQubit_,
+        const Complex mat[2][2]
+    ): KernelGate(type_, 2, -1, controlIsGlobal_, controlQubit_, targetIsGlobal_, targetQubit_, mat) {}
+
+    KernelGate(
+        GateType type_,
+        char targetIsGlobal_, int targetQubit_,
+        const Complex mat[2][2]
+    ): KernelGate(type_, 2, -1, 2, -1, targetIsGlobal_, targetQubit_, mat) {}
+
+    KernelGate() = default;
 };
 
 const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
@@ -146,6 +175,54 @@ __device__ __forceinline__ void THi(int hi) {
     imag[hi] = recRoot2 * (hiReal + hiImag);
 }
 
+__device__ __forceinline__ void GIISingle(int lo, int hi) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = loImag;
+    imag[lo] = loReal;
+    real[hi] = hiReal;
+    imag[hi] = hiImag;
+}
+
+__device__ __forceinline__ void GII(int x) {
+    qreal Real = real[x];
+    qreal Imag = imag[x];
+    real[x] = Imag;
+    imag[x] = Real;
+}
+
+__device__ __forceinline__ void GZZSingle(int lo, int hi) {
+    real[lo] = -real[lo];
+    imag[lo] = -imag[lo];
+    real[hi] = -real[hi];
+    imag[hi] = -imag[hi];
+}
+
+__device__ __forceinline__ void GZZ(int x) {    
+    real[x] = -real[x];
+    imag[x] = -imag[x];
+}
+
+__device__ __forceinline__ void GCCSingle(int lo, int hi, qreal r, qreal i) {
+    qreal loReal = real[lo];
+    qreal loImag = imag[lo];
+    qreal hiReal = real[hi];
+    qreal hiImag = imag[hi];
+    real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r, i);
+    imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r, i);
+    real[hi] = COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r, i);
+    imag[hi] = COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r, i);
+}
+
+__device__ __forceinline__ void GCC(int x, qreal r, qreal i) {
+    qreal Real = real[x];
+    qreal Imag = imag[x];
+    real[x] = COMPLEX_MULTIPLY_REAL(Real, Imag, r, i);
+    imag[x] = COMPLEX_MULTIPLY_IMAG(Real, Imag, r, i);
+}
+
 #define FOLLOW_NEXT(TYPE) \
 case GateType::TYPE: // no break
 
@@ -201,6 +278,21 @@ case GateType::TYPE: { \
         int j = k ^ (k >> 5); \
         OP_HI; \
     } \
+    break; \
+}
+
+#define LOHI_SAME(TYPE, OP_HI) \
+case GateType::TYPE: { \
+    int m = 1 << LOCAL_QUBIT_SIZE; \
+    for (int k = threadIdx.x; k < m; k += blockSize) { \
+        int j = k ^ (k >> 5); \
+        OP_HI; \
+    } \
+    break; \
+}
+
+#define ID_BREAK() \
+case GateType::ID: { \
     break; \
 }
 
@@ -356,6 +448,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     }
                 }
                 switch (deviceGates[i].type) {
+                    FOLLOW_NEXT(GOC)
                     CASE_SINGLE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
                     FOLLOW_NEXT(U2)
                     CASE_SINGLE(U3, USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11))
@@ -375,6 +468,10 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_SINGLE(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
                     CASE_SINGLE(S, SHi(hi))
                     CASE_SINGLE(T, THi(hi))
+                    CASE_SINGLE(GII, GIISingle(lo, hi))
+                    CASE_SINGLE(GZZ, GZZSingle(lo, hi))
+                    CASE_SINGLE(GCC, GCCSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00))
+                    ID_BREAK()
                     default: {
                         assert(false);
                     }
@@ -388,7 +485,12 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_SKIPLO_HI(CZ, ZHi(j))
                     CASE_SKIPLO_HI(S, SHi(j))
                     CASE_SKIPLO_HI(T, THi(j))
+                    FOLLOW_NEXT(GOC)
                     CASE_SKIPLO_HI(U1, U1Hi(j, deviceGates[i].r11, deviceGates[i].i11))
+                    LOHI_SAME(GII, GII(j))
+                    LOHI_SAME(GZZ, GZZ(j))
+                    LOHI_SAME(GCC, GCC(j, deviceGates[i].r00, deviceGates[i].i00))
+                    ID_BREAK()
                     default: {
                         assert(false);
                     }
@@ -569,6 +671,11 @@ void initControlIdx() {
 }
 #endif
 
+#define SET_GATE_TO_ID(g, i) { \
+    Complex mat[2][2] = {1, 0, 0, 1}; \
+    hostGates[g][i] = KernelGate(GateType::ID, 0, 0, mat); \
+}
+
 std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule) {
     std::vector<qindex*> threadBias;
     threadBias.resize(MyGlobalVars::numGPUs);
@@ -665,59 +772,239 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
     
             // initialize gates
             std::map<int, int> toID; // logic -> share
+            int shareCnt = 0;
             int localCnt = 0;
             int globalCnt = 0;
-            for (int i = 0; i < numQubits; i++) {
+            for (int i = 0; i < numLocalQubits; i++) {
                 if (relatedQubits & (qindex(1) << i)) {
-                    toID[layout[i]] = localCnt++;
+                    toID[layout[i]] = shareCnt++;
                 } else {
-                    toID[layout[i]] = globalCnt++;
+                    toID[layout[i]] = localCnt++;
                 }
             }
-            auto isLocalQubit = [relatedLogicQb] (int logicIdx) {
+            for (int i = numLocalQubits; i < numQubits; i++)
+                toID[layout[i]] = globalCnt++;
+            auto isShareQubit = [relatedLogicQb] (int logicIdx) {
                 return relatedLogicQb >> logicIdx & 1;
             };
-            KernelGate hostGates[gates.size()];
+            auto isLocalQubit = [pos, numLocalQubits] (int logicIdx) {
+                return pos[logicIdx] <= numLocalQubits;
+            };
+            KernelGate hostGates[MyGlobalVars::numGPUs][gates.size()];
             assert(gates.size() < MAX_GATE);
-            for (size_t i = 0; i < gates.size(); i++) {
-                hostGates[i].r00 = gates[i].mat[0][0].real;
-                hostGates[i].i00 = gates[i].mat[0][0].imag;
-                hostGates[i].r01 = gates[i].mat[0][1].real;
-                hostGates[i].i01 = gates[i].mat[0][1].imag;
-                hostGates[i].r10 = gates[i].mat[1][0].real;
-                hostGates[i].i10 = gates[i].mat[1][0].imag;
-                hostGates[i].r11 = gates[i].mat[1][1].real;
-                hostGates[i].i11 = gates[i].mat[1][1].imag;
-                if (gates[i].controlQubit2 != -1) {
-                    int c1 = gates[i].controlQubit;
-                    int c2 = gates[i].controlQubit2;
-                    if (isLocalQubit(c2) && !isLocalQubit(c1)) {
-                        int c = c1; c1 = c2; c2 = c;
+            #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                auto isHiGPU = [layout, numLocalQubits](int gpu_id, int logicIdx) {
+                    return gpu_id >> (layout[logicIdx] - numLocalQubits) & 1;
+                };
+                for (size_t i = 0; i < gates.size(); i++) {
+                    if (gates[i].controlQubit2 != -1) {
+                        // Assume no CC-Diagonal
+                        int c1 = gates[i].controlQubit;
+                        int c2 = gates[i].controlQubit2;
+                        if (isLocalQubit(c2) && !isLocalQubit(c1)) {
+                            int c = c1; c1 = c2; c2 = c;
+                        }
+                        if (isLocalQubit(c1) && isLocalQubit(c2)) { // CCU(c1, c2, t)
+                            if (isShareQubit(c2) && !isShareQubit(c1)) {
+                                int c = c1; c1 = c2; c2 = c;
+                            }
+                            hostGates[g][i] = KernelGate(
+                                gates[i].type,
+                                toID[c2], 1 - isShareQubit(c2),
+                                toID[c1], 1 - isShareQubit(c1),
+                                toID[gates[i].targetQubit], 1 - isShareQubit(gates[i].targetQubit),
+                                gates[i].mat
+                            );
+                        } else if (isLocalQubit(c1) && !isLocalQubit(c2)) {
+                            if (isHiGPU(g, c2)) { // CU(c1, t)
+                                hostGates[g][i] = KernelGate(
+                                    Gate::toCU(gates[i].type),
+                                    toID[c1], 1 - isShareQubit(c1),
+                                    toID[gates[i].targetQubit], 1 - isShareQubit(gates[i].targetQubit),
+                                    gates[i].mat
+                                );
+                            } else { // ID(t)
+                                SET_GATE_TO_ID(g, i)
+                            }
+                        } else { // !isLocalQubit(c1) && !isLocalQubit(c2)
+                            if (isHiGPU(g, c1) && isHiGPU(g, c2)) { // U(t)
+                                hostGates[g][i] = KernelGate(
+                                    Gate::toU(gates[i].type),
+                                    toID[gates[i].targetQubit], 1 - isShareQubit(gates[i].targetQubit),
+                                    gates[i].mat
+                                );
+                            } else { // ID(t)
+                                SET_GATE_TO_ID(g, i)
+                            }
+                        }
+                    } else if (gates[i].controlQubit != -1) {
+                        int c = gates[i].controlQubit, t = gates[i].targetQubit;
+                        if (isLocalQubit(c) && isLocalQubit(t)) { // CU(c, t)
+                            hostGates[g][i] = KernelGate(
+                                gates[i].type,
+                                toID[c], 1 - isShareQubit(c),
+                                toID[t], 1 - isShareQubit(t),
+                                gates[i].mat
+                            );
+                        } else if (isLocalQubit(c) && !isLocalQubit(t)) { // U(c)
+                            switch (gates[i].type) {
+                                case GateType::CZ: {
+                                    if (isHiGPU(g, t)) {
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::Z,
+                                            toID[c], 1 - isShareQubit(c),
+                                            gates[i].mat
+                                        );
+                                    } else {
+                                        SET_GATE_TO_ID(g, i)
+                                    }
+                                    break;
+                                }
+                                case GateType::CRZ: { // GOC(c)
+                                    Complex mat[2][2] = {1, 0, 0, isHiGPU(g, t) ? gates[i].mat[1][1]: gates[i].mat[0][0]};
+                                    hostGates[g][i] = KernelGate(
+                                        GateType::GOC,
+                                        toID[c], 1 - isShareQubit(c),
+                                        mat
+                                    );
+                                    break;
+                                }
+                                default: {
+                                    UNREACHABLE()
+                                }
+                            }
+                        } else if (!isLocalQubit(c) && isLocalQubit(t)) {
+                            if (isHiGPU(g, t)) { // U(t)
+                                hostGates[g][i] = KernelGate(
+                                    Gate::toU(gates[i].type),
+                                    toID[t], 1 - isShareQubit(t),
+                                    gates[i].mat
+                                );
+                            } else {
+                                SET_GATE_TO_ID(g, i)
+                            }
+                        } else { // !isLocalQubit(c) && !isLocalQubit(t)
+                            assert(gates[i].isDiagonal());
+                            if (isHiGPU(g, c)) {
+                                switch (gates[i].type) {
+                                    case GateType::CZ: {
+                                        if (isHiGPU(g, t)) {
+                                            Complex mat[2][2] = {-1, 0, 0, -1};
+                                            hostGates[g][i] = KernelGate(
+                                                GateType::GZZ,
+                                                0, 0,
+                                                mat
+                                            );
+                                        } else {
+                                            SET_GATE_TO_ID(g, i)
+                                        }
+                                        break;
+                                    }
+                                    case GateType::CRZ: {
+                                        Complex val = isHiGPU(g, t) ? gates[i].mat[1][1]: gates[i].mat[0][0];
+                                        Complex mat[2][2] = {val, 0, 0, val};
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::GCC,
+                                            0, 0,
+                                            mat
+                                        );
+                                        break;
+                                    }
+                                    default: {
+                                        UNREACHABLE()
+                                    }
+                                }
+                            } else {
+                                SET_GATE_TO_ID(g, i);
+                            }
+                        }
+                    } else {
+                        int t = gates[i].targetQubit;
+                        if (!isLocalQubit(t)) { // GCC(t)
+                            switch (gates[i].type) {
+                                case GateType::U1: {
+                                    if (isHiGPU(g, t)) {
+                                        Complex val = gates[i].mat[1][1];
+                                        Complex mat[2][2] = {val, 0, 0, val};
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::GCC,
+                                            0, 0,
+                                            mat
+                                        );
+                                    } else {
+                                        SET_GATE_TO_ID(g, i)
+                                    }
+                                    break;
+                                }
+                                case GateType::Z: {
+                                    if (isHiGPU(g, t)) {
+                                        Complex mat[2][2] = {-1, 0, 0, -1};
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::GZZ,
+                                            0, 0,
+                                            mat
+                                        );
+                                    } else {
+                                        SET_GATE_TO_ID(g, i)
+                                    }
+                                    break;
+                                }
+                                case GateType::S: {
+                                    if (isHiGPU(g, t)) {
+                                        Complex val(0, 1);
+                                        Complex mat[2][2] = {val, 0, 0, val};
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::GII,
+                                            0, 0,
+                                            mat
+                                        );
+                                    } else {
+                                        SET_GATE_TO_ID(g, i)
+                                    }
+                                    break;
+                                }
+                                case GateType::T: {
+                                    if (isHiGPU(g, t)) {
+                                        Complex val = gates[i].mat[1][1];
+                                        Complex mat[2][2] = {val, 0, 0, val};
+                                        hostGates[g][i] = KernelGate(
+                                            GateType::GCC,
+                                            0, 0,
+                                            mat
+                                        );
+                                    } else {
+                                        SET_GATE_TO_ID(g, i)
+                                    }
+                                    break;
+                                }
+                                case GateType::RZ: {
+                                    Complex val = isHiGPU(g, t) ? gates[i].mat[1][1]: gates[i].mat[0][0];
+                                    Complex mat[2][2] = {val, 0, 0, val};
+                                    hostGates[g][i] = KernelGate(
+                                        GateType::GCC,
+                                        0, 0,
+                                        mat
+                                    );
+                                    break;
+                                }
+                                default: {
+                                    UNREACHABLE()
+                                }
+                            }
+                        } else { // isLocalQubit(t) -> U(t)
+                            hostGates[g][i] = KernelGate(
+                                gates[i].type,
+                                toID[t], 1 - isShareQubit(t),
+                                gates[i].mat
+                            );
+                        }
                     }
-                    hostGates[i].controlQubit2 = toID[c2];
-                    hostGates[i].control2IsGlobal = 1 - isLocalQubit(c2);
-                    hostGates[i].controlQubit = toID[c1];
-                    hostGates[i].controlIsGlobal = 1 - isLocalQubit(c1);
-                } else if (gates[i].controlQubit != -1) {
-                    hostGates[i].controlQubit2 = -1;
-                    hostGates[i].control2IsGlobal = 2;
-                    hostGates[i].controlQubit = toID[gates[i].controlQubit];
-                    hostGates[i].controlIsGlobal = 1 - isLocalQubit(gates[i].controlQubit);
-                } else {
-                    hostGates[i].controlQubit2 = -1;
-                    hostGates[i].control2IsGlobal = 2;
-                    hostGates[i].controlQubit = -1;
-                    hostGates[i].controlIsGlobal = 2;
                 }
-    
-                hostGates[i].targetQubit = toID[gates[i].targetQubit];
-                hostGates[i].targetIsGlobal = 1 - isLocalQubit(gates[i].targetQubit);
-                
-                hostGates[i].type = gates[i].type;
             }
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaSetDevice(g));
-                checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates, sizeof(hostGates), 0, cudaMemcpyDefault, MyGlobalVars::streams[g]));
+                checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates[g], sizeof(hostGates[g]), 0, cudaMemcpyDefault, MyGlobalVars::streams[g]));
             }
             // execute
             qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;

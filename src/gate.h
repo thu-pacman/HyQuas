@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ, TOTAL
+    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
 };
 
 struct Gate {
@@ -25,8 +25,7 @@ struct Gate {
         return controlQubit2 != -1;
     }
     bool isDiagonal() const {
-        return 0;
-        // return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
+        return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
     }
     static Gate CCX(int c1, int c2, int targetQubit);
     static Gate CNOT(int controlQubit, int targetQubit);
@@ -47,9 +46,17 @@ struct Gate {
     static Gate RX(int targetQubit, qreal angle);
     static Gate RY(int targetQubit, qreal angle);
     static Gate RZ(int targetQubit, qreal angle);
+    static Gate ID(int targetQubit);
+    static Gate GII(int targetQubit);
+    static Gate GTT(int targetQubit);
+    static Gate GZZ(int targetQubit);
+    static Gate GOC(int targetQubit, qreal real, qreal imag);
+    static Gate GCC(int targetQubit, qreal real, qreal imag);
     static Gate random(int lo, int hi);
     static Gate random(int lo, int hi, GateType type);
     static Gate control(int controlQubit, int targetQubit, GateType type);
+    static GateType toCU(GateType type);
+    static GateType toU(GateType type);
     static std::string get_name(GateType ty);
     std::vector<unsigned char> serialize() const;
     static Gate deserialize(const unsigned char* arr, int& cur);

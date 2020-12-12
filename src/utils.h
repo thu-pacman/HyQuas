@@ -16,6 +16,12 @@ typedef cuFloatComplex qComplex;
 #define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
 #define DESERIALIZE_STEP(x) { x = *reinterpret_cast<const decltype(x)*>(arr + cur); cur += sizeof(x); }
 
+#define UNREACHABLE() { \
+    printf("file %s line %i: unreachable!\n", __FILE__, __LINE__); \
+    fflush(stdout); \
+    exit(1); \
+}
+
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 
 #define checkCudaErrors(stmt) {                                 \

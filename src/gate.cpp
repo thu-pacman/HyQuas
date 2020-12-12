@@ -244,6 +244,66 @@ Gate Gate::RZ(int targetQubit, qreal angle) {
     return g;
 }
 
+Gate Gate::ID(int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::ID;
+    g.mat[0][0] = 1; g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = 1;
+    g.name = "ID";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::GII(int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::GII;
+    g.mat[0][0] = Complex(0, 1); g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(0, 1);
+    g.name = "GII";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::GZZ(int targetQubit) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::GZZ;
+    g.mat[0][0] = Complex(0, 1); g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(0, 1);
+    g.name = "GZZ";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::GOC(int targetQubit, qreal real, qreal imag) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::GOC;
+    g.mat[0][0] = 1; g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(real, imag);
+    g.name = "GOC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::GCC(int targetQubit, qreal real, qreal imag) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::GCC;
+    g.mat[0][0] = Complex(real, imag); g.mat[0][1] = 0;
+    g.mat[1][0] = 0; g.mat[1][1] = Complex(real, imag);
+    g.name = "GCC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
 auto gen_01_float = []() {
     return rand() * 1.0 / RAND_MAX;
 };
@@ -404,6 +464,34 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
         }
     }
     exit(1);
+}
+
+GateType Gate::toCU(GateType type) {
+    if (type == GateType::CCX) {
+        return GateType::CNOT;
+    } else {
+        UNREACHABLE()
+    }
+}
+
+GateType Gate::toU(GateType type) {
+    switch (type) {
+        case GateType::CCX:
+        case GateType::CNOT:
+            return GateType::X;
+        case GateType::CY:
+            return GateType::Y;
+        case GateType::CZ:
+            return GateType::Z;
+        case GateType::CRX:
+            return GateType::RX;
+        case GateType::CRY:
+            return GateType::RY;
+        case GateType::CRZ:
+            return GateType::RZ;
+        default:
+            UNREACHABLE()
+    }
 }
 
 std::string Gate::get_name(GateType ty) {
