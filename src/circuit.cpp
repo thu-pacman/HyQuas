@@ -16,13 +16,19 @@ int Circuit::run(bool copy_back) {
 #ifdef USE_GROUP
     kernelExecOpt(deviceStateVec, numQubits, schedule);
 #else
-    kernelExecSimple(deviceStateVec, numQubits, gates);
+    kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #endif
     // gates.clear();
-    // for (auto& gg: schedule.gateGroups)
-    //     for (auto& g: gg.gates)
-    //         gates.push_back(g);
-    // kernelExecSimple(deviceStateVec, numQubits, gates);
+    // for (auto& lg: schedule.localGroups) {
+    //     for (auto& gg: lg.gateGroups)
+    //         for (auto& g: gg.gates)
+    //             gates.push_back(g);
+    // }
+    // schedule.finalPos.clear();
+    // for (int i = 0; i < numQubits; i++) {
+    //     schedule.finalPos.push_back(i);
+    // }
+    // kernelExecSimple(deviceStateVec[0], numQubits, gates);
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
@@ -80,5 +86,10 @@ void Circuit::compile() {
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
 #endif
+#else
+    schedule.finalPos.clear();
+    for (int i = 0; i < numQubits; i++) {
+        schedule.finalPos.push_back(i);
+    }
 #endif
 }
