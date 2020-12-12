@@ -73,16 +73,14 @@ void Schedule::dump(int numQubits) {
             }
         }
         printf("\n");
-        std::vector<int> layout; layout.resize(numQubits);
         printf("pos: ");
         for (int j = 0; j < numQubits; j++) {
-            printf("[%d: %d] ",(int) i, midPos[i][j]);
-            layout[midPos[i][j]] = j;
+            printf("[%d: %d] ", j, midPos[i][j]);
         }
         printf("\n");
         printf("layout: ");
         for (int j = 0; j < numQubits; j++) {
-            printf("[%d: %d] ", j, layout[j]);
+            printf("[%d: %d] ", j, midLayout[i][j]);
         }
         printf("\n\n");
     }
