@@ -59,26 +59,6 @@ std::pair<std::string, std::vector<qreal>> parse_gate(char buf[]) {
     return std::make_pair(name, params);
 }
 
-qreal zero_wrapper(qreal x) {
-    const qreal eps = 1e-14;
-    if (x > -eps && x < eps) {
-        return 0;
-    } else {
-        return x;
-    }
-}
-
-void show(std::unique_ptr<Circuit>& c, qindex idx) {
-    Complex x = c->ampAt(idx);
-    printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
-}
-
-void conditionShow(std::unique_ptr<Circuit>& c, qindex idx) {
-    Complex x = c->ampAt(idx);
-    if (x.len() > 0.001) 
-        printf("%d %.12f: %.12f %.12f\n", idx, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
-}
-
 std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
     FILE* f = nullptr;
     if ((f = fopen(filename.c_str(), "r")) == NULL) {
@@ -235,12 +215,7 @@ int main(int argc, char* argv[]) {
     c = parse_circuit(std::string(argv[1]));
     c->compile();
     c->run();
-    for (int i = 0; i < 128; i++) {
-        show(c, i);
-    }
-    for (int i = 128; i < (1 << c->numQubits); i++) {
-        conditionShow(c, i);
-    }
+    c->printState();
     Logger::print();
     return 0;
 }

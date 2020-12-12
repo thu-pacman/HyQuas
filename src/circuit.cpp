@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <chrono>
 #include <mpi.h>
+#include <algorithm>
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
@@ -65,12 +66,26 @@ void Circuit::dumpGates() {
     }
 }
 
-Complex Circuit::ampAt(qindex idx) {
+qindex Circuit::toPhysicalID(qindex idx) {
     int id = 0;
     for (int i = 0; i < numQubits; i++) {
         if (idx >> i & 1)
             id |= qindex(1) << schedule.finalPos[i];
     }
+    return id;
+}
+
+qindex Circuit::toLogicID(qindex idx) {
+    int id = 0;
+    for (int i = 0; i < numQubits; i++) {
+        if (idx >> schedule.finalPos[i] & 1)
+            id |= qindex(1) << i;
+    }
+    return id;
+}
+
+Complex Circuit::ampAt(qindex idx) {
+    qindex id = toPhysicalID(idx);
     return Complex(result[id].x, result[id].y);
 }
 
@@ -92,4 +107,22 @@ void Circuit::compile() {
         schedule.finalPos.push_back(i);
     }
 #endif
+}
+
+void Circuit::printState() {
+    for (int i = 0; i < 128; i++) {
+        Complex x = ampAt(i);
+        printf("%d %.12f: %.12f %.12f\n", i, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
+    }
+    std::vector<std::pair<qindex, Complex>> largeAmps;
+    for (int i = 0; i < (1 << numQubits); i++) {
+        if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
+            largeAmps.push_back(make_pair(toLogicID(i), Complex(result[i])));
+        }
+    }
+    sort(largeAmps.begin(), largeAmps.end());
+    for (auto& amp: largeAmps) {
+        auto& x = amp.second;
+        printf("%d %.12f: %.12f %.12f\n", amp.first, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
+    }
 }

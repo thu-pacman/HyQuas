@@ -29,3 +29,12 @@ void init() {
     }
 }
 };
+
+qreal zero_wrapper(qreal x) {
+    const qreal eps = 1e-14;
+    if (x > -eps && x < eps) {
+        return 0;
+    } else {
+        return x;
+    }
+}

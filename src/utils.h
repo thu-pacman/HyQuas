@@ -55,6 +55,9 @@ struct Complex {
         imag = 0;
         return *this;
     }
+    bool operator < (const Complex& b) const {
+        return real == b.real ? imag < b.imag : real < b.real;
+    }
     qreal len() const { return real * real + imag * imag; }
 };
 
@@ -71,3 +74,5 @@ int bitCount(T x) {
     }
     return ret;
 }
+
+qreal zero_wrapper(qreal x);

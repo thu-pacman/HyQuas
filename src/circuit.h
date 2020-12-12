@@ -15,10 +15,13 @@ public:
         gates.push_back(gate);
     }
     void dumpGates();
+    void printState();
     Complex ampAt(qindex idx);
     const int numQubits;
 
 private:
+    qindex toPhysicalID(qindex idx);
+    qindex toLogicID(qindex idx);
     std::vector<Gate> gates;
     std::vector<qComplex*> deviceStateVec;
     Schedule schedule;
