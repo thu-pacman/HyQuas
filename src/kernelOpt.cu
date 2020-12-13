@@ -180,16 +180,16 @@ __device__ __forceinline__ void GIISingle(int lo, int hi) {
     qreal loImag = imag[lo];
     qreal hiReal = real[hi];
     qreal hiImag = imag[hi];
-    real[lo] = loImag;
+    real[lo] = -loImag;
     imag[lo] = loReal;
-    real[hi] = hiReal;
-    imag[hi] = hiImag;
+    real[hi] = -hiImag;
+    imag[hi] = hiReal;
 }
 
 __device__ __forceinline__ void GII(int x) {
     qreal Real = real[x];
     qreal Imag = imag[x];
-    real[x] = Imag;
+    real[x] = -Imag;
     imag[x] = Real;
 }
 
@@ -281,12 +281,12 @@ case GateType::TYPE: { \
     break; \
 }
 
-#define LOHI_SAME(TYPE, OP_HI) \
+#define LOHI_SAME(TYPE, OP) \
 case GateType::TYPE: { \
     int m = 1 << LOCAL_QUBIT_SIZE; \
     for (int k = threadIdx.x; k < m; k += blockSize) { \
         int j = k ^ (k >> 5); \
-        OP_HI; \
+        OP; \
     } \
     break; \
 }

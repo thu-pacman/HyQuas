@@ -20,10 +20,13 @@ int Circuit::run(bool copy_back) {
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #endif
     // gates.clear();
-    // for (auto& lg: schedule.localGroups) {
-    //     for (auto& gg: lg.gateGroups)
+    // for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
+    //     auto& lg = schedule.localGroups[lgID];
+    //     for (size_t ggID = 0; ggID < lg.gateGroups.size(); ggID++) {
+    //         auto& gg = lg.gateGroups[ggID];
     //         for (auto& g: gg.gates)
     //             gates.push_back(g);
+    //     }
     // }
     // schedule.finalPos.clear();
     // for (int i = 0; i < numQubits; i++) {
