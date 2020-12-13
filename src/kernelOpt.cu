@@ -17,9 +17,9 @@ struct KernelGate {
 
     KernelGate(
         GateType type_,
-        char control2IsGlobal_, int controlQubit2_,
-        char controlIsGlobal_, int controlQubit_,
-        char targetIsGlobal_, int targetQubit_,
+        int controlQubit2_, char control2IsGlobal_, 
+        int controlQubit_, char controlIsGlobal_,
+        int targetQubit_, char targetIsGlobal_,
         const Complex mat[2][2]
     ):
         targetQubit(targetQubit_), controlQubit(controlQubit_), controlQubit2(controlQubit2_),
@@ -30,16 +30,16 @@ struct KernelGate {
     
     KernelGate(
         GateType type_,
-        char controlIsGlobal_, int controlQubit_,
-        char targetIsGlobal_, int targetQubit_,
+        int controlQubit_, char controlIsGlobal_,
+        int targetQubit_, char targetIsGlobal_,
         const Complex mat[2][2]
-    ): KernelGate(type_, 2, -1, controlIsGlobal_, controlQubit_, targetIsGlobal_, targetQubit_, mat) {}
+    ): KernelGate(type_, 2, -1, controlQubit_, controlIsGlobal_, targetQubit_, targetIsGlobal_, mat) {}
 
     KernelGate(
         GateType type_,
-        char targetIsGlobal_, int targetQubit_,
+        int targetQubit_, char targetIsGlobal_,
         const Complex mat[2][2]
-    ): KernelGate(type_, 2, -1, 2, -1, targetIsGlobal_, targetQubit_, mat) {}
+    ): KernelGate(type_, 2, -1, 2, -1, targetQubit_, targetIsGlobal_, mat) {}
 
     KernelGate() = default;
 };
@@ -727,7 +727,10 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
         auto layout = schedule.midLayout[lgID];
         auto& gateGroups = schedule.localGroups[lgID].gateGroups;
         
-        for (size_t g = 0; g < gateGroups.size(); g++) {
+        for (size_t gg = 0; gg < gateGroups.size(); gg++) {
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+            }
             #ifdef MEASURE_STAGE
             // TODO multistream
             cudaEvent_t start, stop;
@@ -735,9 +738,9 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
             checkCudaErrors(cudaEventCreate(&stop));
             checkCudaErrors(cudaEventRecord(start, 0));
             #endif
-            auto& gates = gateGroups[g].gates;
+            auto& gates = gateGroups[gg].gates;
             // initialize blockHot, enumerate, threadBias
-            qindex relatedLogicQb = gateGroups[g].relatedQubits;
+            qindex relatedLogicQb = gateGroups[gg].relatedQubits;
             qindex relatedQubits = toPhyQubit(pos, relatedLogicQb);
             int cnt = bitCount(relatedQubits);
             if (cnt < LOCAL_QUBIT_SIZE) {
