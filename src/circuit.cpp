@@ -117,7 +117,10 @@ void Circuit::printState() {
     std::vector<std::pair<qindex, Complex>> largeAmps;
     for (int i = 0; i < (1 << numQubits); i++) {
         if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
-            largeAmps.push_back(make_pair(toLogicID(i), Complex(result[i])));
+            int logicID = toLogicID(i);
+            if (logicID >= 128) {
+                largeAmps.push_back(make_pair(toLogicID(i), Complex(result[i])));
+            }
         }
     }
     sort(largeAmps.begin(), largeAmps.end());

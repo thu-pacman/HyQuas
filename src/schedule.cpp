@@ -219,8 +219,9 @@ void Schedule::initCuttPlans(int numQubits) {
                 overlapCnt ++;
             }
         }
-
+#ifdef SHOW_SCHEDULE
         printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
+#endif
         assert(newGlobals.size() >= MyGlobalVars::bit);
         newGlobals.resize(MyGlobalVars::bit);
 
@@ -245,9 +246,11 @@ void Schedule::initCuttPlans(int numQubits) {
             }
             a2aCommSize.push_back(-1);
             a2aComm.emplace_back();
+#ifdef SHOW_SCHEDULE
             printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
             printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
             printf("------------------------------------------------------\n");
+#endif
             continue;
         }
         std::vector<int> perm = gen_perm_vector(numLocalQubits);
@@ -262,10 +265,11 @@ void Schedule::initCuttPlans(int numQubits) {
             layout[pos[swappedQid]] = swappedQid;
             c++;
         }
+#ifdef SHOW_SCHEDULE
         printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
         printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
         printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
-        
+#endif
         // complex have two floats
         perm.push_back(0);
         for (int i = perm.size() - 1; i; i--) {
@@ -282,10 +286,11 @@ void Schedule::initCuttPlans(int numQubits) {
             layout[c] = qa; pos[qa] = c;
             c++;
         }
+#ifdef SHOW_SCHEDULE
         printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
         printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
         printf("------------------------------------------------------\n");
-
+#endif
         std::vector<std::pair<int, int>> newCommPair;
         for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
             newCommPair.push_back(std::make_pair(i & overlapGlobals, i));

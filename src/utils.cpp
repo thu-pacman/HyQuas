@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "logger.h"
 
 namespace MyGlobalVars {
 int numGPUs;
@@ -7,7 +8,7 @@ std::unique_ptr<cudaStream_t[]> streams;
 
 void init() {
     checkCudaErrors(cudaGetDeviceCount(&numGPUs));
-    printf("Total GPU: %d\n", numGPUs);
+    Logger::add("Total GPU: %d", numGPUs);
     bit = -1;
     int x = numGPUs;
     while (x) {
@@ -24,7 +25,7 @@ void init() {
         checkCudaErrors(cudaSetDevice(i));
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
-        printf("[%d] %s\n", i, prop.name);
+        Logger::add("[%d] %s", i, prop.name);
         checkCudaErrors(cudaStreamCreate(&streams[i]);)
     }
 }
