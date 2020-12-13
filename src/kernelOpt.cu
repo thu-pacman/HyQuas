@@ -791,14 +791,14 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 return relatedLogicQb >> logicIdx & 1;
             };
             auto isLocalQubit = [pos, numLocalQubits] (int logicIdx) {
-                return pos[logicIdx] <= numLocalQubits;
+                return pos[logicIdx] < numLocalQubits;
             };
             KernelGate hostGates[MyGlobalVars::numGPUs][gates.size()];
             assert(gates.size() < MAX_GATE);
             #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                auto isHiGPU = [layout, numLocalQubits](int gpu_id, int logicIdx) {
-                    return gpu_id >> (layout[logicIdx] - numLocalQubits) & 1;
+                auto isHiGPU = [pos, numLocalQubits](int gpu_id, int logicIdx) {
+                    return gpu_id >> (pos[logicIdx] - numLocalQubits) & 1;
                 };
                 for (size_t i = 0; i < gates.size(); i++) {
                     if (gates[i].controlQubit2 != -1) {
@@ -878,7 +878,7 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                                 }
                             }
                         } else if (!isLocalQubit(c) && isLocalQubit(t)) {
-                            if (isHiGPU(g, t)) { // U(t)
+                            if (isHiGPU(g, c)) { // U(t)
                                 hostGates[g][i] = KernelGate(
                                     Gate::toU(gates[i].type),
                                     toID[t], 1 - isShareQubit(t),
