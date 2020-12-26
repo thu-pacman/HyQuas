@@ -33,7 +33,7 @@ LocalGroup OneLayerCompiler::run() {
         if (remainGates.size() == 0)
             break;
         cnt ++;
-        assert(cnt < 100);
+        assert(cnt < 1000);
     }
     return lg;
 }

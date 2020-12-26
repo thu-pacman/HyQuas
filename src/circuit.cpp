@@ -13,6 +13,9 @@ using namespace std;
 
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
+#if BACKEND == 3
+    kernelMatInit(schedule, deviceMats);
+#endif
     auto start = chrono::system_clock::now();
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
@@ -34,11 +37,14 @@ int Circuit::run(bool copy_back) {
     }
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #elif BACKEND == 3
-    kernelExecOpt(deviceStateVec, numQubits, schedule);
+    kernelExecBlas(deviceStateVec, numQubits, schedule, deviceMats);
 #endif
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
+#if BACKEND == 3
+    kernelMatDestroy(deviceMats);
+#endif
     result.resize(1ll << numQubits);
     if (copy_back) {
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
@@ -118,7 +124,6 @@ void Circuit::compile() {
 #endif
     schedule.initCuttPlans(numQubits);
     schedule.initMatrix();
-    exit(0);
 #else
     schedule.finalPos.clear();
     for (int i = 0; i < numQubits; i++) {

@@ -24,6 +24,7 @@ private:
     qindex toLogicID(qindex idx);
     std::vector<Gate> gates;
     std::vector<qComplex*> deviceStateVec;
+    std::vector<std::vector<qComplex*>> deviceMats;
     Schedule schedule;
     std::vector<qComplex> result;
 };

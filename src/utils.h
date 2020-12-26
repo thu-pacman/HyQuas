@@ -13,12 +13,14 @@ typedef int qindex;
 typedef cuDoubleComplex qComplex;
 #define make_qComplex make_cuDoubleComplex
 #define MPI_Complex MPI_C_DOUBLE_COMPLEX
+#define cublasGEMM cublasZgemm
 #else
 typedef float qreal;
 typedef int qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX
+#define cublasGEMM cublasCgemm
 #endif
 
 #define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
