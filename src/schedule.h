@@ -10,7 +10,7 @@ struct GateGroup {
     GateGroup(const GateGroup&) = default;
     GateGroup(): relatedQubits(0) {}
     static GateGroup merge(const GateGroup& a, const GateGroup& b);
-    void addGate(const Gate& g);
+    void addGate(const Gate& g, bool enableGlobal = false);
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     std::vector<int> toID() const;
     std::vector<unsigned char> serialize() const;

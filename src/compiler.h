@@ -6,22 +6,24 @@
 
 class Compiler {
 public:
-    Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates);
+    Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates, bool enableGlobal);
     Schedule run();
 private:
     int numQubits;
     int localSize;
     int shareSize;
+    bool enableGlobal;
     std::vector<Gate> gates;
 };
 
 class OneLayerCompiler {
 public:
-    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates);
+    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal);
     LocalGroup run();
 private:
     int numQubits;
     int localSize;
+    bool enableGlobal;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
     void remove(GateGroup& gg);

@@ -4,20 +4,22 @@
 #include <algorithm>
 #include <assert.h>
 
-Compiler::Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), shareSize(shareSize), gates(inputGates) {}
+Compiler::Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates, bool enableGlobal):
+    numQubits(numQubits), localSize(localSize), shareSize(shareSize), enableGlobal(enableGlobal), gates(inputGates) {}
 
 Schedule Compiler::run() {
-    OneLayerCompiler localCompiler(numQubits, localSize, gates);
+    OneLayerCompiler localCompiler(numQubits, localSize, gates, enableGlobal);
     LocalGroup localGroup = localCompiler.run();
     Schedule schedule;
     for (auto& gg: localGroup.gateGroups) {
-        OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates);
+        OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates, enableGlobal);
         schedule.localGroups.push_back(shareCompiler.run());
     }
     return schedule;
 }
 
-OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates): numQubits(numQubits), localSize(localSize), remainGates(inputGates) { }
+OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal):
+    numQubits(numQubits), localSize(localSize), enableGlobal(enableGlobal), remainGates(inputGates) {}
 
 LocalGroup OneLayerCompiler::run() {
     LocalGroup lg;
@@ -53,7 +55,7 @@ GateGroup OneLayerCompiler::getGroup() {
             if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit])) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.controlQubit2]);
                 newGroup = GateGroup::merge(newGroup, cur[gate.targetQubit]);
-                newGroup.addGate(gate);
+                newGroup.addGate(gate, enableGlobal);
                 cur[gate.controlQubit2] = cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
             } else {
                 full[gate.controlQubit2] = full[gate.controlQubit] = full[gate.targetQubit] = 1;
@@ -61,14 +63,14 @@ GateGroup OneLayerCompiler::getGroup() {
         } else if (gate.isControlGate()) {
             if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit])) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.targetQubit]);
-                newGroup.addGate(gate);
+                newGroup.addGate(gate, enableGlobal);
                 cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
             } else {
                 full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
         } else {
             if (!full[gate.targetQubit])
-                cur[gate.targetQubit].addGate(gate);
+                cur[gate.targetQubit].addGate(gate, enableGlobal);
         }
     }
 
@@ -97,7 +99,7 @@ GateGroup OneLayerCompiler::getGroup() {
     memset(blocked, 0, sizeof(blocked));
     for (auto& g: remainGates) {
         if (std::binary_search(usedID.begin(), usedID.end(), g.gateID)) continue;
-        if (g.isDiagonal()) {
+        if (g.isDiagonal() && enableGlobal) {
             // TODO: Diagonal C2 Gate
             if (g.isControlGate()) {
                 if (!blocked[g.controlQubit] && !blocked[g.targetQubit]) {

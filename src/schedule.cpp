@@ -21,10 +21,19 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     return ret;
 }
 
-void GateGroup::addGate(const Gate& gate) {
+void GateGroup::addGate(const Gate& gate, bool enableGlobal) {
     gates.push_back(gate);
-    if (!gate.isDiagonal()) {
+    if (enableGlobal) {
+        if (!gate.isDiagonal()) {
+            relatedQubits |= qindex(1) << gate.targetQubit;
+        }
+    } else {
         relatedQubits |= qindex(1) << gate.targetQubit;
+        if (gate.controlQubit != -1)
+            relatedQubits |= qindex(1) << gate.controlQubit;
+        if (gate.controlQubit2 != -1)
+            relatedQubits |= qindex(1) << gate.controlQubit2;
+
     }
 }
 
@@ -58,6 +67,7 @@ void Schedule::dump(int numQubits) {
         printf("\n\n");
     }
     fflush(stdout);
+#if BACKEND == 1 || BACKEND == 2
     printf("%d %d\n", (int) cuttPlans.size(), (int) midPos.size());
     for (size_t i = 0; i < localGroups.size(); i++) {
         printf("Global: ");
@@ -78,6 +88,7 @@ void Schedule::dump(int numQubits) {
         }
         printf("\n\n");
     }
+#endif
     fflush(stdout);
 }
 
@@ -167,6 +178,7 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
     return s;
 }
 
+#if BACKEND == 1
 void Schedule::initCuttPlans(int numQubits) {
     auto gen_perm_vector = [](int len) {
         std::vector<int> ret;
@@ -307,3 +319,95 @@ void Schedule::initCuttPlans(int numQubits) {
     }
     finalPos = pos;
 }
+
+#elif BACKEND==3
+void Schedule::initCuttPlans(int numQubits) {
+    auto gen_perm_vector = [](int len) {
+        std::vector<int> ret;
+        for (int i = 0; i < len; i++)
+            ret.push_back(i);
+        return ret;
+    };
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
+    std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
+    std::vector<int> dim(numLocalQubits + 1, 2);
+    midPos.clear();
+    midLayout.clear();
+    cuttPlans.clear(); cuttPlans.resize(1);
+    a2aComm.clear();
+    a2aCommSize.clear();
+    assert(localGroups.size() == 1);
+    auto& group = localGroups[0];
+
+    // printf("len %d\n", dim.size());
+    for (size_t ggID = 0; ggID < group.gateGroups.size(); ggID++) {
+        std::vector<int> toGlobal; // qubit id
+        std::vector<int> toLocal; // qubit id
+        auto& gateGroup = group.gateGroups[ggID];
+        int numMatQubits = bitCount(gateGroup.relatedQubits);
+        for (int i = 0; i < numMatQubits; i++) {
+            int q = layout[i];
+            if (!(gateGroup.relatedQubits >> q & 1))
+                toGlobal.push_back(q);
+        }
+        for (int i = numMatQubits; i < numLocalQubits; i++) {
+            int q = layout[i];
+            if (gateGroup.relatedQubits >> q & 1)
+                toLocal.push_back(q);
+        }
+        assert(toGlobal.size() == toLocal.size());
+        std::vector<int> perm = gen_perm_vector(numLocalQubits);
+        for (int i = 0; i < toGlobal.size(); i++) {
+            int x = toGlobal[i], y = toLocal[i];
+            std::swap(perm[pos[x]], perm[pos[y]]);
+            std::swap(pos[x], pos[y]);
+            layout[pos[x]] = x; layout[pos[y]] = y;
+        }
+
+        
+#ifdef SHOW_SCHEDULE
+        printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+        printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+        printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
+#endif
+        // complex have two floats
+        perm.push_back(0);
+        for (int i = perm.size() - 1; i; i--) {
+            perm[i] = perm[i-1] + 1;
+        }
+        perm[0] = 0;
+
+        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+            cuttHandle plan;
+            checkCudaErrors(cudaSetDevice(g));
+            checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+            cuttPlans[g].push_back(plan);
+        }
+        midPos.push_back(pos);
+        midLayout.push_back(layout);
+
+        // for (auto& gate: gateGroup.gates) {
+        //     gate.targetQubit = pos[gate.targetQubit];
+        //     assert(gate.targetQubit < numMatQubits);
+
+        //     if (gate.controlQubit != -1) {
+        //         gate.controlQubit = pos[gate.controlQubit];
+        //         assert(gate.controlQubit < numMatQubits);
+        //     }
+
+        //     if (gate.controlQubit2 != -1) {
+        //         gate.controlQubit2 = pos[gate.controlQubit2];
+        //         assert(gate.controlQubit2 < numMatQubits);
+        //     }
+        // }
+        // gateGroup.relatedQubits = (1 << numMatQubits) - 1;
+    }
+    finalPos = pos;
+}
+
+#else
+void Schedule::initCuttPlans(int numQubits) {
+    UNREACHABLE()
+}
+#endif

@@ -33,6 +33,8 @@ int Circuit::run(bool copy_back) {
         schedule.finalPos.push_back(i);
     }
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
+#elif BACKEND == 3
+    kernelExecOpt(deviceStateVec, numQubits, schedule);
 #endif
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
@@ -96,7 +98,7 @@ Complex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2
-    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates);
+    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, true);
     schedule = compiler.run();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
@@ -105,6 +107,16 @@ void Circuit::compile() {
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
 #endif
+#elif BACKEND == 3
+    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, false);
+    schedule = compiler.run();
+    int totalGroups = 0;
+    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
+#ifdef SHOW_SCHEDULE
+    schedule.dump(numQubits);
+#endif
+    schedule.initCuttPlans(numQubits);
 #else
     schedule.finalPos.clear();
     for (int i = 0; i < numQubits; i++) {
