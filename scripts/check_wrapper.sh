@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x
-source init.sh -DUSE_GROUP=on -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off
+source init.sh -DBACKEND=group -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off -DUSE_DOUBLE=on
 input_dir=../tests/input
 std_dir=../tests/output
 

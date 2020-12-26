@@ -7,11 +7,19 @@
 #include <cuda_runtime.h>
 #include <memory>
 
+#ifdef USE_DOUBLE
+typedef double qreal;
+typedef int qindex;
+typedef cuDoubleComplex qComplex;
+#define make_qComplex make_cuDoubleComplex
+#define MPI_Complex MPI_C_DOUBLE_COMPLEX
+#else
 typedef float qreal;
 typedef int qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX
+#endif
 
 #define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
 #define DESERIALIZE_STEP(x) { x = *reinterpret_cast<const decltype(x)*>(arr + cur); cur += sizeof(x); }

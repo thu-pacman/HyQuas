@@ -12,7 +12,7 @@ HEADERS := $(wildcard src/*.h)
 SOURCES_CXX := $(wildcard src/*.cpp)
 SOURCES_CUDA := $(wildcard src/*.cu)
 OBJECTS := $(SOURCES_CXX:src/%.cpp=build/%.o) $(SOURCES_CUDA:src/%.cu=build/%.o)
-DEFS := -DUSE_GROUP -DSHOW_SCHEDULE -DSHOW_SUMMARY -DDISABLE_ASSERT
+DEFS := -DBACKEND=1 -DSHOW_SCHEDULE -DSHOW_SUMMARY -DDISABLE_ASSERT
 
 all: build/main
 

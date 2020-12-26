@@ -14,25 +14,26 @@ using namespace std;
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
     auto start = chrono::system_clock::now();
-#ifdef USE_GROUP
+#if BACKEND == 0
+    kernelExecSimple(deviceStateVec[0], numQubits, gates);
+#elif BACKEND == 1
     kernelExecOpt(deviceStateVec, numQubits, schedule);
-#else
+#elif BACKEND == 2
+    gates.clear();
+    for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
+        auto& lg = schedule.localGroups[lgID];
+        for (size_t ggID = 0; ggID < lg.gateGroups.size(); ggID++) {
+            auto& gg = lg.gateGroups[ggID];
+            for (auto& g: gg.gates)
+                gates.push_back(g);
+        }
+    }
+    schedule.finalPos.clear();
+    for (int i = 0; i < numQubits; i++) {
+        schedule.finalPos.push_back(i);
+    }
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #endif
-    // gates.clear();
-    // for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
-    //     auto& lg = schedule.localGroups[lgID];
-    //     for (size_t ggID = 0; ggID < lg.gateGroups.size(); ggID++) {
-    //         auto& gg = lg.gateGroups[ggID];
-    //         for (auto& g: gg.gates)
-    //             gates.push_back(g);
-    //     }
-    // }
-    // schedule.finalPos.clear();
-    // for (int i = 0; i < numQubits; i++) {
-    //     schedule.finalPos.push_back(i);
-    // }
-    // kernelExecSimple(deviceStateVec[0], numQubits, gates);
     auto end = chrono::system_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
@@ -94,7 +95,7 @@ Complex Circuit::ampAt(qindex idx) {
 
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
-#ifdef USE_GROUP
+#if BACKEND == 1 || BACKEND == 2
     Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates);
     schedule = compiler.run();
     int totalGroups = 0;

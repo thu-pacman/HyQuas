@@ -547,7 +547,7 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
     saveData(a, threadBias, enumerate);
 }
 
-#ifdef USE_GROUP
+#if BACKEND == 1
 void initControlIdx() {
     int loIdx_host[10][10][1 << THREAD_DEP];
     int shiftAt_host[10][10];
