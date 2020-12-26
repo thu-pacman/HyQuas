@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cutt.h>
+#include <memory>
 #include "utils.h"
 #include "gate.h"
 
@@ -33,8 +34,10 @@ struct Schedule {
     std::vector<int> a2aCommSize;
     std::vector<std::vector<int>> a2aComm;
     std::vector<int> finalPos;
+    std::vector<std::unique_ptr<qComplex[]>> matrix;
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);
     void initCuttPlans(int numQubits);
+    void initMatrix();
 };

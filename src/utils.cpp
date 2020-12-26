@@ -39,3 +39,11 @@ qreal zero_wrapper(qreal x) {
         return x;
     }
 }
+
+qComplex operator * (const qComplex& a, const qComplex& b) {
+    return make_qComplex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+qComplex operator + (const qComplex& a, const qComplex& b) {
+    return make_qComplex(a.x + b.x, a.y * b.y);
+}

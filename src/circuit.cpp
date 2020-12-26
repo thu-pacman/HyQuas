@@ -117,6 +117,8 @@ void Circuit::compile() {
     schedule.dump(numQubits);
 #endif
     schedule.initCuttPlans(numQubits);
+    schedule.initMatrix();
+    exit(0);
 #else
     schedule.finalPos.clear();
     for (int i = 0; i < numQubits; i++) {

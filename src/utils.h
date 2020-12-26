@@ -30,7 +30,7 @@ typedef cuFloatComplex qComplex;
     exit(1); \
 }
 
-const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
+const int LOCAL_QUBIT_SIZE = 5; // is hardcoded
 
 #define checkCudaErrors(stmt) {                                 \
     cudaError_t err = stmt;                            \
@@ -64,6 +64,8 @@ struct Complex {
     Complex(qreal real, qreal imag): real(real), imag(imag) {}
     Complex(const Complex&) = default;
     Complex(const qComplex& x): real(x.x), imag(x.y) {}
+    operator qComplex() { return make_qComplex(real, imag); }
+
     Complex& operator = (qreal x) {
         real = x;
         imag = 0;
@@ -90,3 +92,6 @@ int bitCount(T x) {
 }
 
 qreal zero_wrapper(qreal x);
+
+qComplex operator * (const qComplex& a, const qComplex& b);
+qComplex operator + (const qComplex& a, const qComplex& b);

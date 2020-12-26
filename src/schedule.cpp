@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <tuple>
+#include <omp.h>
 
 GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     GateGroup ret;
@@ -33,7 +34,6 @@ void GateGroup::addGate(const Gate& gate, bool enableGlobal) {
             relatedQubits |= qindex(1) << gate.controlQubit;
         if (gate.controlQubit2 != -1)
             relatedQubits |= qindex(1) << gate.controlQubit2;
-
     }
 }
 
@@ -358,7 +358,7 @@ void Schedule::initCuttPlans(int numQubits) {
         }
         assert(toGlobal.size() == toLocal.size());
         std::vector<int> perm = gen_perm_vector(numLocalQubits);
-        for (int i = 0; i < toGlobal.size(); i++) {
+        for (size_t i = 0; i < toGlobal.size(); i++) {
             int x = toGlobal[i], y = toLocal[i];
             std::swap(perm[pos[x]], perm[pos[y]]);
             std::swap(pos[x], pos[y]);
@@ -386,28 +386,114 @@ void Schedule::initCuttPlans(int numQubits) {
         }
         midPos.push_back(pos);
         midLayout.push_back(layout);
-
-        // for (auto& gate: gateGroup.gates) {
-        //     gate.targetQubit = pos[gate.targetQubit];
-        //     assert(gate.targetQubit < numMatQubits);
-
-        //     if (gate.controlQubit != -1) {
-        //         gate.controlQubit = pos[gate.controlQubit];
-        //         assert(gate.controlQubit < numMatQubits);
-        //     }
-
-        //     if (gate.controlQubit2 != -1) {
-        //         gate.controlQubit2 = pos[gate.controlQubit2];
-        //         assert(gate.controlQubit2 < numMatQubits);
-        //     }
-        // }
-        // gateGroup.relatedQubits = (1 << numMatQubits) - 1;
     }
     finalPos = pos;
 }
 
 #else
 void Schedule::initCuttPlans(int numQubits) {
+    UNREACHABLE()
+}
+#endif
+
+#if BACKEND == 3
+void Schedule::initMatrix() {
+    assert(localGroups.size() == 1);
+    auto& group = localGroups[0];
+    matrix.clear();
+    for (size_t ggID = 0; ggID < group.gateGroups.size(); ggID++) {
+        auto& gg = group.gateGroups[ggID];
+        auto& pos = midPos[ggID];
+        int numMatQubits = bitCount(gg.relatedQubits);
+        int n = 1 << numMatQubits;
+        std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
+        for (int i = 0; i < n; i++) {
+            mat[i * n + i] = make_qComplex(1.0, 0.0);
+        }
+        auto insertBit = [](int x, int pos) {
+            return x >> pos << (pos + 1) | (x & ((1 << pos) - 1));
+        };
+        for (auto& gate: gg.gates) {
+            if (gate.controlQubit2 != -1) {
+                int c2 = pos[gate.controlQubit2];
+                int c1 = pos[gate.controlQubit];
+                int t = pos[gate.targetQubit];
+                assert(c2 < numMatQubits);
+                assert(c1 < numMatQubits);
+                assert(t < numMatQubits);
+                // sort
+                int a = std::max(std::max(c1, c2), t);
+                int c = std::min(std::min(c1, c2), t);
+                int b = c2 + c1 + t - a - c;
+                
+                #pragma omp parallel for
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < (n >> 3); j++) {
+                        int lo = j;
+                        lo = insertBit(lo, c);
+                        lo = insertBit(lo, b);
+                        lo = insertBit(lo, a);
+                        lo += i * n;
+                        lo |= 1 << c2;
+                        lo |= 1 << c1;
+                        int hi = lo | 1 << t;
+                        qComplex v0 = mat[lo];
+                        qComplex v1 = mat[hi];
+                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                    }
+                }
+            } else if (gate.controlQubit != -1) {
+                int c = pos[gate.controlQubit];
+                int t = pos[gate.targetQubit];
+                assert(c < numMatQubits);
+                assert(t < numMatQubits);
+                // sort
+                int a = std::max(c, t);
+                int b = std::min(c, t);
+
+                #pragma omp parallel for
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < (n >> 2); j++) {
+                        int lo = j;
+                        lo = insertBit(lo, b);
+                        lo = insertBit(lo, a);
+                        lo += i * n;
+                        lo |= 1 << c;
+                        int hi = lo | 1 << t;
+                        qComplex v0 = mat[lo];
+                        qComplex v1 = mat[hi];
+                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                    }
+                }
+            } else {
+                int t = pos[gate.targetQubit];
+                #pragma omp parallel for
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < (n >> 1); j++) {
+                        int lo = j;
+                        lo = insertBit(lo, t);
+                        lo += i * n;
+                        int hi = lo | 1 << t;
+                        qComplex v0 = mat[lo];
+                        qComplex v1 = mat[hi];
+                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                    }
+                }
+            }
+        }
+        // for (int i = 0; i < 5; i++) {
+        //     for (int j = 0; j < n; j++)
+        //         printf("(%f, %f) ", mat[i * n + j].x, mat[i * n + j].y);
+        //     printf("\n");
+        // }
+        matrix.push_back(std::move(mat));
+    }
+}
+#else
+void Schedule::initMatrix() {
     UNREACHABLE()
 }
 #endif
