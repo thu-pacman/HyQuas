@@ -407,11 +407,12 @@ void Schedule::initMatrix() {
         int numMatQubits = bitCount(gg.relatedQubits);
         int n = 1 << numMatQubits;
         std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
+        for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
         for (int i = 0; i < n; i++) {
             mat[i * n + i] = make_qComplex(1.0, 0.0);
         }
         auto insertBit = [](int x, int pos) {
-            return x >> pos << (pos + 1) | (x & ((1 << pos) - 1));
+            return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
         };
         for (auto& gate: gg.gates) {
             if (gate.controlQubit2 != -1) {
@@ -469,6 +470,7 @@ void Schedule::initMatrix() {
                 }
             } else {
                 int t = pos[gate.targetQubit];
+                assert(t < numMatQubits);
                 #pragma omp parallel for
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < (n >> 1); j++) {
@@ -484,11 +486,7 @@ void Schedule::initMatrix() {
                 }
             }
         }
-        // for (int i = 0; i < 5; i++) {
-        //     for (int j = 0; j < n; j++)
-        //         printf("(%f, %f) ", mat[i * n + j].x, mat[i * n + j].y);
-        //     printf("\n");
-        // }
+        // assert(isUnitary(mat, n));
         matrix.push_back(std::move(mat));
     }
 }

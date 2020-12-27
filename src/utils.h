@@ -97,3 +97,5 @@ qreal zero_wrapper(qreal x);
 
 qComplex operator * (const qComplex& a, const qComplex& b);
 qComplex operator + (const qComplex& a, const qComplex& b);
+
+bool isUnitary(std::unique_ptr<qComplex[]>& mat, int n);

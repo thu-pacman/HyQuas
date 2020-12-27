@@ -1,4 +1,6 @@
 #include "utils.h"
+
+#include <cstring>
 #include "logger.h"
 
 namespace MyGlobalVars {
@@ -45,5 +47,43 @@ qComplex operator * (const qComplex& a, const qComplex& b) {
 }
 
 qComplex operator + (const qComplex& a, const qComplex& b) {
-    return make_qComplex(a.x + b.x, a.y * b.y);
+    return make_qComplex(a.x + b.x, a.y + b.y);
+}
+
+bool isUnitary(std::unique_ptr<qComplex[]>& mat, int n) {
+    qComplex result[n * n];
+    memset(result, 0, sizeof(result));
+    for (int k = 0; k < n; k++)
+        #pragma omp parallel for
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                qComplex v1 = mat[k * n + i];
+                v1.y = - v1.y;
+                result[i * n + j] = result[i * n + j] + v1 * mat[k * n + j];
+            }
+    bool wa = 0;
+    qreal eps = 1e-8;
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++) {
+        qComplex val = result[i * n + i];
+        if (fabs(val.x - 1) > eps || fabs(val.y) > eps) {
+            wa = 1;
+        }
+        for (int j = 0; j < n; j++) {
+            if (i == j)
+                continue;
+            qComplex val = result[i * n + j];
+            if (fabs(val.x) > eps || fabs(val.y) > eps)
+                wa = 1;
+        }
+    }
+    if (wa) {
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++)
+                printf("(%.2f %.2f) ", result[i * n + j].x, result[i * n + j].y);
+            printf("\n");
+        }
+        exit(1);
+    }
+    return 1;
 }
