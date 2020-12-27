@@ -22,6 +22,6 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
 void initControlIdx();
 
 // kernelBlas
-void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qComplex*>>& deviceMats);
-void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule, const std::vector<std::vector<qComplex*>>& deviceMats);
-void kernelMatDestroy(std::vector<std::vector<qComplex*>>& deviceMats);
+void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qreal*>>& deviceMats);
+void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule, const std::vector<std::vector<qreal*>>& deviceMats);
+void kernelMatDestroy(std::vector<std::vector<qreal*>>& deviceMats);

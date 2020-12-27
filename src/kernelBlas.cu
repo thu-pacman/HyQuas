@@ -21,7 +21,7 @@ __global__ void printVector(qComplex *data, int n) { // with gridDim == 1 && blo
     printf("\n");
 }
 
-void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule, const std::vector<std::vector<qComplex*>>& deviceMats) {
+void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule, const std::vector<std::vector<qreal*>>& deviceMats) {
     assert(MyGlobalVars::numGPUs == 1);
     assert(schedule.localGroups.size() == 1);
     assert(MyGlobalVars::bit == 0);
@@ -36,7 +36,7 @@ void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const 
     checkBlasErrors(cublasCreate(&handle));
     checkBlasErrors(cublasSetStream(handle, MyGlobalVars::streams[0]));
     auto& gateGroups = schedule.localGroups[0].gateGroups;
-    qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
+    qreal alpha = 1.0, beta = 0.0;
     for (size_t i = 0; i < gateGroups.size(); i++) {
         if (i > 0) {
             checkCuttErrors(cuttExecute(schedule.cuttPlans[0][i], deviceStateVec[0], deviceBuffer[0]));
@@ -53,10 +53,10 @@ void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const 
         // checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[0]));
 #endif
         checkBlasErrors(cublasGEMM(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-            K, numElements / K , K, // M, N, K
-            &alpha, deviceMats[0][i], K, // alpha, a, lda
-            deviceBuffer[0], K, // b, ldb
-            &beta, deviceStateVec[0], K // beta, c, ldc
+            K * 2, numElements / K, K * 2, // M, N, K
+            &alpha, deviceMats[0][i], K * 2, // alpha, a, lda
+            reinterpret_cast<qreal*>(deviceBuffer[0]), K * 2, // b, ldb
+            &beta, reinterpret_cast<qreal*>(deviceStateVec[0]), K * 2 // beta, c, ldc
         ));
         // printVector<<<1, 1, 0, MyGlobalVars::streams[0]>>>(deviceStateVec[0], 32);
     }
@@ -64,25 +64,35 @@ void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const 
     checkBlasErrors(cublasDestroy(handle));
 }
 
-void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qComplex*>>& deviceMats) {
+void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qreal*>>& deviceMats) {
     deviceMats.clear();
     deviceMats.resize(MyGlobalVars::numGPUs);
     for (auto& lg: schedule.localGroups) {
-        for (auto& gg: lg.gateGroups) {
+        for (int ggID = 0; ggID < lg.gateGroups.size(); ggID ++) {
+            auto& gg = lg.gateGroups[ggID];
             int n = 1 << bitCount(gg.relatedQubits);
+            qreal realMat[2 * n][2 * n];
+            #pragma omp parallel for
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++) {
+                    qComplex val = schedule.matrix[ggID][i * n + j];
+                    realMat[i * 2][j * 2] = val.x;
+                    realMat[i * 2][j * 2 + 1] = val.y;
+                    realMat[i * 2 + 1][j * 2] = -val.y;
+                    realMat[i * 2 + 1][j * 2 + 1] = val.x;
+                }
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaSetDevice(g));
-                qComplex* mat;
-                cudaMalloc(&mat, n * n * sizeof(qComplex));
-                int i = deviceMats[g].size();
-                cudaMemcpyAsync(mat, schedule.matrix[i].get(), n * n * sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
+                qreal* mat;
+                cudaMalloc(&mat, n * n * 4 * sizeof(qreal));
+                cudaMemcpyAsync(mat, realMat, n * n * 4 * sizeof(qreal), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
                 deviceMats[g].push_back(mat);
             }
         }
     }
 }
 
-void kernelMatDestroy(std::vector<std::vector<qComplex*>>& deviceMats) {
+void kernelMatDestroy(std::vector<std::vector<qreal*>>& deviceMats) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         for (auto& mat: deviceMats[g]) {
