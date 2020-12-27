@@ -487,6 +487,11 @@ void Schedule::initMatrix() {
             }
         }
         // assert(isUnitary(mat, n));
+        // for (int i = 0; i < n; i++) {
+        //     for (int j = 0; j < n; j++)
+        //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
+        //     printf("\n");
+        // }
         matrix.push_back(std::move(mat));
     }
 }
