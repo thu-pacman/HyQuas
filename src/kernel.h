@@ -18,8 +18,10 @@ void kernelDestroy(qComplex* deviceStateVec);
 void cuttPlanInit(std::vector<cuttHandle>& plans);
 
 // kernelOpt
-std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
+void kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
 void initControlIdx();
+void copyGatesToSymbol(KernelGate* hostGates, int numGates);
+void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate);
 
 // kernelBlas
 void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qreal*>>& deviceMats);
