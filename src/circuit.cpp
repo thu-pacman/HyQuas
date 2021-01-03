@@ -5,6 +5,7 @@
 #include <chrono>
 #include <mpi.h>
 #include <algorithm>
+#include <cuda_profiler_api.h>
 #include "utils.h"
 #include "kernel.h"
 #include "compiler.h"
@@ -16,6 +17,10 @@ int Circuit::run(bool copy_back) {
 #if BACKEND == 3
     kernelMatInit(schedule, deviceMats);
 #endif
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        checkCudaErrors(cudaSetDevice(i));
+        checkCudaErrors(cudaProfilerStart());
+    }
     auto start = chrono::system_clock::now();
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
@@ -40,6 +45,10 @@ int Circuit::run(bool copy_back) {
     kernelExecBlas(deviceStateVec, numQubits, schedule, deviceMats);
 #endif
     auto end = chrono::system_clock::now();
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        checkCudaErrors(cudaSetDevice(i));
+        checkCudaErrors(cudaProfilerStop());
+    }
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
 #if BACKEND == 3
