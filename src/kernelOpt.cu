@@ -728,17 +728,6 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
         auto& gateGroups = schedule.localGroups[lgID].gateGroups;
         
         for (size_t gg = 0; gg < gateGroups.size(); gg++) {
-#if BACKEND == 3
-            if (gg > 0) {
-                for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                    cudaSetDevice(g);
-                    checkCuttErrors(cuttExecute(schedule.cuttPlans[g][gg], deviceStateVec[g], deviceBuffer[g]));
-                    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[g], deviceBuffer[g], numElements * sizeof(qComplex), cudaMemcpyDeviceToDevice, MyGlobalVars::streams[g]));
-                }
-            }
-            pos = schedule.midPos[gg];
-            layout = schedule.midLayout[gg];
-#endif
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
             }
