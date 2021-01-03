@@ -6,6 +6,7 @@ find_package(OpenMP REQUIRED)
 # include_directories(${MPI_INCLUDE_PATH})
 find_library(CUTT cutt "${PROJECT_SOURCE_DIR}/third-party/cutt/cutt/lib")
 include_directories(${PROJECT_SOURCE_DIR}/third-party/cutt/cutt/include)
+include_directories(${PROJECT_SOURCE_DIR}/third-party/dbg-macro)
 MESSAGE(STATUS "Found CUTT: ${CUTT}")
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${OpenMP_CXX_FLAGS}")
