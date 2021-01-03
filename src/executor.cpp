@@ -106,7 +106,7 @@ void Executor::setState(std::vector<int> new_pos, std::vector<int> new_layout) {
 }
 
 #define SET_GATE_TO_ID(g, i) { \
-    Complex mat[2][2] = {1, 0, 0, 1}; \
+    qComplex mat[2][2] = {1, 0, 0, 1}; \
     hostGates[g * gates.size() + i] = KernelGate(GateType::ID, 0, 0, mat); \
 }
 
@@ -178,7 +178,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::CRZ: { // GOC(c)
-                    Complex mat[2][2] = {1, 0, 0, IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0]};
+                    qComplex mat[2][2] = {make_qComplex(1), make_qComplex(0), make_qComplex(0), IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0]};
                     return KernelGate(
                         GateType::GOC,
                         toID.at(c), 1 - IS_SHARE_QUBIT(c),
@@ -205,7 +205,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 switch (gate.type) {
                     case GateType::CZ: {
                         if (IS_HIGH_GPU(gpu_id, t)) {
-                            Complex mat[2][2] = {-1, 0, 0, -1};
+                            qComplex mat[2][2] = {make_qComplex(-1), make_qComplex(0), make_qComplex(0), make_qComplex(-1)};
                             return KernelGate(
                                 GateType::GZZ,
                                 0, 0,
@@ -216,8 +216,8 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                         }
                     }
                     case GateType::CRZ: {
-                        Complex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
-                        Complex mat[2][2] = {val, 0, 0, val};
+                        qComplex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(
                             GateType::GCC,
                             0, 0,
@@ -238,8 +238,8 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
             switch (gate.type) {
                 case GateType::U1: {
                     if (IS_HIGH_GPU(gpu_id, t)) {
-                        Complex val = gate.mat[1][1];
-                        Complex mat[2][2] = {val, 0, 0, val};
+                        qComplex val = gate.mat[1][1];
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GCC, 0, 0, mat);
                     } else {
                         return KernelGate::ID();
@@ -247,7 +247,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 }
                 case GateType::Z: {
                     if (IS_HIGH_GPU(gpu_id, t)) {
-                        Complex mat[2][2] = {-1, 0, 0, -1};
+                        qComplex mat[2][2] = {make_qComplex(-1), make_qComplex(0), make_qComplex(0), make_qComplex(-1)};
                         return KernelGate(GateType::GZZ, 0, 0, mat);
                     } else {
                         return KernelGate::ID();
@@ -255,8 +255,8 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 }
                 case GateType::S: {
                     if (IS_HIGH_GPU(gpu_id, t)) {
-                        Complex val(0, 1);
-                        Complex mat[2][2] = {val, 0, 0, val};
+                        qComplex val = make_qComplex(0, 1);
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GII, 0, 0, mat);
                     } else {
                         return KernelGate::ID();
@@ -264,16 +264,16 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 }
                 case GateType::T: {
                     if (IS_HIGH_GPU(gpu_id, t)) {
-                        Complex val = gate.mat[1][1];
-                        Complex mat[2][2] = {val, 0, 0, val};
+                        qComplex val = gate.mat[1][1];
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GCC, 0, 0, mat);
                     } else {
                         return KernelGate::ID();
                     }
                 }
                 case GateType::RZ: {
-                    Complex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
-                    Complex mat[2][2] = {val, 0, 0, val};
+                    qComplex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
+                    qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                     return KernelGate(GateType::GCC, 0, 0, mat);
                 }
                 default: {

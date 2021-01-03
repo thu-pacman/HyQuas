@@ -106,9 +106,9 @@ qindex Circuit::toLogicID(qindex idx) {
     return id;
 }
 
-Complex Circuit::ampAt(qindex idx) {
+qComplex Circuit::ampAt(qindex idx) {
     qindex id = toPhysicalID(idx);
-    return Complex(result[id].x, result[id].y);
+    return make_qComplex(result[id].x, result[id].y);
 }
 
 void Circuit::compile() {
@@ -144,21 +144,21 @@ void Circuit::compile() {
 
 void Circuit::printState() {
     for (int i = 0; i < 128; i++) {
-        Complex x = ampAt(i);
-        printf("%d %.12f: %.12f %.12f\n", i, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
+        qComplex x = ampAt(i);
+        printf("%d %.12f: %.12f %.12f\n", i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
     }
-    std::vector<std::pair<qindex, Complex>> largeAmps;
+    std::vector<std::pair<qindex, qComplex>> largeAmps;
     for (int i = 0; i < (1 << numQubits); i++) {
         if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
             int logicID = toLogicID(i);
             if (logicID >= 128) {
-                largeAmps.push_back(make_pair(toLogicID(i), Complex(result[i])));
+                largeAmps.push_back(make_pair(toLogicID(i), result[i]));
             }
         }
     }
     sort(largeAmps.begin(), largeAmps.end());
     for (auto& amp: largeAmps) {
         auto& x = amp.second;
-        printf("%d %.12f: %.12f %.12f\n", amp.first, x.real * x.real + x.imag * x.imag, zero_wrapper(x.real), zero_wrapper(x.imag));
+        printf("%d %.12f: %.12f %.12f\n", amp.first, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
     }
 }

@@ -94,33 +94,6 @@ namespace MyGlobalVars {
     void init();
 };
 
-struct Complex {
-    qreal real;
-    qreal imag;
-
-    Complex() = default;
-    Complex(qreal x): real(x), imag(0) {}
-    Complex(qreal real, qreal imag): real(real), imag(imag) {}
-    Complex(const Complex&) = default;
-    Complex(const qComplex& x): real(x.x), imag(x.y) {}
-    operator qComplex() { return make_qComplex(real, imag); }
-
-    Complex& operator = (qreal x) {
-        real = x;
-        imag = 0;
-        return *this;
-    }
-    bool operator < (const Complex& b) const {
-        return real == b.real ? imag < b.imag : real < b.real;
-    }
-    qreal len() const { return real * real + imag * imag; }
-};
-
-struct ComplexArray {
-    qreal *real;
-    qreal *imag;
-};
-
 template<typename T>
 int bitCount(T x) {
     int ret = 0;
@@ -136,3 +109,6 @@ qComplex operator * (const qComplex& a, const qComplex& b);
 qComplex operator + (const qComplex& a, const qComplex& b);
 
 bool isUnitary(std::unique_ptr<qComplex[]>& mat, int n);
+
+qComplex make_qComplex(qreal x);
+bool operator < (const qComplex& a, const qComplex& b);

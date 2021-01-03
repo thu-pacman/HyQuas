@@ -16,7 +16,7 @@ public:
     }
     void dumpGates();
     void printState();
-    Complex ampAt(qindex idx);
+    qComplex ampAt(qindex idx);
     const int numQubits;
 
 private:

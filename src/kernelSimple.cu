@@ -316,32 +316,32 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
             }
             case GateType::CRX: {
                 CRXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].x, -gate.mat[0][1].y);
                 break;
             }
             case GateType::CRY: {
                 CRYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].x, gate.mat[1][0].x);
                 break;
             }
             case GateType::CRZ: {
                 CRZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].x, - gate.mat[0][0].y);
                 break;
             }
             case GateType::U1: {
                 U1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[1][1].real, gate.mat[1][1].imag);
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[1][1].x, gate.mat[1][1].y);
                 break;
             }
             case GateType::U2: // no break
             case GateType::U3: {
                 UKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                     deviceStateVec, numQubit_, gate.targetQubit,
-                    gate.mat[0][0].real, gate.mat[0][0].imag,
-                    gate.mat[0][1].real, gate.mat[0][1].imag,
-                    gate.mat[1][0].real, gate.mat[1][0].imag,
-                    gate.mat[1][1].real, gate.mat[1][1].imag
+                    gate.mat[0][0].x, gate.mat[0][0].y,
+                    gate.mat[0][1].x, gate.mat[0][1].y,
+                    gate.mat[1][0].x, gate.mat[1][0].y,
+                    gate.mat[1][1].x, gate.mat[1][1].y
                 );
                 break;
             }
@@ -371,17 +371,17 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
             }
             case GateType::RX: {
                 RXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, -gate.mat[0][1].imag);
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].x, -gate.mat[0][1].y);
                 break;
             }
             case GateType::RY: {
                 RYKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, gate.mat[1][0].real);
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].x, gate.mat[1][0].x);
                 break;
             }
             case GateType::RZ: {
                 RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
-                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].real, - gate.mat[0][0].imag);
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].x, - gate.mat[0][0].y);
                 break;
             }
             default: {
@@ -462,10 +462,10 @@ qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit) {
     return ret;
 }
 
-Complex kernelGetAmp(qComplex* deviceStateVec, qindex idx) {
+qComplex kernelGetAmp(qComplex* deviceStateVec, qindex idx) {
     qComplex ret;
     cudaMemcpy(&ret, deviceStateVec + idx, sizeof(qComplex), cudaMemcpyDeviceToHost);
-    return Complex(ret);
+    return ret;
 }
 
 void kernelDeviceToHost(qComplex* hostStateVec, qComplex* deviceStateVec, int numQubits) {

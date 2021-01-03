@@ -11,7 +11,7 @@ enum class GateType {
 struct Gate {
     int gateID;
     GateType type;
-    Complex mat[2][2];
+    qComplex mat[2][2];
     std::string name;
     int targetQubit;
     int controlQubit; // -1 if no control
@@ -77,31 +77,31 @@ struct KernelGate {
         int controlQubit2_, char control2IsGlobal_, 
         int controlQubit_, char controlIsGlobal_,
         int targetQubit_, char targetIsGlobal_,
-        const Complex mat[2][2]
+        const qComplex mat[2][2]
     ):
         targetQubit(targetQubit_), controlQubit(controlQubit_), controlQubit2(controlQubit2_),
         type(type_),
         targetIsGlobal(targetIsGlobal_), controlIsGlobal(controlIsGlobal_), control2IsGlobal(control2IsGlobal_),
-        r00(mat[0][0].real), i00(mat[0][0].imag), r01(mat[0][1].real), i01(mat[0][1].imag),
-        r10(mat[1][0].real), i10(mat[1][0].imag), r11(mat[1][1].real), i11(mat[1][1].imag) {}
+        r00(mat[0][0].x), i00(mat[0][0].y), r01(mat[0][1].x), i01(mat[0][1].y),
+        r10(mat[1][0].x), i10(mat[1][0].y), r11(mat[1][1].x), i11(mat[1][1].y) {}
     
     KernelGate(
         GateType type_,
         int controlQubit_, char controlIsGlobal_,
         int targetQubit_, char targetIsGlobal_,
-        const Complex mat[2][2]
+        const qComplex mat[2][2]
     ): KernelGate(type_, 2, -1, controlQubit_, controlIsGlobal_, targetQubit_, targetIsGlobal_, mat) {}
 
     KernelGate(
         GateType type_,
         int targetQubit_, char targetIsGlobal_,
-        const Complex mat[2][2]
+        const qComplex mat[2][2]
     ): KernelGate(type_, 2, -1, 2, -1, targetQubit_, targetIsGlobal_, mat) {}
 
     KernelGate() = default;
 
     static KernelGate ID() {
-        Complex mat[2][2] = {1, 0, 0, 1}; \
+        qComplex mat[2][2] = {1, 0, 0, 1}; \
         return KernelGate(GateType::ID, 0, 0, mat);
     }
 };

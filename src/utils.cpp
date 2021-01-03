@@ -91,3 +91,11 @@ bool isUnitary(std::unique_ptr<qComplex[]>& mat, int n) {
     }
     return 1;
 }
+
+qComplex make_qComplex(qreal x) {
+    return make_qComplex(x, 0.0);
+}
+
+bool operator < (const qComplex& a, const qComplex& b) {
+        return a.x == b.x ? a.y < b.y : a.x < b.x;
+}

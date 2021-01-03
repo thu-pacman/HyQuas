@@ -12,7 +12,7 @@
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits);
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates);
 qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit);
-Complex kernelGetAmp(qComplex* deviceStateVec, qindex idx);
+qComplex kernelGetAmp(qComplex* deviceStateVec, qindex idx);
 void kernelDeviceToHost(qComplex* hostStateVec, qComplex* deviceStateVec, int numQubits);
 void kernelDestroy(qComplex* deviceStateVec);
 void cuttPlanInit(std::vector<cuttHandle>& plans);
