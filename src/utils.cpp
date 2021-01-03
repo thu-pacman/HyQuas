@@ -28,6 +28,10 @@ void init() {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
         Logger::add("[%d] %s", i, prop.name);
+        for (int j = 0; j < numGPUs; j++)
+            if (i != j && (i ^ j) < 4) {
+                checkCudaErrors(cudaDeviceEnablePeerAccess(j, 0));
+            }
         checkCudaErrors(cudaStreamCreate(&streams[i]);)
     }
 }
