@@ -4,7 +4,6 @@
 using namespace std;
 
 const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
-const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {

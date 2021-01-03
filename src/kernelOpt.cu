@@ -44,8 +44,6 @@ struct KernelGate {
     KernelGate() = default;
 };
 
-const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
-const int MAX_GATE = 600;
 extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qindex blockBias;
@@ -727,9 +725,6 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
         auto& gateGroups = schedule.localGroups[lgID].gateGroups;
         
         for (size_t gg = 0; gg < gateGroups.size(); gg++) {
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
-            }
             #ifdef MEASURE_STAGE
             // TODO multistream
             cudaEvent_t start, stop;

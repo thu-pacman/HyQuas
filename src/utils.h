@@ -33,7 +33,9 @@ typedef cuFloatComplex qComplex;
     exit(1); \
 }
 
-const int LOCAL_QUBIT_SIZE = 5; // is hardcoded
+const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
+const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
+const int MAX_GATE = 600;
 
 static const char *cublasGetErrorString(cublasStatus_t error)
 {
