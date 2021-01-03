@@ -683,7 +683,6 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaMalloc(&threadBias[g], sizeof(qindex) << THREAD_DEP));
     }
-    std::vector<qreal> ret;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     int numElements = 1 << numLocalQubits;
     std::vector<qComplex*> deviceBuffer;
@@ -698,15 +697,15 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
                 ret |= qindex(1) << pos[i];
         return ret;
     };
-    
+
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
         if (lgID > 0) {
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
-            }
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
                 cudaSetDevice(g);
                 checkCuttErrors(cuttExecute(schedule.cuttPlans[g][lgID], deviceStateVec[g], deviceBuffer[g]));
+            }
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
             }
             int commSize = schedule.a2aCommSize[lgID];
             int partSize = numElements / commSize;
@@ -1033,5 +1032,5 @@ std::vector<qreal> kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQ
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g])); // warning: for time measure!
         checkCudaErrors(cudaFree(threadBias[g]));
     }
-    return ret;
+    return std::vector<qreal>();
 }
