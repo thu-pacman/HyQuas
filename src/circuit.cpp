@@ -10,6 +10,7 @@
 #include "kernel.h"
 #include "compiler.h"
 #include "logger.h"
+#include "executor.h"
 using namespace std;
 
 int Circuit::run(bool copy_back) {
@@ -25,7 +26,7 @@ int Circuit::run(bool copy_back) {
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #elif BACKEND == 1
-    kernelExecOpt(deviceStateVec, numQubits, schedule);
+    Executor(deviceStateVec, numQubits, schedule).run();
 #elif BACKEND == 2
     gates.clear();
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {

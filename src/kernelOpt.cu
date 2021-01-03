@@ -632,50 +632,6 @@ void initControlIdx() {
 }
 #endif
 
-void kernelExecOpt(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule) {
-    Executor executor(deviceStateVec, numQubits);
-    for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
-        if (lgID > 0) {
-            // TODO reshape in schedule
-            std::vector<cuttHandle> plans;
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                plans.push_back(schedule.cuttPlans[g][lgID]);
-            }
-            // WARNING: wrong layout;
-            executor.transpose(plans);
-            executor.all2all(schedule.a2aCommSize[lgID], schedule.a2aComm[lgID]);
-        }
-        executor.setState(schedule.midPos[lgID], schedule.midLayout[lgID]);
-                
-        auto pos = schedule.midPos[lgID];
-        auto layout = schedule.midLayout[lgID];
-        auto& gateGroups = schedule.localGroups[lgID].gateGroups;
-        
-        for (size_t gg = 0; gg < gateGroups.size(); gg++) {
-#ifdef MEASURE_STAGE
-            // TODO multistream
-            cudaEvent_t start, stop;
-            checkCudaErrors(cudaEventCreate(&start));
-            checkCudaErrors(cudaEventCreate(&stop));
-            checkCudaErrors(cudaEventRecord(start, 0));
-#endif
-            executor.applyGateGroup(gateGroups[gg]);
-#ifdef MEASURE_STAGE
-            // TODO multistream support
-            cudaEventRecord(stop, 0);
-            cudaEventSynchronize(stop);
-            float time;
-            cudaEventElapsedTime(&time, start, stop);
-            cudaEventDestroy(start);
-            cudaEventDestroy(stop);
-            printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
-#endif
-            // printf("Group End\n");
-        }
-    }
-    executor.finalize();
-}
-
 void copyGatesToSymbol(KernelGate* hostGates, int numGates) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));

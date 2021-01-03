@@ -99,4 +99,9 @@ struct KernelGate {
     ): KernelGate(type_, 2, -1, 2, -1, targetQubit_, targetIsGlobal_, mat) {}
 
     KernelGate() = default;
+
+    static KernelGate ID() {
+        Complex mat[2][2] = {1, 0, 0, 1}; \
+        return KernelGate(GateType::ID, 0, 0, mat);
+    }
 };
