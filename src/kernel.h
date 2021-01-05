@@ -23,6 +23,6 @@ void copyGatesToSymbol(KernelGate* hostGates, int numGates);
 void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate);
 
 // kernelBlas
-void kernelMatInit(const Schedule& schedule, std::vector<std::vector<qreal*>>& deviceMats);
-void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule, const std::vector<std::vector<qreal*>>& deviceMats);
-void kernelMatDestroy(std::vector<std::vector<qreal*>>& deviceMats);
+void kernelMatInit(Schedule& schedule);
+void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
+void kernelMatDestroy(Schedule& schedule);

@@ -7,11 +7,6 @@
 
 #include "schedule.h"
 
-struct State {
-    std::vector<int> pos;
-    std::vector<int> layout;
-};
-
 class Executor {
 public:
     Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
@@ -20,7 +15,7 @@ private:
     // instructions
     void transpose(std::vector<cuttHandle> plans);
     void all2all(int commSize, std::vector<int> comm);
-    void setState(std::vector<int> new_pos, std::vector<int> new_layout);
+    void setState(const State& newState) { state = newState; }
     void applyGateGroup(const GateGroup& gg);
     void finalize();
     // void Checkpoint();

@@ -19,7 +19,7 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
             ret.gates.push_back(g);
         }
     }
-    return ret;
+    return std::move(ret);
 }
 
 void GateGroup::addGate(const Gate& gate, bool enableGlobal) {
@@ -37,10 +37,17 @@ void GateGroup::addGate(const Gate& gate, bool enableGlobal) {
     }
 }
 
+GateGroup GateGroup::copyGates() {
+    GateGroup ret;
+    ret.gates = this->gates;
+    ret.relatedQubits = this->relatedQubits;
+    return std::move(ret);
+}
+
 void Schedule::dump(int numQubits) {
     int L = 3;
     for (auto& lg: localGroups) {
-        for (auto& gg: lg.gateGroups) {
+        for (auto& gg: lg.fullGroups) {
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
                     if (i == gate.controlQubit) {
@@ -68,23 +75,23 @@ void Schedule::dump(int numQubits) {
     }
     fflush(stdout);
 #if BACKEND == 1 || BACKEND == 2
-    printf("%d %d\n", (int) cuttPlans.size(), (int) midPos.size());
     for (size_t i = 0; i < localGroups.size(); i++) {
+        const LocalGroup& lg = localGroups[i];
         printf("Global: ");
         for (int j = 0; j < numQubits; j++) {
-            if (!(localGroups[i].relatedQubits >> j & 1)) {
+            if (!(lg.relatedQubits >> j & 1)) {
                 printf("%d ", j);
             }
         }
         printf("\n");
         printf("pos: ");
         for (int j = 0; j < numQubits; j++) {
-            printf("[%d: %d] ", j, midPos[i][j]);
+            printf("[%d: %d] ", j, lg.state.pos[j]);
         }
         printf("\n");
         printf("layout: ");
         for (int j = 0; j < numQubits; j++) {
-            printf("[%d: %d] ", j, midLayout[i][j]);
+            printf("[%d: %d] ", j, lg.state.pos[j]);
         }
         printf("\n\n");
     }
@@ -127,14 +134,14 @@ GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
 }
 
 std::vector<unsigned char> LocalGroup::serialize() const {
-    auto num_gg = gateGroups.size();
+    auto num_gg = fullGroups.size();
     std::vector<unsigned char> result;
     result.resize(sizeof(relatedQubits) + sizeof(num_gg));
     auto arr = result.data();
     int cur = 0;
     SERIALIZE_STEP(relatedQubits);
     SERIALIZE_STEP(num_gg);
-    for (auto& gateGroup: gateGroups) {
+    for (auto& gateGroup: fullGroups) {
         auto gg = gateGroup.serialize();
         result.insert(result.end(), gg.begin(), gg.end());
     }
@@ -144,11 +151,11 @@ std::vector<unsigned char> LocalGroup::serialize() const {
 
 LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     LocalGroup s;
-    decltype(s.gateGroups.size()) num_gg;
+    decltype(s.fullGroups.size()) num_gg;
     DESERIALIZE_STEP(s.relatedQubits);
     DESERIALIZE_STEP(num_gg);
     for (decltype(num_gg) i = 0; i < num_gg; i++) {
-        s.gateGroups.push_back(GateGroup::deserialize(arr, cur));
+        s.fullGroups.push_back(GateGroup::deserialize(arr, cur));
     }
     return s;
 }
@@ -190,11 +197,7 @@ void Schedule::initCuttPlans(int numQubits) {
     std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
     std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
     std::vector<int> dim(numLocalQubits + 1, 2);
-    midPos.clear();
-    midLayout.clear();
-    cuttPlans.clear(); cuttPlans.resize(MyGlobalVars::numGPUs);
-    a2aComm.clear();
-    a2aCommSize.clear();
+
     // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
         auto& localGroup = localGroups[lgID];
@@ -213,7 +216,7 @@ void Schedule::initCuttPlans(int numQubits) {
 
         int overlapGlobals = 0;
         int overlapCnt = 0;
-        // put overlapped global qubit into the previous
+        // put overlapped global qubit into the previous position
         for (size_t i = 0; i < newGlobals.size(); i++) {
             bool isGlobal;
             int p;
@@ -244,80 +247,79 @@ void Schedule::initCuttPlans(int numQubits) {
                 }
                 
             }
-            midPos.push_back(pos);
-            midLayout.push_back(layout);
+            localGroup.state = State(pos, layout);
+            localGroup.cuttPlans.clear();
             for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                cuttPlans[g].push_back(cuttHandle());
+                localGroup.cuttPlans.push_back(cuttHandle());
             }
-            a2aCommSize.push_back(-1);
-            a2aComm.emplace_back();
+            localGroup.a2aCommSize = -1;
+            localGroup.a2aComm.clear();
 #ifdef SHOW_SCHEDULE
             printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
             printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
             printf("------------------------------------------------------\n");
 #endif
-            continue;
-        }
-        std::vector<int> perm = gen_perm_vector(numLocalQubits);
-        int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
-        for (int i = 0; i < MyGlobalVars::bit; i++) {
-            if (overlapGlobals >> i & 1) continue;
-            std::swap(perm[pos[newGlobals[i]]], perm[c]);
-            int swappedQid = layout[c];
-            pos[swappedQid] = pos[newGlobals[i]];
-            pos[newGlobals[i]] = c;
-            layout[pos[newGlobals[i]]] = newGlobals[i];
-            layout[pos[swappedQid]] = swappedQid;
-            c++;
-        }
-#ifdef SHOW_SCHEDULE
-        printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
-        printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-        printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
-#endif
-        // complex have two floats
-        perm.push_back(0);
-        for (int i = perm.size() - 1; i; i--) {
-            perm[i] = perm[i-1] + 1;
-        }
-        perm[0] = 0;
+        } else {
+            std::vector<int> perm = gen_perm_vector(numLocalQubits);
+            int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
+            for (int i = 0; i < MyGlobalVars::bit; i++) {
+                if (overlapGlobals >> i & 1) continue;
+                std::swap(perm[pos[newGlobals[i]]], perm[c]);
+                int swappedQid = layout[c];
+                pos[swappedQid] = pos[newGlobals[i]];
+                pos[newGlobals[i]] = c;
+                layout[pos[newGlobals[i]]] = newGlobals[i];
+                layout[pos[swappedQid]] = swappedQid;
+                c++;
+            }
+    #ifdef SHOW_SCHEDULE
+            printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+            printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+            printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
+    #endif
+            // complex have two floats
+            perm.push_back(0);
+            for (int i = perm.size() - 1; i; i--) {
+                perm[i] = perm[i-1] + 1;
+            }
+            perm[0] = 0;
 
-        c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
-        for (int i = 0; i < MyGlobalVars::bit; i++) {
-            if (overlapGlobals >> i & 1) continue;
-            int a = i + numLocalQubits;
-            int qa = layout[a], qc = layout[c];
-            layout[a] = qc; pos[qc] = a;
-            layout[c] = qa; pos[qa] = c;
-            c++;
+            c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
+            for (int i = 0; i < MyGlobalVars::bit; i++) {
+                if (overlapGlobals >> i & 1) continue;
+                int a = i + numLocalQubits;
+                int qa = layout[a], qc = layout[c];
+                layout[a] = qc; pos[qc] = a;
+                layout[c] = qa; pos[qa] = c;
+                c++;
+            }
+    #ifdef SHOW_SCHEDULE
+            printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+            printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
+            printf("------------------------------------------------------\n");
+    #endif
+            std::vector<std::pair<int, int>> newCommPair;
+            for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+                newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
+            }
+            std::sort(newCommPair.begin(), newCommPair.end());
+            std::vector<int> newComm;
+            for (auto x: newCommPair) {
+                newComm.push_back(x.second);
+            }
+            localGroup.a2aComm = newComm;
+            localGroup.a2aCommSize = MyGlobalVars::numGPUs >> overlapCnt;
+            localGroup.cuttPlans.clear();
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                cuttHandle plan;
+                checkCudaErrors(cudaSetDevice(g));
+                checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+                localGroup.cuttPlans.push_back(plan);
+            }
+            localGroup.state = State(pos, layout);
         }
-#ifdef SHOW_SCHEDULE
-        printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-        printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
-        printf("------------------------------------------------------\n");
-#endif
-        std::vector<std::pair<int, int>> newCommPair;
-        for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
-            newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
-        }
-        std::sort(newCommPair.begin(), newCommPair.end());
-        std::vector<int> newComm;
-        for (auto x: newCommPair) {
-            newComm.push_back(x.second);
-        }
-        a2aComm.push_back(newComm);
-        a2aCommSize.push_back(MyGlobalVars::numGPUs >> overlapCnt);
-
-        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-            cuttHandle plan;
-            checkCudaErrors(cudaSetDevice(g));
-            checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
-            cuttPlans[g].push_back(plan);
-        }
-        midPos.push_back(pos);
-        midLayout.push_back(layout);
     }
-    finalPos = pos;
+    finalState = State(pos, layout);
 }
 
 #elif BACKEND==3
@@ -332,19 +334,14 @@ void Schedule::initCuttPlans(int numQubits) {
     std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
     std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
     std::vector<int> dim(numLocalQubits + 1, 2);
-    midPos.clear();
-    midLayout.clear();
-    cuttPlans.clear(); cuttPlans.resize(1);
-    a2aComm.clear();
-    a2aCommSize.clear();
     assert(localGroups.size() == 1);
     auto& group = localGroups[0];
 
     // printf("len %d\n", dim.size());
-    for (size_t ggID = 0; ggID < group.gateGroups.size(); ggID++) {
+    for (size_t ggID = 0; ggID < group.fullGroups.size(); ggID++) {
         std::vector<int> toGlobal; // qubit id
         std::vector<int> toLocal; // qubit id
-        auto& gateGroup = group.gateGroups[ggID];
+        auto& gateGroup = group.fullGroups[ggID];
         int numMatQubits = bitCount(gateGroup.relatedQubits);
         for (int i = 0; i < numMatQubits; i++) {
             int q = layout[i];
@@ -377,17 +374,16 @@ void Schedule::initCuttPlans(int numQubits) {
             perm[i] = perm[i-1] + 1;
         }
         perm[0] = 0;
-
+        gateGroup.cuttPlans.clear();
         for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
             cuttHandle plan;
             checkCudaErrors(cudaSetDevice(g));
             checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
-            cuttPlans[g].push_back(plan);
+            gateGroup.cuttPlans.push_back(plan);
         }
-        midPos.push_back(pos);
-        midLayout.push_back(layout);
+        gateGroup.state = State(pos, layout);
     }
-    finalPos = pos;
+    finalState = State(pos, layout);
 }
 
 #else
@@ -400,10 +396,9 @@ void Schedule::initCuttPlans(int numQubits) {
 void Schedule::initMatrix() {
     assert(localGroups.size() == 1);
     auto& group = localGroups[0];
-    matrix.clear();
-    for (size_t ggID = 0; ggID < group.gateGroups.size(); ggID++) {
-        auto& gg = group.gateGroups[ggID];
-        auto& pos = midPos[ggID];
+    for (size_t ggID = 0; ggID < group.fullGroups.size(); ggID++) {
+        auto& gg = group.fullGroups[ggID];
+        auto& pos = gg.state.pos;
         int numMatQubits = bitCount(gg.relatedQubits);
         int n = 1 << numMatQubits;
         std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
@@ -492,7 +487,7 @@ void Schedule::initMatrix() {
         //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
         //     printf("\n");
         // }
-        matrix.push_back(std::move(mat));
+        gg.matrix = std::move(mat);
     }
 }
 #else

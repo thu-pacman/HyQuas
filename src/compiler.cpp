@@ -11,7 +11,7 @@ Schedule Compiler::run() {
     OneLayerCompiler localCompiler(numQubits, localSize, gates, enableGlobal);
     LocalGroup localGroup = localCompiler.run();
     Schedule schedule;
-    for (auto& gg: localGroup.gateGroups) {
+    for (auto& gg: localGroup.fullGroups) {
         OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates, enableGlobal);
         schedule.localGroups.push_back(shareCompiler.run());
     }
@@ -27,7 +27,7 @@ LocalGroup OneLayerCompiler::run() {
     int cnt = 0;
     while (true) {
         GateGroup gg = getGroup();
-        lg.gateGroups.push_back(gg);
+        lg.fullGroups.push_back(gg.copyGates());
         lg.relatedQubits |= gg.relatedQubits;
         remove(gg);
         if (remainGates.size() == 0)
@@ -35,7 +35,7 @@ LocalGroup OneLayerCompiler::run() {
         cnt ++;
         assert(cnt < 1000);
     }
-    return lg;
+    return std::move(lg);
 }
 
 GateGroup OneLayerCompiler::getGroup() {
@@ -54,9 +54,11 @@ GateGroup OneLayerCompiler::getGroup() {
         if (gate.isC2Gate()) {
             if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit])) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.controlQubit2]);
-                newGroup = GateGroup::merge(newGroup, cur[gate.targetQubit]);
+                newGroup = GateGroup::merge(std::move(newGroup), cur[gate.targetQubit]);
                 newGroup.addGate(gate, enableGlobal);
-                cur[gate.controlQubit2] = cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
+                cur[gate.controlQubit2] = newGroup.copyGates();
+                cur[gate.controlQubit] = newGroup.copyGates();
+                cur[gate.targetQubit] = newGroup.copyGates();
             } else {
                 full[gate.controlQubit2] = full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
@@ -64,7 +66,8 @@ GateGroup OneLayerCompiler::getGroup() {
             if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit])) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.targetQubit]);
                 newGroup.addGate(gate, enableGlobal);
-                cur[gate.controlQubit] = cur[gate.targetQubit] = newGroup;
+                cur[gate.controlQubit] = newGroup.copyGates();
+                cur[gate.targetQubit] = newGroup.copyGates();
             } else {
                 full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
@@ -119,7 +122,7 @@ GateGroup OneLayerCompiler::getGroup() {
             blocked[g.targetQubit] = 1;
         }
     }
-    return selected;
+    return std::move(selected);
 }
 
 void OneLayerCompiler::remove(GateGroup& gg) {

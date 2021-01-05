@@ -30,23 +30,15 @@ Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const S
 
 void Executor::run() {
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
+        auto& localGroup = schedule.localGroups[lgID];
         if (lgID > 0) {
-            // TODO reshape in schedule
-            std::vector<cuttHandle> plans;
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                plans.push_back(schedule.cuttPlans[g][lgID]);
-            }
-            // WARNING: wrong layout;
-            this->transpose(plans);
-            this->all2all(schedule.a2aCommSize[lgID], schedule.a2aComm[lgID]);
+            this->transpose(localGroup.cuttPlans);
+            this->all2all(localGroup.a2aCommSize, localGroup.a2aComm);
         }
-        this->setState(schedule.midPos[lgID], schedule.midLayout[lgID]);
-                
-        auto pos = schedule.midPos[lgID];
-        auto layout = schedule.midLayout[lgID];
-        auto& gateGroups = schedule.localGroups[lgID].gateGroups;
-        
-        for (size_t gg = 0; gg < gateGroups.size(); gg++) {
+        this->setState(localGroup.state);
+
+        auto& fullGroups = schedule.localGroups[lgID].fullGroups;        
+        for (size_t gg = 0; gg < fullGroups.size(); gg++) {
 #ifdef MEASURE_STAGE
             // TODO multistream
             cudaEvent_t start, stop;
@@ -54,7 +46,7 @@ void Executor::run() {
             checkCudaErrors(cudaEventCreate(&stop));
             checkCudaErrors(cudaEventRecord(start, 0));
 #endif
-            this->applyGateGroup(gateGroups[gg]);
+            this->applyGateGroup(fullGroups[gg]);
 #ifdef MEASURE_STAGE
             // TODO multistream support
             cudaEventRecord(stop, 0);
@@ -98,11 +90,6 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
     }
-}
-
-void Executor::setState(std::vector<int> new_pos, std::vector<int> new_layout) {
-    state.pos = new_pos;
-    state.layout = new_layout;
 }
 
 #define SET_GATE_TO_ID(g, i) { \

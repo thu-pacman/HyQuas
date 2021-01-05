@@ -16,7 +16,7 @@ using namespace std;
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
 #if BACKEND == 3
-    kernelMatInit(schedule, deviceMats);
+    kernelMatInit(schedule);
 #endif
     for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
@@ -31,19 +31,16 @@ int Circuit::run(bool copy_back) {
     gates.clear();
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
         auto& lg = schedule.localGroups[lgID];
-        for (size_t ggID = 0; ggID < lg.gateGroups.size(); ggID++) {
-            auto& gg = lg.gateGroups[ggID];
+        for (size_t ggID = 0; ggID < lg.fullGroups.size(); ggID++) {
+            auto& gg = lg.fullGroups[ggID];
             for (auto& g: gg.gates)
                 gates.push_back(g);
         }
     }
-    schedule.finalPos.clear();
-    for (int i = 0; i < numQubits; i++) {
-        schedule.finalPos.push_back(i);
-    }
+    schedule.finalState = State(numQubits);
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #elif BACKEND == 3
-    kernelExecBlas(deviceStateVec, numQubits, schedule, deviceMats);
+    kernelExecBlas(deviceStateVec, numQubits, schedule);
 #endif
     auto end = chrono::system_clock::now();
     for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
@@ -53,7 +50,7 @@ int Circuit::run(bool copy_back) {
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
 #if BACKEND == 3
-    kernelMatDestroy(deviceMats);
+    kernelMatDestroy(schedule);
 #endif
     result.resize(1ll << numQubits);
     if (copy_back) {
@@ -90,17 +87,19 @@ void Circuit::dumpGates() {
 
 qindex Circuit::toPhysicalID(qindex idx) {
     int id = 0;
+    auto& pos = schedule.finalState.pos;
     for (int i = 0; i < numQubits; i++) {
         if (idx >> i & 1)
-            id |= qindex(1) << schedule.finalPos[i];
+            id |= qindex(1) << pos[i];
     }
     return id;
 }
 
 qindex Circuit::toLogicID(qindex idx) {
     int id = 0;
+    auto& pos = schedule.finalState.pos;
     for (int i = 0; i < numQubits; i++) {
-        if (idx >> schedule.finalPos[i] & 1)
+        if (idx >> pos[i] & 1)
             id |= qindex(1) << i;
     }
     return id;
@@ -117,7 +116,7 @@ void Circuit::compile() {
     Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, true);
     schedule = compiler.run();
     int totalGroups = 0;
-    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+    for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
     schedule.initCuttPlans(numQubits);
 #ifdef SHOW_SCHEDULE
@@ -127,7 +126,7 @@ void Circuit::compile() {
     Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, false);
     schedule = compiler.run();
     int totalGroups = 0;
-    for (auto& lg: schedule.localGroups) totalGroups += lg.gateGroups.size();
+    for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
@@ -135,10 +134,7 @@ void Circuit::compile() {
     schedule.initCuttPlans(numQubits);
     schedule.initMatrix();
 #else
-    schedule.finalPos.clear();
-    for (int i = 0; i < numQubits; i++) {
-        schedule.finalPos.push_back(i);
-    }
+    schedule.finalState = State(numQubits);
 #endif
 }
 
