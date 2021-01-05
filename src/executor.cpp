@@ -274,6 +274,22 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
 }
 
 void Executor::applyGateGroup(const GateGroup& gg) {
+    switch (gg.backend) {
+        case Backend::PerGate: {
+            applyPerGateGroup(gg);
+            break;
+        }
+        case Backend::BLAS: {
+            applyBlasGroup(gg);
+            break;
+        }
+        default:
+            UNREACHABLE()
+    }
+    setState(gg.state);
+}
+
+void Executor::applyPerGateGroup(const GateGroup& gg) {
     auto& gates = gg.gates;
     // initialize blockHot, enumerate, threadBias
     qindex relatedLogicQb = gg.relatedQubits;
@@ -299,6 +315,23 @@ void Executor::applyGateGroup(const GateGroup& gg) {
     copyGatesToSymbol(hostGates, gates.size());
     qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
     launchExecutor(gridDim, deviceStateVec, threadBias, numLocalQubits, gates.size(), blockHot, enumerate);
+}
+
+void Executor::applyBlasGroup(const GateGroup& gg) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    int numElements = 1 << numLocalQubits;
+    qreal alpha = 1.0, beta = 0.0;
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
+        int K = 1 << bitCount(gg.relatedQubits);
+        checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
+            K * 2, numElements / K, K * 2, // M, N, K
+            &alpha, gg.deviceMats[g], K * 2, // alpha, a, lda
+            reinterpret_cast<qreal*>(deviceBuffer[g]), K * 2, // b, ldb
+            &beta, reinterpret_cast<qreal*>(deviceStateVec[g]), K * 2 // beta, c, ldc
+        ));
+    }
 }
 
 qindex Executor::toPhyQubitSet(qindex logicQubitset) const {

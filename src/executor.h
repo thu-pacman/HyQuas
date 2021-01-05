@@ -17,6 +17,8 @@ private:
     void all2all(int commSize, std::vector<int> comm);
     void setState(const State& newState) { state = newState; }
     void applyGateGroup(const GateGroup& gg);
+    void applyPerGateGroup(const GateGroup& gg);
+    void applyBlasGroup(const GateGroup& gg);
     void finalize();
     // void Checkpoint();
     // void Restore();

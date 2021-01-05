@@ -74,7 +74,7 @@ void Schedule::dump(int numQubits) {
         printf("\n\n");
     }
     fflush(stdout);
-#if BACKEND == 1 || BACKEND == 2
+#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3
     for (size_t i = 0; i < localGroups.size(); i++) {
         const LocalGroup& lg = localGroups[i];
         printf("Global: ");
@@ -192,6 +192,83 @@ std::vector<int> gen_perm_vector(int len) {
     return ret;
 }
 
+State GateGroup::initPerGateState(const State& oldState) {
+    state = oldState;
+    cuttPlans.clear();
+    return state;
+}
+
+State GateGroup::initBlasState(const State& oldState, int numQubits) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    std::vector<int> pos = oldState.pos;
+    std::vector<int> layout = oldState.layout;
+    std::vector<int> dim(numLocalQubits + 1, 2);
+
+    std::vector<int> toGlobal; // qubit id
+    std::vector<int> toLocal; // qubit id
+    int numMatQubits = bitCount(relatedQubits);
+    for (int i = 0; i < numMatQubits; i++) {
+        int q = layout[i];
+        if (!(relatedQubits >> q & 1))
+            toGlobal.push_back(q);
+    }
+    for (int i = numMatQubits; i < numLocalQubits; i++) {
+        int q = layout[i];
+        if (relatedQubits >> q & 1)
+            toLocal.push_back(q);
+    }
+    assert(toGlobal.size() == toLocal.size());
+    std::vector<int> perm = gen_perm_vector(numLocalQubits);
+    for (size_t i = 0; i < toGlobal.size(); i++) {
+        int x = toGlobal[i], y = toLocal[i];
+        std::swap(perm[pos[x]], perm[pos[y]]);
+        std::swap(pos[x], pos[y]);
+        layout[pos[x]] = x; layout[pos[y]] = y;
+    }
+
+    
+#ifdef SHOW_SCHEDULE
+    printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+    printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+    printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
+#endif
+    // complex have two floats
+    perm.push_back(0);
+    for (int i = perm.size() - 1; i; i--) {
+        perm[i] = perm[i-1] + 1;
+    }
+    perm[0] = 0;
+    cuttPlans.clear();
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        cuttHandle plan;
+        checkCudaErrors(cudaSetDevice(g));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+        cuttPlans.push_back(plan);
+    }
+    State newState = State(pos, layout);
+    this->state = newState;
+    return newState;
+}
+
+
+State GateGroup::initState(const State& oldState, int numQubits) {
+    if (BACKEND == 1) {
+        backend = Backend::PerGate;
+    } else if (BACKEND == 3) {
+        backend = Backend::BLAS;
+    } else {
+        UNREACHABLE();
+    }
+
+    if (backend == Backend::PerGate) {
+        return initPerGateState(oldState);
+    }
+    if (backend == Backend::BLAS) {
+        return initBlasState(oldState, numQubits);
+    }
+    UNREACHABLE();
+}
+
 State LocalGroup::initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     auto pos = oldState.pos, layout = oldState.layout;
@@ -255,6 +332,9 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
     auto newState = State(pos, layout);
     this->state = newState;
+    for (auto& gg: fullGroups) {
+        newState = gg.initState(newState, numQubits);
+    }
     return newState;
 }
 
@@ -288,10 +368,137 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
 #endif
     auto newState = State(pos, layout);
     this->state = newState;
+    for (auto& gg: fullGroups) {
+        newState = gg.initState(newState, numQubits);
+    }
     return newState;
 }
 
-#if BACKEND == 1
+void GateGroup::initCPUMatrix() {
+    auto& pos = state.pos;
+    int numMatQubits = bitCount(relatedQubits);
+    int n = 1 << numMatQubits;
+    std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
+    for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
+    for (int i = 0; i < n; i++) {
+        mat[i * n + i] = make_qComplex(1.0, 0.0);
+    }
+    auto insertBit = [](int x, int pos) {
+        return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
+    };
+    for (auto& gate: gates) {
+        if (gate.controlQubit2 != -1) {
+            int c2 = pos[gate.controlQubit2];
+            int c1 = pos[gate.controlQubit];
+            int t = pos[gate.targetQubit];
+            assert(c2 < numMatQubits);
+            assert(c1 < numMatQubits);
+            assert(t < numMatQubits);
+            // sort
+            int a = std::max(std::max(c1, c2), t);
+            int c = std::min(std::min(c1, c2), t);
+            int b = c2 + c1 + t - a - c;
+            
+            #pragma omp parallel for
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < (n >> 3); j++) {
+                    int lo = j;
+                    lo = insertBit(lo, c);
+                    lo = insertBit(lo, b);
+                    lo = insertBit(lo, a);
+                    lo += i * n;
+                    lo |= 1 << c2;
+                    lo |= 1 << c1;
+                    int hi = lo | 1 << t;
+                    qComplex v0 = mat[lo];
+                    qComplex v1 = mat[hi];
+                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                }
+            }
+        } else if (gate.controlQubit != -1) {
+            int c = pos[gate.controlQubit];
+            int t = pos[gate.targetQubit];
+            assert(c < numMatQubits);
+            assert(t < numMatQubits);
+            // sort
+            int a = std::max(c, t);
+            int b = std::min(c, t);
+
+            #pragma omp parallel for
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < (n >> 2); j++) {
+                    int lo = j;
+                    lo = insertBit(lo, b);
+                    lo = insertBit(lo, a);
+                    lo += i * n;
+                    lo |= 1 << c;
+                    int hi = lo | 1 << t;
+                    qComplex v0 = mat[lo];
+                    qComplex v1 = mat[hi];
+                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                }
+            }
+        } else {
+            int t = pos[gate.targetQubit];
+            assert(t < numMatQubits);
+            #pragma omp parallel for
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < (n >> 1); j++) {
+                    int lo = j;
+                    lo = insertBit(lo, t);
+                    lo += i * n;
+                    int hi = lo | 1 << t;
+                    qComplex v0 = mat[lo];
+                    qComplex v1 = mat[hi];
+                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                }
+            }
+        }
+    }
+    // assert(isUnitary(mat, n));
+    // for (int i = 0; i < n; i++) {
+    //     for (int j = 0; j < n; j++)
+    //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
+    //     printf("\n");
+    // }
+    matrix = std::move(mat);
+}
+
+void GateGroup::initGPUMatrix() {
+    int n = 1 << bitCount(relatedQubits);
+    qreal realMat[2 * n][2 * n];
+    #pragma omp parallel for
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) {
+            qComplex val = matrix[i * n + j];
+            realMat[i * 2][j * 2] = val.x;
+            realMat[i * 2][j * 2 + 1] = val.y;
+            realMat[i * 2 + 1][j * 2] = -val.y;
+            realMat[i * 2 + 1][j * 2 + 1] = val.x;
+        }
+    assert(deviceMats.size() == 0);
+    deviceMats.clear();
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        qreal* mat;
+        cudaMalloc(&mat, n * n * 4 * sizeof(qreal));
+        cudaMemcpyAsync(mat, realMat, n * n * 4 * sizeof(qreal), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
+        deviceMats.push_back(mat);
+    }
+}
+
+void GateGroup::initMatrix() {
+    if (backend == Backend::BLAS) {
+        initCPUMatrix();
+        initGPUMatrix();
+    }
+}
+
+
+#if BACKEND == 1 || BACKEND == 3
 void Schedule::initCuttPlans(int numQubits) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     State state(numQubits);
@@ -340,175 +547,19 @@ void Schedule::initCuttPlans(int numQubits) {
     finalState = state;
 }
 
-#elif BACKEND==3
-void Schedule::initCuttPlans(int numQubits) {
-    auto gen_perm_vector = [](int len) {
-        std::vector<int> ret;
-        for (int i = 0; i < len; i++)
-            ret.push_back(i);
-        return ret;
-    };
-    int numLocalQubits = numQubits - MyGlobalVars::bit;
-    std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
-    std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
-    std::vector<int> dim(numLocalQubits + 1, 2);
-    assert(localGroups.size() == 1);
-    auto& group = localGroups[0];
-
-    // printf("len %d\n", dim.size());
-    for (size_t ggID = 0; ggID < group.fullGroups.size(); ggID++) {
-        std::vector<int> toGlobal; // qubit id
-        std::vector<int> toLocal; // qubit id
-        auto& gateGroup = group.fullGroups[ggID];
-        int numMatQubits = bitCount(gateGroup.relatedQubits);
-        for (int i = 0; i < numMatQubits; i++) {
-            int q = layout[i];
-            if (!(gateGroup.relatedQubits >> q & 1))
-                toGlobal.push_back(q);
+void Schedule::initMatrix() {
+    for (auto& lg: localGroups) {
+        for (auto& gg: lg.fullGroups) {
+            gg.initMatrix();
         }
-        for (int i = numMatQubits; i < numLocalQubits; i++) {
-            int q = layout[i];
-            if (gateGroup.relatedQubits >> q & 1)
-                toLocal.push_back(q);
-        }
-        assert(toGlobal.size() == toLocal.size());
-        std::vector<int> perm = gen_perm_vector(numLocalQubits);
-        for (size_t i = 0; i < toGlobal.size(); i++) {
-            int x = toGlobal[i], y = toLocal[i];
-            std::swap(perm[pos[x]], perm[pos[y]]);
-            std::swap(pos[x], pos[y]);
-            layout[pos[x]] = x; layout[pos[y]] = y;
-        }
-
-        
-#ifdef SHOW_SCHEDULE
-        printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
-        printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-        printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
-#endif
-        // complex have two floats
-        perm.push_back(0);
-        for (int i = perm.size() - 1; i; i--) {
-            perm[i] = perm[i-1] + 1;
-        }
-        perm[0] = 0;
-        gateGroup.cuttPlans.clear();
-        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-            cuttHandle plan;
-            checkCudaErrors(cudaSetDevice(g));
-            checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
-            gateGroup.cuttPlans.push_back(plan);
-        }
-        gateGroup.state = State(pos, layout);
     }
-    finalState = State(pos, layout);
 }
 
 #else
 void Schedule::initCuttPlans(int numQubits) {
     UNREACHABLE()
 }
-#endif
 
-#if BACKEND == 3
-void Schedule::initMatrix() {
-    assert(localGroups.size() == 1);
-    auto& group = localGroups[0];
-    for (size_t ggID = 0; ggID < group.fullGroups.size(); ggID++) {
-        auto& gg = group.fullGroups[ggID];
-        auto& pos = gg.state.pos;
-        int numMatQubits = bitCount(gg.relatedQubits);
-        int n = 1 << numMatQubits;
-        std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
-        for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
-        for (int i = 0; i < n; i++) {
-            mat[i * n + i] = make_qComplex(1.0, 0.0);
-        }
-        auto insertBit = [](int x, int pos) {
-            return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
-        };
-        for (auto& gate: gg.gates) {
-            if (gate.controlQubit2 != -1) {
-                int c2 = pos[gate.controlQubit2];
-                int c1 = pos[gate.controlQubit];
-                int t = pos[gate.targetQubit];
-                assert(c2 < numMatQubits);
-                assert(c1 < numMatQubits);
-                assert(t < numMatQubits);
-                // sort
-                int a = std::max(std::max(c1, c2), t);
-                int c = std::min(std::min(c1, c2), t);
-                int b = c2 + c1 + t - a - c;
-                
-                #pragma omp parallel for
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < (n >> 3); j++) {
-                        int lo = j;
-                        lo = insertBit(lo, c);
-                        lo = insertBit(lo, b);
-                        lo = insertBit(lo, a);
-                        lo += i * n;
-                        lo |= 1 << c2;
-                        lo |= 1 << c1;
-                        int hi = lo | 1 << t;
-                        qComplex v0 = mat[lo];
-                        qComplex v1 = mat[hi];
-                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
-                    }
-                }
-            } else if (gate.controlQubit != -1) {
-                int c = pos[gate.controlQubit];
-                int t = pos[gate.targetQubit];
-                assert(c < numMatQubits);
-                assert(t < numMatQubits);
-                // sort
-                int a = std::max(c, t);
-                int b = std::min(c, t);
-
-                #pragma omp parallel for
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < (n >> 2); j++) {
-                        int lo = j;
-                        lo = insertBit(lo, b);
-                        lo = insertBit(lo, a);
-                        lo += i * n;
-                        lo |= 1 << c;
-                        int hi = lo | 1 << t;
-                        qComplex v0 = mat[lo];
-                        qComplex v1 = mat[hi];
-                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
-                    }
-                }
-            } else {
-                int t = pos[gate.targetQubit];
-                assert(t < numMatQubits);
-                #pragma omp parallel for
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < (n >> 1); j++) {
-                        int lo = j;
-                        lo = insertBit(lo, t);
-                        lo += i * n;
-                        int hi = lo | 1 << t;
-                        qComplex v0 = mat[lo];
-                        qComplex v1 = mat[hi];
-                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
-                    }
-                }
-            }
-        }
-        // assert(isUnitary(mat, n));
-        // for (int i = 0; i < n; i++) {
-        //     for (int j = 0; j < n; j++)
-        //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
-        //     printf("\n");
-        // }
-        gg.matrix = std::move(mat);
-    }
-}
-#else
 void Schedule::initMatrix() {
     UNREACHABLE()
 }

@@ -40,13 +40,23 @@ struct GateGroup {
     GateGroup(GateGroup&&) = default;
     GateGroup& operator = (GateGroup&&) = default;
     GateGroup(): relatedQubits(0) {}
+    GateGroup copyGates();
+
     static GateGroup merge(const GateGroup& a, const GateGroup& b);
     void addGate(const Gate& g, bool enableGlobal = false);
+    
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     std::vector<int> toID() const;
+    
     std::vector<unsigned char> serialize() const;
     static GateGroup deserialize(const unsigned char* arr, int& cur);
-    GateGroup copyGates();
+
+    State initState(const State& oldState, int numQubits);
+    State initPerGateState(const State& oldState);
+    State initBlasState(const State& oldState, int numQubits);
+    void initCPUMatrix();
+    void initGPUMatrix();
+    void initMatrix();
 };
 
 struct LocalGroup {

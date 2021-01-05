@@ -21,8 +21,3 @@ void cuttPlanInit(std::vector<cuttHandle>& plans);
 void initControlIdx();
 void copyGatesToSymbol(KernelGate* hostGates, int numGates);
 void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate);
-
-// kernelBlas
-void kernelMatInit(Schedule& schedule);
-void kernelExecBlas(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
-void kernelMatDestroy(Schedule& schedule);

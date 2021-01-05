@@ -15,9 +15,6 @@ using namespace std;
 
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
-#if BACKEND == 3
-    kernelMatInit(schedule);
-#endif
     for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaProfilerStart());
@@ -25,7 +22,7 @@ int Circuit::run(bool copy_back) {
     auto start = chrono::system_clock::now();
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
-#elif BACKEND == 1
+#elif BACKEND == 1 || BACKEND == 3
     Executor(deviceStateVec, numQubits, schedule).run();
 #elif BACKEND == 2
     gates.clear();
@@ -39,8 +36,6 @@ int Circuit::run(bool copy_back) {
     }
     schedule.finalState = State(numQubits);
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
-#elif BACKEND == 3
-    kernelExecBlas(deviceStateVec, numQubits, schedule);
 #endif
     auto end = chrono::system_clock::now();
     for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
@@ -49,9 +44,6 @@ int Circuit::run(bool copy_back) {
     }
     auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
     Logger::add("Time Cost: %d ms", int(duration.count()));
-#if BACKEND == 3
-    kernelMatDestroy(schedule);
-#endif
     result.resize(1ll << numQubits);
     if (copy_back) {
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
@@ -112,27 +104,17 @@ qComplex Circuit::ampAt(qindex idx) {
 
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
-#if BACKEND == 1 || BACKEND == 2
-    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, true);
+#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3
+    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, BACKEND != 3);
     schedule = compiler.run();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
-    schedule.initCuttPlans(numQubits);
-#ifdef SHOW_SCHEDULE
-    schedule.dump(numQubits);
-#endif
-#elif BACKEND == 3
-    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, false);
-    schedule = compiler.run();
-    int totalGroups = 0;
-    for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
-    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
-#ifdef SHOW_SCHEDULE
-    schedule.dump(numQubits);
-#endif
     schedule.initCuttPlans(numQubits);
     schedule.initMatrix();
+#ifdef SHOW_SCHEDULE
+    schedule.dump(numQubits);
+#endif
 #else
     schedule.finalState = State(numQubits);
 #endif
