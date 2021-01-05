@@ -185,18 +185,116 @@ Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
     return s;
 }
 
+std::vector<int> gen_perm_vector(int len) {
+    std::vector<int> ret;
+    for (int i = 0; i < len; i++)
+        ret.push_back(i);
+    return ret;
+}
+
+State LocalGroup::initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    auto pos = oldState.pos, layout = oldState.layout;
+    int overlapCnt = bitCount(overlapGlobals);
+    std::vector<int> perm = gen_perm_vector(numLocalQubits);
+    int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
+    for (int i = 0; i < MyGlobalVars::bit; i++) {
+        if (overlapGlobals >> i & 1) continue;
+        std::swap(perm[pos[newGlobals[i]]], perm[c]);
+        int swappedQid = layout[c];
+        pos[swappedQid] = pos[newGlobals[i]];
+        pos[newGlobals[i]] = c;
+        layout[pos[newGlobals[i]]] = newGlobals[i];
+        layout[pos[swappedQid]] = swappedQid;
+        c++;
+    }
+#ifdef SHOW_SCHEDULE
+    printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+    printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+    printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
+#endif
+    // complex have two floats
+    perm.push_back(0);
+    for (int i = perm.size() - 1; i; i--) {
+        perm[i] = perm[i-1] + 1;
+    }
+    perm[0] = 0;
+
+    c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
+    for (int i = 0; i < MyGlobalVars::bit; i++) {
+        if (overlapGlobals >> i & 1) continue;
+        int a = i + numLocalQubits;
+        int qa = layout[a], qc = layout[c];
+        layout[a] = qc; pos[qc] = a;
+        layout[c] = qa; pos[qa] = c;
+        c++;
+    }
+#ifdef SHOW_SCHEDULE
+    printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+    printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
+    printf("------------------------------------------------------\n");
+#endif
+    std::vector<std::pair<int, int>> newCommPair;
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
+    }
+    std::sort(newCommPair.begin(), newCommPair.end());
+    std::vector<int> newComm;
+    for (auto x: newCommPair) {
+        newComm.push_back(x.second);
+    }
+    a2aComm = newComm;
+    a2aCommSize = MyGlobalVars::numGPUs >> overlapCnt;
+    cuttPlans.clear();
+    std::vector<int> dim(numLocalQubits + 1, 2);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        cuttHandle plan;
+        checkCudaErrors(cudaSetDevice(g));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+        cuttPlans.push_back(plan);
+    }
+    auto newState = State(pos, layout);
+    this->state = newState;
+    return newState;
+}
+
+State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    auto pos = oldState.pos, layout = oldState.layout;
+    for (size_t i = 0; i < newGlobals.size(); i++) {
+        int x = newGlobals[i];
+        if (pos[x] >= numLocalQubits)
+            continue;
+        for (int y = numLocalQubits; y < numQubits; y++) {
+            if (std::find(newGlobals.begin(), newGlobals.end(), layout[y]) == newGlobals.end()) {
+                std::swap(pos[x], pos[y]);
+                layout[pos[x]] = x; layout[pos[y]] = y;
+                break;
+            }
+        }
+        
+    }
+    state = State(pos, layout);
+    cuttPlans.clear();
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        cuttPlans.push_back(cuttHandle());
+    }
+    a2aCommSize = -1;
+    a2aComm.clear();
+#ifdef SHOW_SCHEDULE
+    printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+    printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
+    printf("------------------------------------------------------\n");
+#endif
+    auto newState = State(pos, layout);
+    this->state = newState;
+    return newState;
+}
+
 #if BACKEND == 1
 void Schedule::initCuttPlans(int numQubits) {
-    auto gen_perm_vector = [](int len) {
-        std::vector<int> ret;
-        for (int i = 0; i < len; i++)
-            ret.push_back(i);
-        return ret;
-    };
     int numLocalQubits = numQubits - MyGlobalVars::bit;
-    std::vector<int> pos = gen_perm_vector(numQubits); // The position of qubit x is pos[x]
-    std::vector<int> layout = gen_perm_vector(numQubits); // The qubit locate at x is layout[x]
-    std::vector<int> dim(numLocalQubits + 1, 2);
+    State state(numQubits);
 
     // printf("len %d\n", dim.size());
     for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
@@ -220,7 +318,7 @@ void Schedule::initCuttPlans(int numQubits) {
         for (size_t i = 0; i < newGlobals.size(); i++) {
             bool isGlobal;
             int p;
-            std::tie(isGlobal, p) = globalPos(layout, newGlobals[i]);
+            std::tie(isGlobal, p) = globalPos(state.layout, newGlobals[i]);
             if (isGlobal) {
                 std::swap(newGlobals[p], newGlobals[i]);
                 overlapGlobals |= qindex(1) << p;
@@ -234,92 +332,12 @@ void Schedule::initCuttPlans(int numQubits) {
         newGlobals.resize(MyGlobalVars::bit);
 
         if (lgID == 0) {
-            for (size_t i = 0; i < newGlobals.size(); i++) {
-                int x = newGlobals[i];
-                if (pos[x] >= numLocalQubits)
-                    continue;
-                for (int y = numLocalQubits; y < numQubits; y++) {
-                    if (std::find(newGlobals.begin(), newGlobals.end(), layout[y]) == newGlobals.end()) {
-                        std::swap(pos[x], pos[y]);
-                        layout[pos[x]] = x; layout[pos[y]] = y;
-                        break;
-                    }
-                }
-                
-            }
-            localGroup.state = State(pos, layout);
-            localGroup.cuttPlans.clear();
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                localGroup.cuttPlans.push_back(cuttHandle());
-            }
-            localGroup.a2aCommSize = -1;
-            localGroup.a2aComm.clear();
-#ifdef SHOW_SCHEDULE
-            printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-            printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
-            printf("------------------------------------------------------\n");
-#endif
+            state = localGroup.initFirstGroupState(state, numQubits, newGlobals);
         } else {
-            std::vector<int> perm = gen_perm_vector(numLocalQubits);
-            int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
-            for (int i = 0; i < MyGlobalVars::bit; i++) {
-                if (overlapGlobals >> i & 1) continue;
-                std::swap(perm[pos[newGlobals[i]]], perm[c]);
-                int swappedQid = layout[c];
-                pos[swappedQid] = pos[newGlobals[i]];
-                pos[newGlobals[i]] = c;
-                layout[pos[newGlobals[i]]] = newGlobals[i];
-                layout[pos[swappedQid]] = swappedQid;
-                c++;
-            }
-    #ifdef SHOW_SCHEDULE
-            printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
-            printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-            printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
-    #endif
-            // complex have two floats
-            perm.push_back(0);
-            for (int i = perm.size() - 1; i; i--) {
-                perm[i] = perm[i-1] + 1;
-            }
-            perm[0] = 0;
-
-            c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
-            for (int i = 0; i < MyGlobalVars::bit; i++) {
-                if (overlapGlobals >> i & 1) continue;
-                int a = i + numLocalQubits;
-                int qa = layout[a], qc = layout[c];
-                layout[a] = qc; pos[qc] = a;
-                layout[c] = qa; pos[qa] = c;
-                c++;
-            }
-    #ifdef SHOW_SCHEDULE
-            printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
-            printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
-            printf("------------------------------------------------------\n");
-    #endif
-            std::vector<std::pair<int, int>> newCommPair;
-            for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
-                newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
-            }
-            std::sort(newCommPair.begin(), newCommPair.end());
-            std::vector<int> newComm;
-            for (auto x: newCommPair) {
-                newComm.push_back(x.second);
-            }
-            localGroup.a2aComm = newComm;
-            localGroup.a2aCommSize = MyGlobalVars::numGPUs >> overlapCnt;
-            localGroup.cuttPlans.clear();
-            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-                cuttHandle plan;
-                checkCudaErrors(cudaSetDevice(g));
-                checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
-                localGroup.cuttPlans.push_back(plan);
-            }
-            localGroup.state = State(pos, layout);
+            state = localGroup.initState(state, numQubits, newGlobals, overlapGlobals);
         }
     }
-    finalState = State(pos, layout);
+    finalState = state;
 }
 
 #elif BACKEND==3
