@@ -300,6 +300,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     }
                     int shift = shiftAt[controlQubit * 10 + targetQubit];
                     switch (deviceGates[i].type) {
+                        FOLLOW_NEXT(CCX)
                         CASE_CTR_SMALL_SMALL(CNOT, XSingle(lo, hi))
                         CASE_CTR_SMALL_SMALL(CY, YSingle(lo, hi))
                         CASE_CTR_SMALL_SMALL(CZ, ZHi(hi))
@@ -328,6 +329,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         shift = 1 << 9;
                     }
                     switch (deviceGates[i].type) {
+                        FOLLOW_NEXT(CCX)
                         CASE_CONTROL(CNOT, XSingle(lo, hi))
                         CASE_CONTROL(CY, YSingle(lo, hi))
                         CASE_CONTROL(CZ, ZHi(hi))

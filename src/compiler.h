@@ -20,13 +20,14 @@ private:
 
 class OneLayerCompiler {
 public:
-    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0);
+    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
     LocalGroup run();
 private:
     int numQubits;
     int localSize;
     bool enableGlobal;
     qindex whiteList;
+    qindex required;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
     void remove(GateGroup& gg);

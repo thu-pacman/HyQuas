@@ -13,6 +13,7 @@ void Compiler::fillLocals(LocalGroup& lg) {
     for (auto& gg: lg.fullGroups) {
         qindex related = gg.relatedQubits;
         int numRelated = bitCount(related);
+        assert(numRelated <= numLocalQubits);
         if (numRelated < numLocalQubits) {
             for (int i = 0;; i++)
                 if (!(related >> i & 1)) {
@@ -30,10 +31,12 @@ std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
     std::vector<std::vector<Gate>> result;
     result.push_back(std::vector<Gate>());
     for (size_t i = 1; i < lg.fullGroups.size(); i++) {
-        qindex allowed = lg.fullGroups[i-1].relatedQubits & lg.fullGroups[i].relatedQubits;
+        int overlapped = bitCount(((~lg.fullGroups[i-1].relatedQubits) & (~lg.fullGroups[i].relatedQubits) & ((((qindex) 1) << numQubits) - 1)));
         std::vector<Gate> gates = lg.fullGroups[i-1].gates;
         std::reverse(gates.begin(), gates.end());
-        OneLayerCompiler backCompiler(numQubits, bitCount(allowed), gates, enableGlobal, allowed);
+        assert(lg.fullGroups[i-1].relatedQubits != 0);
+        OneLayerCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit + overlapped, gates,
+                                        enableGlobal, lg.fullGroups[i-1].relatedQubits, lg.fullGroups[i].relatedQubits);
         LocalGroup toRemove = backCompiler.run();
         assert(toRemove.fullGroups.size() == 1);
         std::vector<Gate> toRemoveGates = toRemove.fullGroups[0].gates;
@@ -41,6 +44,7 @@ std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
         
         removeGates(lg.fullGroups[i-1].gates, toRemoveGates);
         result.push_back(toRemoveGates);
+        lg.fullGroups[i].relatedQubits |= toRemove.relatedQubits;
     }
     return std::move(result);
 }
@@ -48,8 +52,8 @@ std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
 Schedule Compiler::run() {
     OneLayerCompiler localCompiler(numQubits, localSize, gates, enableGlobal);
     LocalGroup localGroup = localCompiler.run();
-    fillLocals(localGroup);
     auto moveBack = moveToNext(localGroup);
+    fillLocals(localGroup);
     Schedule schedule;
     for (size_t i = 0; i < localGroup.fullGroups.size(); i++) {
         auto& gg = localGroup.fullGroups[i];
@@ -64,8 +68,8 @@ Schedule Compiler::run() {
     return schedule;
 }
 
-OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList):
-    numQubits(numQubits), localSize(localSize), enableGlobal(enableGlobal), whiteList(whiteList), remainGates(inputGates) {}
+OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList, qindex required):
+    numQubits(numQubits), localSize(localSize), enableGlobal(enableGlobal), whiteList(whiteList), required(required), remainGates(inputGates) {}
 
 LocalGroup OneLayerCompiler::run() {
     LocalGroup lg;
@@ -94,6 +98,8 @@ GateGroup OneLayerCompiler::getGroup() {
         for (int i = 0; i < numQubits; i++)
             if (!(whiteList >> i & 1))
                 full[i] = 1;
+        for (int i = 0; i < numQubits; i++)
+            cur[i].relatedQubits = required;
     }
 
     auto canMerge2 = [&](const GateGroup& a, const GateGroup & b) {
