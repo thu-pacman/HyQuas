@@ -11,9 +11,24 @@ Schedule Compiler::run() {
     OneLayerCompiler localCompiler(numQubits, localSize, gates, enableGlobal);
     LocalGroup localGroup = localCompiler.run();
     Schedule schedule;
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
     for (auto& gg: localGroup.fullGroups) {
         OneLayerCompiler shareCompiler(numQubits, shareSize, gg.gates, enableGlobal);
         schedule.localGroups.push_back(shareCompiler.run());
+        if (BACKEND == 1) {
+            qindex related = schedule.localGroups.back().relatedQubits;
+            int numRelated = bitCount(related);
+            if (numRelated < numLocalQubits) {
+                for (int i = 0; i < numQubits; i++)
+                    if (!(related >> i & 1)) {
+                        related |= ((qindex) 1) << i;
+                        numRelated ++;
+                        if (numRelated == numLocalQubits)
+                            break;
+                    }
+            }
+            schedule.localGroups.back().relatedQubits = related;
+        }
     }
     return schedule;
 }

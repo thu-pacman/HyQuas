@@ -513,6 +513,9 @@ void Schedule::initCuttPlans(int numQubits) {
                 newGlobals.push_back(i);
             }
         }
+        if (BACKEND == 1) {
+            assert(newGlobals.size() == MyGlobalVars::bit);
+        }
         
         auto globalPos = [numQubits, numLocalQubits](const std::vector<int>& layout, int x) {
             auto pos = std::find(layout.data() + numLocalQubits, layout.data() + numQubits, x);
@@ -535,8 +538,6 @@ void Schedule::initCuttPlans(int numQubits) {
 #ifdef SHOW_SCHEDULE
         printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
 #endif
-        assert(newGlobals.size() >= MyGlobalVars::bit);
-        newGlobals.resize(MyGlobalVars::bit);
 
         if (lgID == 0) {
             state = localGroup.initFirstGroupState(state, numQubits, newGlobals);
