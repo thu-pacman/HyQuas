@@ -47,7 +47,7 @@ GateGroup GateGroup::copyGates() {
 void Schedule::dump(int numQubits) {
     int L = 3;
     for (auto& lg: localGroups) {
-        for (auto& gg: lg.fullGroups) {
+        for (auto& gg: lg.overlapGroups) {
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
                     if (i == gate.controlQubit) {
@@ -70,6 +70,31 @@ void Schedule::dump(int numQubits) {
         }
         for (int i = 0; i < numQubits * L; i++) {
             printf("-");
+        }
+        printf("\n");
+        for (auto& gg: lg.fullGroups) {
+            for (const Gate& gate: gg.gates) {
+                for (int i = 0; i < numQubits; i++) {
+                    if (i == gate.controlQubit) {
+                        printf(".");
+                        for (int j = 1; j < L; j++) printf(" ");
+                    } else if (i == gate.targetQubit) {
+                        printf("%s", gate.name.c_str());
+                        for (int j = gate.name.length(); j < L; j++)
+                            printf(" ");
+                    } else {
+                        if (gg.contains(i)) putchar('+');
+                        else if (lg.contains(i)) putchar('/');
+                        else putchar('|');
+                        for (int j = 1; j < L; j++) printf(" ");
+                    }
+                }
+                printf("\n");
+            }
+            printf("\n");
+        }
+        for (int i = 0; i < numQubits * L; i++) {
+            printf("#");
         }
         printf("\n\n");
     }
@@ -97,14 +122,6 @@ void Schedule::dump(int numQubits) {
     }
 #endif
     fflush(stdout);
-}
-
-std::vector<int> GateGroup::toID() const {
-    std::vector<int> ret;
-    for (auto& gate: gates) {
-        ret.push_back(gate.gateID);
-    }
-    return ret;
 }
 
 std::vector<unsigned char> GateGroup::serialize() const {
@@ -332,6 +349,9 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
     auto newState = State(pos, layout);
     this->state = newState;
+    for (auto& gg: overlapGroups) {
+        newState = gg.initState(newState, numQubits);
+    }
     for (auto& gg: fullGroups) {
         newState = gg.initState(newState, numQubits);
     }
@@ -341,6 +361,7 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
 State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     auto pos = oldState.pos, layout = oldState.layout;
+    assert(overlapGroups.size() == 0);
     for (size_t i = 0; i < newGlobals.size(); i++) {
         int x = newGlobals[i];
         if (pos[x] >= numLocalQubits)
@@ -513,9 +534,7 @@ void Schedule::initCuttPlans(int numQubits) {
                 newGlobals.push_back(i);
             }
         }
-        if (BACKEND == 1) {
-            assert(newGlobals.size() == MyGlobalVars::bit);
-        }
+        assert(newGlobals.size() == MyGlobalVars::bit);
         
         auto globalPos = [numQubits, numLocalQubits](const std::vector<int>& layout, int x) {
             auto pos = std::find(layout.data() + numLocalQubits, layout.data() + numQubits, x);
@@ -550,6 +569,9 @@ void Schedule::initCuttPlans(int numQubits) {
 
 void Schedule::initMatrix() {
     for (auto& lg: localGroups) {
+        for (auto& gg: lg.overlapGroups) {
+            gg.initMatrix();
+        }
         for (auto& gg: lg.fullGroups) {
             gg.initMatrix();
         }
@@ -565,3 +587,16 @@ void Schedule::initMatrix() {
     UNREACHABLE()
 }
 #endif
+
+void removeGates(std::vector<Gate>& remain, const std::vector<Gate>& remove) {
+    std::vector<int> usedID;
+    for (auto& g: remove) usedID.push_back(g.gateID);
+    std::sort(usedID.begin(), usedID.end());
+    auto temp = remain;
+    remain.clear();
+    for (auto& g: temp) {
+        if (!std::binary_search(usedID.begin(), usedID.end(), g.gateID)) {
+            remain.push_back(g);
+        }
+    }
+}

@@ -37,27 +37,12 @@ void Executor::run() {
         }
         this->setState(localGroup.state);
 
-        auto& fullGroups = schedule.localGroups[lgID].fullGroups;        
-        for (size_t gg = 0; gg < fullGroups.size(); gg++) {
-#ifdef MEASURE_STAGE
-            // TODO multistream
-            cudaEvent_t start, stop;
-            checkCudaErrors(cudaEventCreate(&start));
-            checkCudaErrors(cudaEventCreate(&stop));
-            checkCudaErrors(cudaEventRecord(start, 0));
-#endif
-            this->applyGateGroup(fullGroups[gg]);
-#ifdef MEASURE_STAGE
-            // TODO multistream support
-            cudaEventRecord(stop, 0);
-            cudaEventSynchronize(stop);
-            float time;
-            cudaEventElapsedTime(&time, start, stop);
-            cudaEventDestroy(start);
-            cudaEventDestroy(stop);
-            printf("[Group %d] time for %x: %f\n", int(g), relatedQubits, time);
-#endif
-            // printf("Group End\n");
+        for (auto& gg: schedule.localGroups[lgID].overlapGroups) {
+            this->applyGateGroup(gg);
+        }
+
+        for (auto& gg: schedule.localGroups[lgID].fullGroups) {
+            this->applyGateGroup(gg);
         }
     }
     this->finalize();
@@ -274,6 +259,13 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
 }
 
 void Executor::applyGateGroup(const GateGroup& gg) {
+#ifdef MEASURE_STAGE
+    // TODO multistream
+    cudaEvent_t start, stop;
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+    checkCudaErrors(cudaEventRecord(start, 0));
+#endif
     switch (gg.backend) {
         case Backend::PerGate: {
             applyPerGateGroup(gg);
@@ -287,6 +279,17 @@ void Executor::applyGateGroup(const GateGroup& gg) {
             UNREACHABLE()
     }
     setState(gg.state);
+#ifdef MEASURE_STAGE
+    // TODO multistream support
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+    float time;
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    printf("[Group] time for %x: %f\n", gg.relatedQubits, time);
+#endif
+    // printf("Group End\n");
 }
 
 void Executor::applyPerGateGroup(const GateGroup& gg) {

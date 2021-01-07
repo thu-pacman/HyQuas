@@ -46,7 +46,6 @@ struct GateGroup {
     void addGate(const Gate& g, bool enableGlobal = false);
     
     bool contains(int i) { return (relatedQubits >> i) & 1; }
-    std::vector<int> toID() const;
     
     std::vector<unsigned char> serialize() const;
     static GateGroup deserialize(const unsigned char* arr, int& cur);
@@ -89,3 +88,5 @@ struct Schedule {
     void initCuttPlans(int numQubits);
     void initMatrix();
 };
+
+void removeGates(std::vector<Gate>& remain, const std::vector<Gate>& remove); // remain := remain - remove        

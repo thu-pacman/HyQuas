@@ -9,6 +9,8 @@ public:
     Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates, bool enableGlobal);
     Schedule run();
 private:
+    void fillLocals(LocalGroup& lg);
+    std::vector<std::vector<Gate>> moveToNext(LocalGroup& lg);
     int numQubits;
     int localSize;
     int shareSize;
@@ -18,12 +20,13 @@ private:
 
 class OneLayerCompiler {
 public:
-    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal);
+    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0);
     LocalGroup run();
 private:
     int numQubits;
     int localSize;
     bool enableGlobal;
+    qindex whiteList;
     std::vector<Gate> remainGates;
     GateGroup getGroup();
     void remove(GateGroup& gg);
