@@ -31,11 +31,10 @@ std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
     std::vector<std::vector<Gate>> result;
     result.push_back(std::vector<Gate>());
     for (size_t i = 1; i < lg.fullGroups.size(); i++) {
-        int overlapped = bitCount(((~lg.fullGroups[i-1].relatedQubits) & (~lg.fullGroups[i].relatedQubits) & ((((qindex) 1) << numQubits) - 1)));
         std::vector<Gate> gates = lg.fullGroups[i-1].gates;
         std::reverse(gates.begin(), gates.end());
         assert(lg.fullGroups[i-1].relatedQubits != 0);
-        OneLayerCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit + overlapped, gates,
+        OneLayerCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit, gates,
                                         enableGlobal, lg.fullGroups[i-1].relatedQubits, lg.fullGroups[i].relatedQubits);
         LocalGroup toRemove = backCompiler.run();
         assert(toRemove.fullGroups.size() == 1);

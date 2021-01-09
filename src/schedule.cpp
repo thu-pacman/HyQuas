@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <tuple>
 #include <omp.h>
+#include <dbg.h>
 
 GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     GateGroup ret;
@@ -215,8 +216,7 @@ State GateGroup::initPerGateState(const State& oldState) {
     return state;
 }
 
-State GateGroup::initBlasState(const State& oldState, int numQubits) {
-    int numLocalQubits = numQubits - MyGlobalVars::bit;
+State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
     std::vector<int> pos = oldState.pos;
     std::vector<int> layout = oldState.layout;
     std::vector<int> dim(numLocalQubits + 1, 2);
@@ -268,7 +268,7 @@ State GateGroup::initBlasState(const State& oldState, int numQubits) {
 }
 
 
-State GateGroup::initState(const State& oldState, int numQubits) {
+State GateGroup::initState(const State& oldState, int numLocalQubits) {
     if (BACKEND == 1) {
         backend = Backend::PerGate;
     } else if (BACKEND == 3) {
@@ -281,7 +281,7 @@ State GateGroup::initState(const State& oldState, int numQubits) {
         return initPerGateState(oldState);
     }
     if (backend == Backend::BLAS) {
-        return initBlasState(oldState, numQubits);
+        return initBlasState(oldState, numLocalQubits);
     }
     UNREACHABLE();
 }
@@ -291,18 +291,36 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     auto pos = oldState.pos, layout = oldState.layout;
     int overlapCnt = bitCount(overlapGlobals);
     std::vector<int> perm = gen_perm_vector(numLocalQubits);
-    int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
-    for (int i = 0; i < MyGlobalVars::bit; i++) {
-        if (overlapGlobals >> i & 1) continue;
-        std::swap(perm[pos[newGlobals[i]]], perm[c]);
+    std::vector<int> newBuffer;
+    if (overlapCnt > 0) {
+        qindex overlapRelated = 0;
+        for (auto& gg: overlapGroups)
+            overlapRelated |= gg.relatedQubits;
+        int need = MyGlobalVars::bit - overlapCnt;
+        for (int i = numLocalQubits - 1; i >= 0; i--) {
+            int x = layout[i];
+            if (std::find(newGlobals.begin(), newGlobals.end(), x) == newGlobals.end() && !(overlapRelated >> x & 1)) {
+                newBuffer.push_back(x);
+                need --;
+                if (need == 0)
+                    break;
+            }
+        }
+    }
+    for (int i = 0; i < MyGlobalVars::bit; i++)
+        if (!(overlapGlobals >> i & 1))
+            newBuffer.push_back(newGlobals[i]);
+    assert(newBuffer.size() == MyGlobalVars::bit);
+    for (int i = 0, c = numLocalQubits - MyGlobalVars::bit; i < MyGlobalVars::bit; i++, c++) {
+        std::swap(perm[pos[newBuffer[i]]], perm[c]);
         int swappedQid = layout[c];
-        pos[swappedQid] = pos[newGlobals[i]];
-        pos[newGlobals[i]] = c;
-        layout[pos[newGlobals[i]]] = newGlobals[i];
+        pos[swappedQid] = pos[newBuffer[i]];
+        pos[newBuffer[i]] = c;
+        layout[pos[newBuffer[i]]] = newBuffer[i];
         layout[pos[swappedQid]] = swappedQid;
-        c++;
     }
 #ifdef SHOW_SCHEDULE
+    printf("buffer: "); for (auto x: newBuffer) printf("%d ", x); printf("\n");
     printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
     printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
     printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
@@ -314,7 +332,7 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
     perm[0] = 0;
 
-    c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
+    int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
     for (int i = 0; i < MyGlobalVars::bit; i++) {
         if (overlapGlobals >> i & 1) continue;
         int a = i + numLocalQubits;
@@ -350,10 +368,10 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     auto newState = State(pos, layout);
     this->state = newState;
     for (auto& gg: overlapGroups) {
-        newState = gg.initState(newState, numQubits);
+        newState = gg.initState(newState, numLocalQubits - MyGlobalVars::bit);
     }
     for (auto& gg: fullGroups) {
-        newState = gg.initState(newState, numQubits);
+        newState = gg.initState(newState, numLocalQubits);
     }
     return newState;
 }

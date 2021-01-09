@@ -10,7 +10,6 @@
 Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule):
     deviceStateVec(deviceStateVec),
     numQubits(numQubits),
-    numLocalQubits(numQubits - MyGlobalVars::bit),
     schedule(schedule) {
     threadBias.resize(MyGlobalVars::numGPUs);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
@@ -19,7 +18,7 @@ Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const S
     }
     std::vector<qreal> ret;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
-    numElements = 1 << numLocalQubits;
+    int numElements = 1 << numLocalQubits;
     deviceBuffer.resize(MyGlobalVars::numGPUs);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         deviceBuffer[g] = deviceStateVec[g] + numElements;        
@@ -38,11 +37,11 @@ void Executor::run() {
         this->setState(localGroup.state);
 
         for (auto& gg: schedule.localGroups[lgID].overlapGroups) {
-            this->applyGateGroup(gg);
+            this->applyGateGroup(gg, true);
         }
 
         for (auto& gg: schedule.localGroups[lgID].fullGroups) {
-            this->applyGateGroup(gg);
+            this->applyGateGroup(gg, false);
         }
     }
     this->finalize();
@@ -59,6 +58,8 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
     }
+    int numLocalQubit = numQubits - MyGlobalVars::bit;
+    int numElements = 1 << numLocalQubit;
     int partSize = numElements / commSize;
     for (int xr = 0; xr < commSize; xr++) {
         for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
@@ -84,9 +85,9 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
 
 #define IS_SHARE_QUBIT(logicIdx) ((relatedLogicQb >> logicIdx & 1) > 0)
 #define IS_LOCAL_QUBIT(logicIdx) (state.pos[logicIdx] < numLocalQubits)
-#define IS_HIGH_GPU(gpu_id, logicIdx) ((gpu_id >> (state.pos[logicIdx] - numLocalQubits) & 1) > 0)
+#define IS_HIGH_PART(part_id, logicIdx) ((part_id >> (state.pos[logicIdx] - numLocalQubits) & 1) > 0)
 
-KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb, const std::map<int, int>& toID) const {
+KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, qindex relatedLogicQb, const std::map<int, int>& toID) const {
     if (gate.controlQubit2 != -1) {
         // Assume no CC-Diagonal
         int c1 = gate.controlQubit;
@@ -106,7 +107,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 gate.mat
             );
         } else if (IS_LOCAL_QUBIT(c1) && !IS_LOCAL_QUBIT(c2)) {
-            if (IS_HIGH_GPU(gpu_id, c2)) { // CU(c1, t)
+            if (IS_HIGH_PART(part_id, c2)) { // CU(c1, t)
                 return KernelGate(
                     Gate::toCU(gate.type),
                     toID.at(c1), 1 - IS_SHARE_QUBIT(c1),
@@ -117,7 +118,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 return KernelGate::ID();
             }
         } else { // !IS_LOCAL_QUBIT(c1) && !IS_LOCAL_QUBIT(c2)
-            if (IS_HIGH_GPU(gpu_id, c1) && IS_HIGH_GPU(gpu_id, c2)) { // U(t)
+            if (IS_HIGH_PART(part_id, c1) && IS_HIGH_PART(part_id, c2)) { // U(t)
                 return KernelGate(
                     Gate::toU(gate.type),
                     toID.at(gate.targetQubit), 1 - IS_SHARE_QUBIT(gate.targetQubit),
@@ -139,7 +140,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
         } else if (IS_LOCAL_QUBIT(c) && !IS_LOCAL_QUBIT(t)) { // U(c)
             switch (gate.type) {
                 case GateType::CZ: {
-                    if (IS_HIGH_GPU(gpu_id, t)) {
+                    if (IS_HIGH_PART(part_id, t)) {
                         return KernelGate(
                             GateType::Z,
                             toID.at(c), 1 - IS_SHARE_QUBIT(c),
@@ -150,7 +151,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::CRZ: { // GOC(c)
-                    qComplex mat[2][2] = {make_qComplex(1), make_qComplex(0), make_qComplex(0), IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0]};
+                    qComplex mat[2][2] = {make_qComplex(1), make_qComplex(0), make_qComplex(0), IS_HIGH_PART(part_id, t) ? gate.mat[1][1]: gate.mat[0][0]};
                     return KernelGate(
                         GateType::GOC,
                         toID.at(c), 1 - IS_SHARE_QUBIT(c),
@@ -162,7 +163,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                 }
             }
         } else if (!IS_LOCAL_QUBIT(c) && IS_LOCAL_QUBIT(t)) {
-            if (IS_HIGH_GPU(gpu_id, c)) { // U(t)
+            if (IS_HIGH_PART(part_id, c)) { // U(t)
                 return KernelGate(
                     Gate::toU(gate.type),
                     toID.at(t), 1 - IS_SHARE_QUBIT(t),
@@ -173,10 +174,10 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
             }
         } else { // !IS_LOCAL_QUBIT(c) && !IS_LOCAL_QUBIT(t)
             assert(gate.isDiagonal());
-            if (IS_HIGH_GPU(gpu_id, c)) {
+            if (IS_HIGH_PART(part_id, c)) {
                 switch (gate.type) {
                     case GateType::CZ: {
-                        if (IS_HIGH_GPU(gpu_id, t)) {
+                        if (IS_HIGH_PART(part_id, t)) {
                             qComplex mat[2][2] = {make_qComplex(-1), make_qComplex(0), make_qComplex(0), make_qComplex(-1)};
                             return KernelGate(
                                 GateType::GZZ,
@@ -188,7 +189,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                         }
                     }
                     case GateType::CRZ: {
-                        qComplex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
+                        qComplex val = IS_HIGH_PART(part_id, t) ? gate.mat[1][1]: gate.mat[0][0];
                         qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(
                             GateType::GCC,
@@ -209,7 +210,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
         if (!IS_LOCAL_QUBIT(t)) { // GCC(t)
             switch (gate.type) {
                 case GateType::U1: {
-                    if (IS_HIGH_GPU(gpu_id, t)) {
+                    if (IS_HIGH_PART(part_id, t)) {
                         qComplex val = gate.mat[1][1];
                         qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GCC, 0, 0, mat);
@@ -218,7 +219,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::Z: {
-                    if (IS_HIGH_GPU(gpu_id, t)) {
+                    if (IS_HIGH_PART(part_id, t)) {
                         qComplex mat[2][2] = {make_qComplex(-1), make_qComplex(0), make_qComplex(0), make_qComplex(-1)};
                         return KernelGate(GateType::GZZ, 0, 0, mat);
                     } else {
@@ -226,7 +227,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::S: {
-                    if (IS_HIGH_GPU(gpu_id, t)) {
+                    if (IS_HIGH_PART(part_id, t)) {
                         qComplex val = make_qComplex(0, 1);
                         qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GII, 0, 0, mat);
@@ -235,7 +236,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::T: {
-                    if (IS_HIGH_GPU(gpu_id, t)) {
+                    if (IS_HIGH_PART(part_id, t)) {
                         qComplex val = gate.mat[1][1];
                         qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                         return KernelGate(GateType::GCC, 0, 0, mat);
@@ -244,7 +245,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
                     }
                 }
                 case GateType::RZ: {
-                    qComplex val = IS_HIGH_GPU(gpu_id, t) ? gate.mat[1][1]: gate.mat[0][0];
+                    qComplex val = IS_HIGH_PART(part_id, t) ? gate.mat[1][1]: gate.mat[0][0];
                     qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                     return KernelGate(GateType::GCC, 0, 0, mat);
                 }
@@ -258,7 +259,7 @@ KernelGate Executor::getGate(const Gate& gate, int gpu_id, qindex relatedLogicQb
     }
 }
 
-void Executor::applyGateGroup(const GateGroup& gg) {
+void Executor::applyGateGroup(const GateGroup& gg, bool isSlice) {
 #ifdef MEASURE_STAGE
     // TODO multistream
     cudaEvent_t start, stop;
@@ -268,11 +269,11 @@ void Executor::applyGateGroup(const GateGroup& gg) {
 #endif
     switch (gg.backend) {
         case Backend::PerGate: {
-            applyPerGateGroup(gg);
+            applyPerGateGroup(gg, isSlice);
             break;
         }
         case Backend::BLAS: {
-            applyBlasGroup(gg);
+            applyBlasGroup(gg, isSlice);
             break;
         }
         default:
@@ -292,8 +293,11 @@ void Executor::applyGateGroup(const GateGroup& gg) {
     // printf("Group End\n");
 }
 
-void Executor::applyPerGateGroup(const GateGroup& gg) {
+void Executor::applyPerGateGroup(const GateGroup& gg, bool isSlice) {
     auto& gates = gg.gates;
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    if (isSlice)
+        numLocalQubits -= MyGlobalVars::bit;
     // initialize blockHot, enumerate, threadBias
     qindex relatedLogicQb = gg.relatedQubits;
     if (bitCount(relatedLogicQb) < LOCAL_QUBIT_SIZE) {
@@ -302,28 +306,64 @@ void Executor::applyPerGateGroup(const GateGroup& gg) {
     qindex relatedQubits = toPhyQubitSet(relatedLogicQb);
     
     qindex blockHot, enumerate;
-    prepareBitMap(relatedQubits, blockHot, enumerate);
+    prepareBitMap(relatedQubits, blockHot, enumerate, numLocalQubits);
 
     // initialize gates
-    std::map<int, int> toID = getLogicShareMap(relatedQubits);
+    std::map<int, int> toID = getLogicShareMap(relatedQubits, numLocalQubits);
     
     KernelGate hostGates[MyGlobalVars::numGPUs * gates.size()];
     assert(gates.size() < MAX_GATE);
+    if (isSlice) {
+        int numPartition = MyGlobalVars::numGPUs;
+        int partSize = 1 << numLocalQubits;
+        for (int p = 0; p < numPartition; p++) {
+            #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                for (size_t i = 0; i < gates.size(); i++) {
+                    hostGates[g * gates.size() + i] = getGate(gates[i], g * numPartition + p, numLocalQubits, relatedLogicQb, toID);
+                }
+            }
+            copyGatesToSymbol(hostGates, gates.size());
+            qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
+            launchExecutor(gridDim, deviceStateVec, threadBias, numLocalQubits, gates.size(), blockHot, enumerate, p * partSize);
+        }
+        return;
+    }
     #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         for (size_t i = 0; i < gates.size(); i++) {
-           hostGates[g * gates.size() + i] = getGate(gates[i], g, relatedLogicQb, toID);
+           hostGates[g * gates.size() + i] = getGate(gates[i], g, numLocalQubits, relatedLogicQb, toID);
         }
     }
     copyGatesToSymbol(hostGates, gates.size());
     qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
-    launchExecutor(gridDim, deviceStateVec, threadBias, numLocalQubits, gates.size(), blockHot, enumerate);
+    launchExecutor(gridDim, deviceStateVec, threadBias, numLocalQubits, gates.size(), blockHot, enumerate, 0);
 }
 
-void Executor::applyBlasGroup(const GateGroup& gg) {
+void Executor::applyBlasGroup(const GateGroup& gg, bool isSlice) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     int numElements = 1 << numLocalQubits;
     qreal alpha = 1.0, beta = 0.0;
+    if (isSlice) {
+        numLocalQubits -= MyGlobalVars::bit;
+        numElements = 1 << numLocalQubits;
+        int numPartition = MyGlobalVars::numGPUs;
+        int partSize = 1 << numLocalQubits;
+        int K = 1 << bitCount(gg.relatedQubits);
+        for (int p = 0; p < numPartition; p++) {
+            for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+                checkCudaErrors(cudaSetDevice(g));
+                checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
+                checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
+                    K * 2, numElements / K, K * 2, // M, N, K
+                    &alpha, gg.deviceMats[g], K * 2, // alpha, a, lda
+                    reinterpret_cast<qreal*>(deviceBuffer[g] + partSize), K * 2, // b, ldb
+                    &beta, reinterpret_cast<qreal*>(deviceStateVec[g] + partSize), K * 2 // beta, c, ldc
+                ));
+            }
+        }
+        return;
+    }
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
@@ -358,7 +398,7 @@ qindex Executor::fillRelatedQubits(qindex relatedLogicQb) const {
     return relatedLogicQb;
 }
 
-void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate) {
+void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits) {
     blockHot = (qindex(1) << numLocalQubits) - 1 - relatedQubits;
     enumerate = relatedQubits;
     qindex threadHot = 0;
@@ -378,7 +418,7 @@ void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enu
     // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
 }
 
-std::map<int, int> Executor::getLogicShareMap(int relatedQubits) const{
+std::map<int, int> Executor::getLogicShareMap(int relatedQubits, int numLocalQubits) const{
     int shareCnt = 0;
     int localCnt = 0;
     int globalCnt = 0;

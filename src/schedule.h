@@ -50,9 +50,9 @@ struct GateGroup {
     std::vector<unsigned char> serialize() const;
     static GateGroup deserialize(const unsigned char* arr, int& cur);
 
-    State initState(const State& oldState, int numQubits);
+    State initState(const State& oldState, int numLocalQubits);
     State initPerGateState(const State& oldState);
-    State initBlasState(const State& oldState, int numQubits);
+    State initBlasState(const State& oldState, int numLocalQubit);
     void initCPUMatrix();
     void initGPUMatrix();
     void initMatrix();

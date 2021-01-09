@@ -20,4 +20,4 @@ void cuttPlanInit(std::vector<cuttHandle>& plans);
 // kernelOpt
 void initControlIdx();
 void copyGatesToSymbol(KernelGate* hostGates, int numGates);
-void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate);
+void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, qindex bias);

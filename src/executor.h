@@ -16,9 +16,9 @@ private:
     void transpose(std::vector<cuttHandle> plans);
     void all2all(int commSize, std::vector<int> comm);
     void setState(const State& newState) { state = newState; }
-    void applyGateGroup(const GateGroup& gg);
-    void applyPerGateGroup(const GateGroup& gg);
-    void applyBlasGroup(const GateGroup& gg);
+    void applyGateGroup(const GateGroup& gg, bool isSlice);
+    void applyPerGateGroup(const GateGroup& gg, bool isSlice);
+    void applyBlasGroup(const GateGroup& gg, bool isSlice);
     void finalize();
     // void Checkpoint();
     // void Restore();
@@ -26,11 +26,11 @@ private:
     // utils
     qindex toPhyQubitSet(qindex logicQubitset) const;
     qindex fillRelatedQubits(qindex related) const;
-    KernelGate getGate(const Gate& g, int gpu_id, qindex relatedLogicQb, const std::map<int, int>& toID) const;
+    KernelGate getGate(const Gate& gate, int part_id, int numLocalQubits, qindex relatedLogicQb, const std::map<int, int>& toID) const;
 
     // internal
-    void prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate); // allocate threadBias
-    std::map<int, int> getLogicShareMap(int relatedQubits) const; // input: physical, output logic -> share
+    void prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits); // allocate threadBias
+    std::map<int, int> getLogicShareMap(int relatedQubits, int numLocalQubits) const; // input: physical, output logic -> share
 
     State state;
 
@@ -38,7 +38,7 @@ private:
     std::vector<qindex*> threadBias;
     std::vector<qComplex*> deviceStateVec;
     std::vector<qComplex*> deviceBuffer;
-    int numQubits, numLocalQubits, numElements;
+    int numQubits;
 
     //schedule
     const Schedule& schedule;

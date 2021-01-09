@@ -641,10 +641,10 @@ void copyGatesToSymbol(KernelGate* hostGates, int numGates) {
     }
 }
 
-void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate) {
+void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, qindex bias) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, MyGlobalVars::streams[g]>>>
-            (deviceStateVec[g], threadBias[g], loIdx_device[g], shiftAt_device[g], numLocalQubits, numGates, blockHot, enumerate);
+            (deviceStateVec[g] + bias, threadBias[g], loIdx_device[g], shiftAt_device[g], numLocalQubits, numGates, blockHot, enumerate);
     }
 }
