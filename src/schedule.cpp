@@ -408,7 +408,7 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     auto newState = State(pos, layout);
     this->state = newState;
     for (auto& gg: fullGroups) {
-        newState = gg.initState(newState, numQubits);
+        newState = gg.initState(newState, numLocalQubits);
     }
     return newState;
 }
