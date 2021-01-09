@@ -91,6 +91,7 @@ namespace MyGlobalVars {
     extern int numGPUs;
     extern int bit;
     extern std::unique_ptr<cudaStream_t[]> streams;
+    extern std::unique_ptr<cudaStream_t[]> streams_comm;
     extern std::unique_ptr<cublasHandle_t[]> blasHandles;
     void init();
 };

@@ -7,6 +7,7 @@ namespace MyGlobalVars {
 int numGPUs;
 int bit;
 std::unique_ptr<cudaStream_t[]> streams;
+std::unique_ptr<cudaStream_t[]> streams_comm;
 std::unique_ptr<cublasHandle_t[]> blasHandles;
 void init() {
     checkCudaErrors(cudaGetDeviceCount(&numGPUs));
@@ -23,6 +24,7 @@ void init() {
     }
 
     streams = std::make_unique<cudaStream_t[]>(MyGlobalVars::numGPUs);
+    streams_comm = std::make_unique<cudaStream_t[]>(MyGlobalVars::numGPUs);
     blasHandles = std::make_unique<cublasHandle_t[]>(MyGlobalVars::numGPUs);
     for (int i = 0; i < numGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
@@ -36,6 +38,7 @@ void init() {
         checkCudaErrors(cudaStreamCreate(&streams[i]);)
         checkBlasErrors(cublasCreate(&blasHandles[i]));
         checkBlasErrors(cublasSetStream(blasHandles[i], streams[i]));
+        checkCudaErrors(cudaStreamCreate(&streams_comm[i]));
     }
 }
 };

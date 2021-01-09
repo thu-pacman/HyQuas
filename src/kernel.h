@@ -19,5 +19,8 @@ void cuttPlanInit(std::vector<cuttHandle>& plans);
 
 // kernelOpt
 void initControlIdx();
-void copyGatesToSymbol(KernelGate* hostGates, int numGates);
-void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, qindex bias);
+// call cudaSetDevice() before this function
+void copyGatesToSymbol(KernelGate* hostGates, int numGates, cudaStream_t& stream, int gpuID);
+
+// call cudaSetDevice() before this function
+void launchExecutor(int gridDim, qComplex* deviceStateVec, qindex* threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, cudaStream_t& stream, int gpuID);

@@ -634,17 +634,11 @@ void initControlIdx() {
 }
 #endif
 
-void copyGatesToSymbol(KernelGate* hostGates, int numGates) {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        checkCudaErrors(cudaSetDevice(g));
-        checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates + g * numGates, sizeof(KernelGate) * numGates, 0, cudaMemcpyDefault, MyGlobalVars::streams[g]));
-    }
+void copyGatesToSymbol(KernelGate* hostGates, int numGates, cudaStream_t& stream, int gpuID) {
+    checkCudaErrors(cudaMemcpyToSymbolAsync(deviceGates, hostGates + gpuID * numGates, sizeof(KernelGate) * numGates, 0, cudaMemcpyDefault, stream));
 }
 
-void launchExecutor(int gridDim, std::vector<qComplex*> &deviceStateVec, std::vector<qindex*> threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, qindex bias) {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        checkCudaErrors(cudaSetDevice(g));
-        run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, MyGlobalVars::streams[g]>>>
-            (deviceStateVec[g] + bias, threadBias[g], loIdx_device[g], shiftAt_device[g], numLocalQubits, numGates, blockHot, enumerate);
-    }
+void launchExecutor(int gridDim, qComplex* deviceStateVec, qindex* threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, cudaStream_t& stream, int gpuID) {
+    run<1<<THREAD_DEP><<<gridDim, 1<<THREAD_DEP, 0, stream>>>
+        (deviceStateVec, threadBias, loIdx_device[gpuID], shiftAt_device[gpuID], numLocalQubits, numGates, blockHot, enumerate);
 }
