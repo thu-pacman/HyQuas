@@ -19,7 +19,7 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     }
     qComplex one = make_qComplex(1.0, 0.0);
     checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
-#if BACKEND==1
+#if BACKEND==1 || BACKEND == 3
     initControlIdx();
 #endif
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {

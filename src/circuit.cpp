@@ -105,13 +105,13 @@ qComplex Circuit::ampAt(qindex idx) {
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3
-    Compiler compiler(numQubits, numQubits - MyGlobalVars::bit, LOCAL_QUBIT_SIZE, gates, BACKEND != 3);
+    Compiler compiler(numQubits, gates);
     schedule = compiler.run();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
     schedule.initCuttPlans(numQubits);
-    schedule.initMatrix();
+    schedule.initMatrix(numQubits);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
 #endif

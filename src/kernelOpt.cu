@@ -510,7 +510,7 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
     saveData(a, threadBias, enumerate);
 }
 
-#if BACKEND == 1
+#if BACKEND == 1 || BACKEND == 3
 void initControlIdx() {
     int loIdx_host[10][10][1 << THREAD_DEP];
     int shiftAt_host[10][10];

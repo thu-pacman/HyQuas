@@ -34,7 +34,7 @@ struct GateGroup {
     std::vector<cuttHandle> cuttPlans;
 
     Backend backend;
-    std::unique_ptr<qComplex[]> matrix;
+    std::vector<std::unique_ptr<qComplex[]>> matrix;
     std::vector<qreal*> deviceMats;
 
     GateGroup(GateGroup&&) = default;
@@ -43,7 +43,7 @@ struct GateGroup {
     GateGroup copyGates();
 
     static GateGroup merge(const GateGroup& a, const GateGroup& b);
-    void addGate(const Gate& g, bool enableGlobal = false);
+    void addGate(const Gate& g, qindex localQubits, bool enableGlobal);
     
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     
@@ -53,9 +53,9 @@ struct GateGroup {
     State initState(const State& oldState, int numLocalQubits);
     State initPerGateState(const State& oldState);
     State initBlasState(const State& oldState, int numLocalQubit);
-    void initCPUMatrix();
+    void initCPUMatrix(int numLocalQubit);
     void initGPUMatrix();
-    void initMatrix();
+    void initMatrix(int numLocalQubit);
 };
 
 struct LocalGroup {
@@ -86,7 +86,7 @@ struct Schedule {
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);
     void initCuttPlans(int numQubits);
-    void initMatrix();
+    void initMatrix(int numQubits);
 };
 
 void removeGates(std::vector<Gate>& remain, const std::vector<Gate>& remove); // remain := remain - remove        

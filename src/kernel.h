@@ -24,3 +24,8 @@ void copyGatesToSymbol(KernelGate* hostGates, int numGates, cudaStream_t& stream
 
 // call cudaSetDevice() before this function
 void launchExecutor(int gridDim, qComplex* deviceStateVec, qindex* threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, cudaStream_t& stream, int gpuID);
+
+
+// kernelUtils
+void isnanTest(qComplex* data, int n, cudaStream_t& stream);
+void printVector(qComplex* data, int n, cudaStream_t& stream);

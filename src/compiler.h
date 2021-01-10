@@ -6,7 +6,7 @@
 
 class Compiler {
 public:
-    Compiler(int numQubits, int localSize, int shareSize, std::vector<Gate> inputGates, bool enableGlobal);
+    Compiler(int numQubits, std::vector<Gate> inputGates);
     Schedule run();
 private:
     void fillLocals(LocalGroup& lg);
@@ -20,11 +20,12 @@ private:
 
 class OneLayerCompiler {
 public:
-    OneLayerCompiler(int numQubits, int localSize, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
+    OneLayerCompiler(int numQubits, int localSize, qindex localQubits, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
     LocalGroup run();
 private:
     int numQubits;
     int localSize;
+    qindex localQubits;
     bool enableGlobal;
     qindex whiteList;
     qindex required;

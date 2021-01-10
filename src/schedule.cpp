@@ -23,17 +23,18 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     return std::move(ret);
 }
 
-void GateGroup::addGate(const Gate& gate, bool enableGlobal) {
+void GateGroup::addGate(const Gate& gate, qindex localQubits, bool enableGlobal) {
     gates.push_back(gate);
     if (enableGlobal) {
         if (!gate.isDiagonal()) {
             relatedQubits |= qindex(1) << gate.targetQubit;
         }
     } else {
-        relatedQubits |= qindex(1) << gate.targetQubit;
-        if (gate.controlQubit != -1)
+        if (!gate.isDiagonal() || (localQubits >> gate.targetQubit & 1))
+            relatedQubits |= qindex(1) << gate.targetQubit;
+        if (gate.controlQubit != -1 && (localQubits >> gate.controlQubit & 1))
             relatedQubits |= qindex(1) << gate.controlQubit;
-        if (gate.controlQubit2 != -1)
+        if (gate.controlQubit2 != -1 && (localQubits >> gate.controlQubit2 & 1))
             relatedQubits |= qindex(1) << gate.controlQubit2;
     }
 }
@@ -269,14 +270,6 @@ State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
 
 
 State GateGroup::initState(const State& oldState, int numLocalQubits) {
-    if (BACKEND == 1) {
-        backend = Backend::PerGate;
-    } else if (BACKEND == 3) {
-        backend = Backend::BLAS;
-    } else {
-        UNREACHABLE();
-    }
-
     if (backend == Backend::PerGate) {
         return initPerGateState(oldState);
     }
@@ -413,115 +406,186 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     return newState;
 }
 
-void GateGroup::initCPUMatrix() {
+#define APPLY_IDENTITY_GATE(val) \
+for (int i = 0; i < n * n; i++) { \
+    mat[i] = mat[i] * val; \
+}
+
+#define APPLY_CI_GATE(val) \
+for (int i = 0; i < n; i++) { \
+    for (int j = 0; j < (n >> 1); j++) { \
+        int lo = j; \
+        lo = insertBit(lo, c1); \
+        lo += i * n; \
+        int hi = lo | 1 << c1; \
+        mat[hi] = mat[hi] * val; \
+    } \
+}
+
+#define APPLY_SINGLE_GATE() \
+for (int i = 0; i < n; i++) { \
+    for (int j = 0; j < (n >> 1); j++) { \
+        int lo = j; \
+        lo = insertBit(lo, t); \
+        lo += i * n; \
+        int hi = lo | 1 << t; \
+        qComplex v0 = mat[lo]; \
+        qComplex v1 = mat[hi]; \
+        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]); \
+        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]); \
+    } \
+}
+
+#define APPLY_CONTROL_GATE() \
+for (int i = 0; i < n; i++) { \
+    for (int j = 0; j < (n >> 2); j++) { \
+        int lo = j; \
+        lo = insertBit(lo, b); \
+        lo = insertBit(lo, a); \
+        lo += i * n; \
+        lo |= 1 << c1; \
+        int hi = lo | 1 << t; \
+        qComplex v0 = mat[lo]; \
+        qComplex v1 = mat[hi]; \
+        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]); \
+        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]); \
+    } \
+}
+
+
+void GateGroup::initCPUMatrix(int numLocalQubit) {
     auto& pos = state.pos;
     int numMatQubits = bitCount(relatedQubits);
+    assert(numMatQubits <= BLAS_MAT_LIMIT);
     int n = 1 << numMatQubits;
-    std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
-    for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
-    for (int i = 0; i < n; i++) {
-        mat[i * n + i] = make_qComplex(1.0, 0.0);
-    }
-    auto insertBit = [](int x, int pos) {
-        return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
-    };
-    for (auto& gate: gates) {
-        if (gate.controlQubit2 != -1) {
-            int c2 = pos[gate.controlQubit2];
-            int c1 = pos[gate.controlQubit];
-            int t = pos[gate.targetQubit];
-            assert(c2 < numMatQubits);
-            assert(c1 < numMatQubits);
-            assert(t < numMatQubits);
-            // sort
-            int a = std::max(std::max(c1, c2), t);
-            int c = std::min(std::min(c1, c2), t);
-            int b = c2 + c1 + t - a - c;
-            
-            #pragma omp parallel for
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < (n >> 3); j++) {
-                    int lo = j;
-                    lo = insertBit(lo, c);
-                    lo = insertBit(lo, b);
-                    lo = insertBit(lo, a);
-                    lo += i * n;
-                    lo |= 1 << c2;
-                    lo |= 1 << c1;
-                    int hi = lo | 1 << t;
-                    qComplex v0 = mat[lo];
-                    qComplex v1 = mat[hi];
-                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
-                }
-            }
-        } else if (gate.controlQubit != -1) {
-            int c = pos[gate.controlQubit];
-            int t = pos[gate.targetQubit];
-            assert(c < numMatQubits);
-            assert(t < numMatQubits);
-            // sort
-            int a = std::max(c, t);
-            int b = std::min(c, t);
+    matrix.clear();
+    matrix.resize(MyGlobalVars::numGPUs);
+    for (int gpuID = 0; gpuID < MyGlobalVars::numGPUs; gpuID++) {
+        auto isHiGPU = [gpuID, numLocalQubit](int q) {
+            assert(q >= numLocalQubit);
+            return (bool)(gpuID >> (q - numLocalQubit) & 1);
+        };
+        std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
+        for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
+        for (int i = 0; i < n; i++) {
+            mat[i * n + i] = make_qComplex(1.0, 0.0);
+        }
+        auto insertBit = [](int x, int pos) {
+            return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
+        };
+        
+        for (auto& gate: gates) {
+            if (gate.controlQubit2 != -1) {
+                int c2 = pos[gate.controlQubit2];
+                int c1 = pos[gate.controlQubit];
+                int t = pos[gate.targetQubit];
+                assert(c2 < numMatQubits || c2 >= numLocalQubit);
+                assert(c1 < numMatQubits || c1 >= numLocalQubit);
+                assert(t < numMatQubits); // no diagnoal c2 gate now
+                // sort
+                int a = std::max(std::max(c1, c2), t);
+                int c = std::min(std::min(c1, c2), t);
+                int b = c2 + c1 + t - a - c;
+                if (c1 > c2) std::swap(c1, c2);
 
-            #pragma omp parallel for
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < (n >> 2); j++) {
-                    int lo = j;
-                    lo = insertBit(lo, b);
-                    lo = insertBit(lo, a);
-                    lo += i * n;
-                    lo |= 1 << c;
-                    int hi = lo | 1 << t;
-                    qComplex v0 = mat[lo];
-                    qComplex v1 = mat[hi];
-                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                if (c1 >= numLocalQubit) {
+                    if (!isHiGPU(c2)) continue;
+                    if (!isHiGPU(c1)) continue;
+                    #pragma omp parallel for
+                    APPLY_SINGLE_GATE()
+                } else if (c2 >= numLocalQubit) {
+                    if (!isHiGPU(c2)) continue;
+                    int a = std::max(c1, t);
+                    int b = std::min(c1, t);
+                    #pragma omp parallel for
+                    APPLY_CONTROL_GATE()
                 }
-            }
-        } else {
-            int t = pos[gate.targetQubit];
-            assert(t < numMatQubits);
-            #pragma omp parallel for
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < (n >> 1); j++) {
-                    int lo = j;
-                    lo = insertBit(lo, t);
-                    lo += i * n;
-                    int hi = lo | 1 << t;
-                    qComplex v0 = mat[lo];
-                    qComplex v1 = mat[hi];
-                    mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                    mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                #pragma omp parallel for
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < (n >> 3); j++) {
+                        int lo = j;
+                        lo = insertBit(lo, c);
+                        lo = insertBit(lo, b);
+                        lo = insertBit(lo, a);
+                        lo += i * n;
+                        lo |= 1 << c2;
+                        lo |= 1 << c1;
+                        int hi = lo | 1 << t;
+                        qComplex v0 = mat[lo];
+                        qComplex v1 = mat[hi];
+                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+                    }
+                }
+            } else if (gate.controlQubit != -1) {
+                int c1 = pos[gate.controlQubit];
+                int t = pos[gate.targetQubit];
+                assert(c1 < numMatQubits || c1 >= numLocalQubit);
+                assert(t < numMatQubits || (t >= numLocalQubit && gate.isDiagonal()));
+                // sort
+                int a = std::max(c1, t);
+                int b = std::min(c1, t);
+                if (c1 >= numLocalQubit) {
+                    if (!isHiGPU(c1)) continue;
+                    if (t >= numLocalQubit) {
+                        bool isHi = isHiGPU(t);
+                        auto val = gate.mat[isHi][isHi];
+                        #pragma omp parallel for
+                        APPLY_IDENTITY_GATE(val);
+                    } else {
+                        #pragma omp parallel for
+                        APPLY_SINGLE_GATE()
+                    }
+                } else {
+                    if (t >= numLocalQubit) {
+                        bool isHi = isHiGPU(t);
+                        auto val = gate.mat[isHi][isHi];
+                        #pragma omp parallel for
+                        APPLY_CI_GATE(val);
+                    } else {
+                        #pragma omp parallel for
+                        APPLY_CONTROL_GATE()
+                    }
+                }
+            } else {
+                int t = pos[gate.targetQubit];
+                assert(t < numMatQubits || (t >= numLocalQubit && gate.isDiagonal()));
+                if (t >= numLocalQubit) {
+                    bool hi = isHiGPU(t);
+                    #pragma omp parallel for
+                    APPLY_IDENTITY_GATE(gate.mat[hi][hi]);
+                } else {
+                    #pragma omp parallel for
+                    APPLY_SINGLE_GATE()
                 }
             }
         }
+        // assert(isUnitary(mat, n));
+        // for (int i = 0; i < n; i++) {
+        //     for (int j = 0; j < n; j++)
+        //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
+        //     printf("\n");
+        // }
+        matrix[gpuID] = std::move(mat);
     }
-    // assert(isUnitary(mat, n));
-    // for (int i = 0; i < n; i++) {
-    //     for (int j = 0; j < n; j++)
-    //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
-    //     printf("\n");
-    // }
-    matrix = std::move(mat);
 }
 
 void GateGroup::initGPUMatrix() {
-    int n = 1 << bitCount(relatedQubits);
-    qreal realMat[2 * n][2 * n];
-    #pragma omp parallel for
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++) {
-            qComplex val = matrix[i * n + j];
-            realMat[i * 2][j * 2] = val.x;
-            realMat[i * 2][j * 2 + 1] = val.y;
-            realMat[i * 2 + 1][j * 2] = -val.y;
-            realMat[i * 2 + 1][j * 2 + 1] = val.x;
-        }
     assert(deviceMats.size() == 0);
     deviceMats.clear();
+    int n = 1 << bitCount(relatedQubits);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
+        qreal realMat[2 * n][2 * n];
+        #pragma omp parallel for
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                qComplex val = matrix[g][i * n + j];
+                realMat[i * 2][j * 2] = val.x;
+                realMat[i * 2][j * 2 + 1] = val.y;
+                realMat[i * 2 + 1][j * 2] = -val.y;
+                realMat[i * 2 + 1][j * 2 + 1] = val.x;
+            }
         qreal* mat;
         cudaMalloc(&mat, n * n * 4 * sizeof(qreal));
         cudaMemcpyAsync(mat, realMat, n * n * 4 * sizeof(qreal), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
@@ -529,9 +593,9 @@ void GateGroup::initGPUMatrix() {
     }
 }
 
-void GateGroup::initMatrix() {
+void GateGroup::initMatrix(int numLocalQubit) {
     if (backend == Backend::BLAS) {
-        initCPUMatrix();
+        initCPUMatrix(numLocalQubit);
         initGPUMatrix();
     }
 }
@@ -585,13 +649,13 @@ void Schedule::initCuttPlans(int numQubits) {
     finalState = state;
 }
 
-void Schedule::initMatrix() {
+void Schedule::initMatrix(int numQubits) {
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
-            gg.initMatrix();
+            gg.initMatrix(numQubits - 2 * MyGlobalVars::bit);
         }
         for (auto& gg: lg.fullGroups) {
-            gg.initMatrix();
+            gg.initMatrix(numQubits - MyGlobalVars::bit);
         }
     }
 }
