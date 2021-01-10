@@ -8,6 +8,7 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
+    MyGlobalVars::init();
     int n = 28;
     int num_gates = 512;
     for (int i = int(GateType::U1); i < int(GateType::TOTAL); i++) {

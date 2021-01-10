@@ -8,6 +8,7 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
+    MyGlobalVars::init();
     int n = 28;
     int num_gates = 512;
     for (int g = int(GateType::CNOT); g <= int(GateType::CRZ); g++) {

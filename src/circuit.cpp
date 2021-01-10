@@ -49,8 +49,10 @@ int Circuit::run(bool copy_back) {
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
         for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
             kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
-            kernelDestroy(deviceStateVec[g]);
         }
+    }
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        kernelDestroy(deviceStateVec[g]);
     }
     return duration.count();
 }
