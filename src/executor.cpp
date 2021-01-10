@@ -392,16 +392,16 @@ void Executor::applyPerGateGroupSliced(const GateGroup& gg, int sliceID) {
 void Executor::applyBlasGroup(const GateGroup& gg) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     int numElements = 1 << numLocalQubits;
-    qreal alpha = 1.0, beta = 0.0;
+    qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
         int K = 1 << bitCount(gg.relatedQubits);
         checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
-            K * 2, numElements / K, K * 2, // M, N, K
-            &alpha, gg.deviceMats[g], K * 2, // alpha, a, lda
-            reinterpret_cast<qreal*>(deviceBuffer[g]), K * 2, // b, ldb
-            &beta, reinterpret_cast<qreal*>(deviceStateVec[g]), K * 2 // beta, c, ldc
+            K, numElements / K, K, // M, N, K
+            &alpha, gg.deviceMats[g], K, // alpha, a, lda
+            deviceBuffer[g], K, // b, ldb
+            &beta, deviceStateVec[g], K // beta, c, ldc
         ));
     }
 }
@@ -409,7 +409,7 @@ void Executor::applyBlasGroup(const GateGroup& gg) {
 void Executor::applyBlasGroupSliced(const GateGroup& gg, int sliceID) {
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
     int numElements = 1 << numLocalQubits;
-    qreal alpha = 1.0, beta = 0.0;
+    qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     int partSize = 1 << numLocalQubits;
     int K = 1 << bitCount(gg.relatedQubits);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
@@ -417,10 +417,10 @@ void Executor::applyBlasGroupSliced(const GateGroup& gg, int sliceID) {
         int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g] + partSize * pID, deviceBuffer[g] + partSize * pID));
         checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
-            K * 2, numElements / K, K * 2, // M, N, K
-            &alpha, gg.deviceMats[g], K * 2, // alpha, a, lda
-            reinterpret_cast<qreal*>(deviceBuffer[g] + partSize * pID), K * 2, // b, ldb
-            &beta, reinterpret_cast<qreal*>(deviceStateVec[g] + partSize * pID), K * 2 // beta, c, ldc
+            K, numElements / K, K, // M, N, K
+            &alpha, gg.deviceMats[g], K, // alpha, a, lda
+            deviceBuffer[g] + partSize * pID, K, // b, ldb
+            &beta, deviceStateVec[g] + partSize * pID, K // beta, c, ldc
         ));
     }
 }

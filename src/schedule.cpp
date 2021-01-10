@@ -576,19 +576,15 @@ void GateGroup::initGPUMatrix() {
     int n = 1 << bitCount(relatedQubits);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        qreal realMat[2 * n][2 * n];
+        qComplex realMat[n][n];
         #pragma omp parallel for
         for (int i = 0; i < n; i++)
             for (int j = 0; j < n; j++) {
-                qComplex val = matrix[g][i * n + j];
-                realMat[i * 2][j * 2] = val.x;
-                realMat[i * 2][j * 2 + 1] = val.y;
-                realMat[i * 2 + 1][j * 2] = -val.y;
-                realMat[i * 2 + 1][j * 2 + 1] = val.x;
+                realMat[i][j] = matrix[g][i * n + j];
             }
-        qreal* mat;
-        cudaMalloc(&mat, n * n * 4 * sizeof(qreal));
-        cudaMemcpyAsync(mat, realMat, n * n * 4 * sizeof(qreal), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
+        qComplex* mat;
+        cudaMalloc(&mat, n * n * sizeof(qComplex));
+        cudaMemcpyAsync(mat, realMat, n * n * sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]);
         deviceMats.push_back(mat);
     }
 }
