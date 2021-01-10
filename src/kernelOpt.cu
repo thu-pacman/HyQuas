@@ -7,8 +7,7 @@
 #include "executor.h"
 using namespace std;
 
-extern __shared__ qreal real[1<<LOCAL_QUBIT_SIZE];
-extern __shared__ qreal imag[1<<LOCAL_QUBIT_SIZE];
+extern __shared__ qComplex shm[1<<LOCAL_QUBIT_SIZE];
 extern __shared__ qindex blockBias;
 
 __device__ __constant__ qreal recRoot2 = 0.70710678118654752440084436210485; // more elegant way?
@@ -18,170 +17,125 @@ std::vector<int*> loIdx_device;
 std::vector<int*> shiftAt_device;
 
 
-__device__ __forceinline__ void XSingle(int lo, int hi) {
-    qreal Real = real[lo];
-    qreal Imag = imag[lo];
-    real[lo] = real[hi];
-    imag[lo] = imag[hi];
-    real[hi] = Real;
-    imag[hi] = Imag;
+__device__ __forceinline__ void XSingle(int loIdx, int hiIdx) {
+    qComplex v = shm[loIdx];
+    shm[loIdx] = shm[hiIdx];
+    shm[hiIdx] = v;
 }
 
-__device__ __forceinline__ void YSingle(int lo, int hi) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = hiImag;
-    imag[lo] = -hiReal;
-    real[hi] = -loImag;
-    imag[hi] = loReal;
+__device__ __forceinline__ void YSingle(int loIdx, int hiIdx) {
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    
+    shm[loIdx] = make_qComplex(hi.y, -hi.x);
+    shm[hiIdx] = make_qComplex(-lo.y, lo.x);
 }
 
-__device__ __forceinline__ void ZHi(int hi) {
-    real[hi] = -real[hi];
-    imag[hi] = -imag[hi];
+__device__ __forceinline__ void ZHi(int hiIdx) {
+    qComplex v = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(-v.x, -v.y);
 }
 
 
-__device__ __forceinline__ void RXSingle(int lo, int hi, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal + beta * hiImag;
-    imag[lo] = alpha * loImag - beta * hiReal;
-    real[hi] = alpha * hiReal + beta * loImag;
-    imag[hi] = alpha * hiImag - beta * loReal;
+__device__ __forceinline__ void RXSingle(int loIdx, int hiIdx, qreal alpha, qreal beta) {
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    shm[loIdx] = make_qComplex(alpha * lo.x + beta * hi.y, alpha * lo.y - beta * hi.x);
+    shm[hiIdx] = make_qComplex(alpha * hi.x + beta * lo.y, alpha * hi.y - beta * lo.x);
 }
 
-__device__ __forceinline__ void RYSingle(int lo, int hi, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal - beta * hiReal;
-    imag[lo] = alpha * loImag - beta * hiImag;
-    real[hi] = beta * loReal + alpha * hiReal;
-    imag[hi] = beta * loImag + alpha * hiImag;
+__device__ __forceinline__ void RYSingle(int loIdx, int hiIdx, qreal alpha, qreal beta) {
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    shm[loIdx] = make_qComplex(alpha * lo.x - beta * hi.x, alpha * lo.y - beta * hi.y);
+    shm[hiIdx] = make_qComplex(beta * lo.x + alpha * hi.x, beta * lo.y + alpha * hi.y);
 }
 
-__device__ __forceinline__ void RZSingle(int lo, int hi, qreal alpha, qreal beta){
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = alpha * loReal + beta * loImag;
-    imag[lo] = alpha * loImag - beta * loReal;
-    real[hi] = alpha * hiReal - beta * hiImag;
-    imag[hi] = alpha * hiImag + beta * hiReal;
+__device__ __forceinline__ void RZSingle(int loIdx, int hiIdx, qreal alpha, qreal beta){
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    shm[loIdx] = make_qComplex(alpha * lo.x + beta * lo.y, alpha * lo.y - beta * lo.x);
+    shm[hiIdx] = make_qComplex(alpha * hi.x - beta * hi.y, alpha * hi.y + beta * hi.x);
 }
 
-__device__ __forceinline__ void RZLo(int lo, qreal alpha, qreal beta) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    real[lo] = alpha * loReal + beta * loImag;
-    imag[lo] = alpha * loImag - beta * loReal;
+__device__ __forceinline__ void RZLo(int loIdx, qreal alpha, qreal beta) {
+    qComplex lo = shm[loIdx];
+    shm[loIdx] = make_qComplex(alpha * lo.x + beta * lo.y, alpha * lo.y - beta * lo.x);
 }
 
-__device__ __forceinline__ void RZHi(int hi, qreal alpha, qreal beta){
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[hi] = alpha * hiReal - beta * hiImag;
-    imag[hi] = alpha * hiImag + beta * hiReal;
+__device__ __forceinline__ void RZHi(int hiIdx, qreal alpha, qreal beta){
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(alpha * hi.x - beta * hi.y, alpha * hi.y + beta * hi.x);
 }
 
-__device__ __forceinline__ void U1Hi(int hi, qreal alpha, qreal beta) {
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[hi] = alpha * hiReal - beta * hiImag;
-    imag[hi] = alpha * hiImag + beta * hiReal;
+#define COMPLEX_MULTIPLY_REAL(v0, v1) (v0.x * v1.x - v0.y * v1.y)
+#define COMPLEX_MULTIPLY_IMAG(v0, v1) (v0.x * v1.y + v0.y * v1.x)
+
+__device__ __forceinline__ void U1Hi(int hiIdx, qComplex p) {
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(hi, p), COMPLEX_MULTIPLY_IMAG(hi, p));
 }
 
-#define COMPLEX_MULTIPLY_REAL(i0, r0, i1, r1) (i0 * i1 - r0 * r1)
-#define COMPLEX_MULTIPLY_IMAG(i0, r0, i1, r1) (i0 * r1 + i1 * r0)
-__device__ __forceinline__ void USingle(int lo, int hi, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
-    imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
-    real[hi] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
-    imag[hi] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+__device__ __forceinline__ void USingle(int loIdx, int hiIdx, qComplex v00, qComplex v01, qComplex v10, qComplex v11) {
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    shm[loIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(lo, v00) + COMPLEX_MULTIPLY_REAL(hi, v01),
+                               COMPLEX_MULTIPLY_IMAG(lo, v00) + COMPLEX_MULTIPLY_IMAG(hi, v01));
+    shm[hiIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(lo, v10) + COMPLEX_MULTIPLY_REAL(hi, v11),
+                               COMPLEX_MULTIPLY_IMAG(lo, v10) + COMPLEX_MULTIPLY_IMAG(hi, v11));
 }
 
-__device__ __forceinline__ void HSingle(int lo, int hi) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = recRoot2 * (loReal + hiReal);
-    imag[lo] = recRoot2 * (loImag + hiImag);
-    real[hi] = recRoot2 * (loReal - hiReal);
-    imag[hi] = recRoot2 * (loImag - hiImag);
+__device__ __forceinline__ void HSingle(int loIdx, int hiIdx) {
+    qComplex lo = shm[loIdx];
+    qComplex hi = shm[hiIdx];
+    shm[loIdx] = make_qComplex(recRoot2 * (lo.x + hi.x), recRoot2 * (lo.y + hi.y));
+    shm[hiIdx] = make_qComplex(recRoot2 * (lo.x - hi.x), recRoot2 * (lo.y - hi.y));
 }
 
-__device__ __forceinline__ void SHi(int hi) {
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[hi] = -hiImag;
-    imag[hi] = hiReal;
+__device__ __forceinline__ void SHi(int hiIdx) {
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(-hi.y, hi.x);
 }
 
-__device__ __forceinline__ void THi(int hi) {
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[hi] = recRoot2 * (hiReal - hiImag);
-    imag[hi] = recRoot2 * (hiReal + hiImag);
+__device__ __forceinline__ void THi(int hiIdx) {
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(recRoot2 * (hi.x - hi.y), recRoot2 * (hi.x + hi.y));
 }
 
-__device__ __forceinline__ void GIISingle(int lo, int hi) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = -loImag;
-    imag[lo] = loReal;
-    real[hi] = -hiImag;
-    imag[hi] = hiReal;
+__device__ __forceinline__ void GIISingle(int loIdx, int hiIdx) {
+    qComplex lo = shm[loIdx];
+    shm[loIdx] = make_qComplex(-lo.y, lo.x);
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(-hi.y, hi.x);
 }
 
-__device__ __forceinline__ void GII(int x) {
-    qreal Real = real[x];
-    qreal Imag = imag[x];
-    real[x] = -Imag;
-    imag[x] = Real;
+__device__ __forceinline__ void GII(int idx) {
+    qComplex v = shm[idx];
+    shm[idx] = make_qComplex(-v.y, v.x);
 }
 
-__device__ __forceinline__ void GZZSingle(int lo, int hi) {
-    real[lo] = -real[lo];
-    imag[lo] = -imag[lo];
-    real[hi] = -real[hi];
-    imag[hi] = -imag[hi];
+__device__ __forceinline__ void GZZSingle(int loIdx, int hiIdx) {
+    qComplex lo = shm[loIdx];
+    shm[loIdx] = make_qComplex(-lo.x, -lo.y);
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(-hi.x, -hi.y);
 }
 
-__device__ __forceinline__ void GZZ(int x) {    
-    real[x] = -real[x];
-    imag[x] = -imag[x];
+__device__ __forceinline__ void GZZ(int idx) { 
+    qComplex v = shm[idx];
+    shm[idx] = make_qComplex(-v.x, -v.y);
 }
 
-__device__ __forceinline__ void GCCSingle(int lo, int hi, qreal r, qreal i) {
-    qreal loReal = real[lo];
-    qreal loImag = imag[lo];
-    qreal hiReal = real[hi];
-    qreal hiImag = imag[hi];
-    real[lo] = COMPLEX_MULTIPLY_REAL(loReal, loImag, r, i);
-    imag[lo] = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r, i);
-    real[hi] = COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r, i);
-    imag[hi] = COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r, i);
+__device__ __forceinline__ void GCCSingle(int loIdx, int hiIdx, qComplex p) {
+    qComplex lo = shm[loIdx];
+    shm[loIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(lo, p), COMPLEX_MULTIPLY_IMAG(lo, p));
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(hi, p), COMPLEX_MULTIPLY_IMAG(hi, p));
 }
 
-__device__ __forceinline__ void GCC(int x, qreal r, qreal i) {
-    qreal Real = real[x];
-    qreal Imag = imag[x];
-    real[x] = COMPLEX_MULTIPLY_REAL(Real, Imag, r, i);
-    imag[x] = COMPLEX_MULTIPLY_IMAG(Real, Imag, r, i);
+__device__ __forceinline__ void GCC(int idx, qComplex p) {
+    qComplex v = shm[idx];
+    shm[idx] = make_qComplex(COMPLEX_MULTIPLY_REAL(v, p), COMPLEX_MULTIPLY_IMAG(v, p));
 }
 
 #define FOLLOW_NEXT(TYPE) \
@@ -412,9 +366,9 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 }
                 switch (deviceGates[i].type) {
                     FOLLOW_NEXT(GOC)
-                    CASE_SINGLE(U1, U1Hi(hi, deviceGates[i].r11, deviceGates[i].i11))
+                    CASE_SINGLE(U1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     FOLLOW_NEXT(U2)
-                    CASE_SINGLE(U3, USingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00, deviceGates[i].r01, deviceGates[i].i01, deviceGates[i].r10, deviceGates[i].i10, deviceGates[i].r11, deviceGates[i].i11))
+                    CASE_SINGLE(U3, USingle(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)));
                     CASE_SINGLE(H, HSingle(lo, hi))
                     FOLLOW_NEXT(X)
                     FOLLOW_NEXT(CNOT)
@@ -433,7 +387,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_SINGLE(T, THi(hi))
                     CASE_SINGLE(GII, GIISingle(lo, hi))
                     CASE_SINGLE(GZZ, GZZSingle(lo, hi))
-                    CASE_SINGLE(GCC, GCCSingle(lo, hi, deviceGates[i].r00, deviceGates[i].i00))
+                    CASE_SINGLE(GCC, GCCSingle(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00)))
                     ID_BREAK()
                     default: {
                         assert(false);
@@ -449,10 +403,10 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_SKIPLO_HI(S, SHi(j))
                     CASE_SKIPLO_HI(T, THi(j))
                     FOLLOW_NEXT(GOC)
-                    CASE_SKIPLO_HI(U1, U1Hi(j, deviceGates[i].r11, deviceGates[i].i11))
+                    CASE_SKIPLO_HI(U1, U1Hi(j, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     LOHI_SAME(GII, GII(j))
                     LOHI_SAME(GZZ, GZZ(j))
-                    LOHI_SAME(GCC, GCC(j, deviceGates[i].r00, deviceGates[i].i00))
+                    LOHI_SAME(GCC, GCC(j, make_qComplex(deviceGates[i].r00, deviceGates[i].i00)))
                     ID_BREAK()
                     default: {
                         assert(false);
@@ -483,9 +437,7 @@ __device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex b
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
-        qComplex data = a[bias | y];
-        real[x ^ (x >> 5)] = data.x;
-        imag[x ^ (x >> 5)] = data.y;
+        shm[x ^ (x >> 5)] = a[bias | y];
     }
 }
 
@@ -495,8 +447,7 @@ __device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
-        qComplex result = make_qComplex(real[x ^ (x >> 5)], imag[x ^ x >> 5]);
-        a[bias | y] = result;
+        a[bias | y] = shm[x ^ (x >> 5)];
     }
 }
 
