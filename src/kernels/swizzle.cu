@@ -287,7 +287,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
             if (!targetIsGlobal) {
                 int lo = loArr[targetQubit << THREAD_DEP | threadIdx.x];
                 int hi = lo ^ (1 << targetQubit) ^ (((1 << targetQubit) >> 3) & 7);
-                int add[4];
+                int add[3];
                 if (targetQubit < 8) {
                     add[0] = add[1] = add[2] = 256;
                 } else if (targetQubit == 8) {
@@ -404,23 +404,17 @@ void initControlIdx() {
         cudaMalloc(&shiftAt_device[i], sizeof(shiftAt_host));
     }
     for (int i = 0; i < 128; i++)
-        loIdx_host[0][0][i] = i << 1;
+        loIdx_host[0][0][i] = (i << 1) ^ ((i & 4) >> 2);
 
     for (int i = 0; i < 128; i++)
         loIdx_host[0][1][i] = (((i >> 4) << 5) | (i & 15)) ^ ((i & 2) << 3);
 
     for (int i = 0; i < 128; i++)
-        loIdx_host[0][2][i] = ((i >> 2) << 3) | (i & 7);
+        loIdx_host[0][2][i] = (((i >> 5) << 6) | (i & 31)) ^ ((i & 4) << 3);
     
     for (int q = 3; q < 10; q++)
         for (int i = 0; i < 128; i++)
             loIdx_host[0][q][i] = ((i >> q) << (q + 1)) | (i & ((1 << q) - 1));
-
-    for (int q = 0; q < 10; q++) {
-        for (int i = 0; i < 128; i++)
-            printf("%d ", loIdx_host[0][q][i]);
-        printf("\n");
-    }
 
     loIdx_device.resize(MyGlobalVars::numGPUs);
     shiftAt_device.resize(MyGlobalVars::numGPUs);
