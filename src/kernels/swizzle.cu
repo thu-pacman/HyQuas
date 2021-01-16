@@ -287,11 +287,11 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
             if (!targetIsGlobal) {
                 int lo = loArr[targetQubit << THREAD_DEP | threadIdx.x];
                 int hi = lo ^ (1 << targetQubit) ^ (((1 << targetQubit) >> 3) & 7);
-                int add[3];
+                int add[4];
                 if (targetQubit < 8) {
                     add[0] = add[1] = add[2] = 256;
                 } else if (targetQubit == 8) {
-                    add[0] = 128; add[1] = 372; add[2] = 128;
+                    add[0] = 128; add[1] = 384; add[2] = 128;
                 } else { // targetQubit == 9
                     add[0] = add[1] = add[2] = 128;
                 }
