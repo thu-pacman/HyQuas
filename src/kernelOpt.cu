@@ -5,6 +5,7 @@
 #include <omp.h>
 #include "gate.h"
 #include "executor.h"
+#include "dbg.h"
 using namespace std;
 
 extern __shared__ qComplex shm[1<<LOCAL_QUBIT_SIZE];
@@ -143,15 +144,13 @@ case GateType::TYPE: // no break
 
 #define CASE_CONTROL(TYPE, OP) \
 case GateType::TYPE: { \
-    for (int j = threadIdx.x; j < m; j += blockSize) { \
-        int lo = ((j >> smallQubit) << (smallQubit + 1)) | (j & maskSmall); \
-        lo = ((lo >> largeQubit) << (largeQubit + 1)) | (lo & maskLarge); \
-        lo |= 1 << controlQubit; \
-        int hi = lo | (1 << targetQubit); \
-        lo ^= lo >> 3 & 7; \
-        hi ^= hi >> 3 & 7; \
-        OP; \
-    } \
+    assert(lo < 1024); \
+    assert(hi < 1024); \
+    OP; \
+    lo += add; hi += add; \
+    assert(lo < 1024); \
+    assert(hi < 1024); \
+    OP; \
     break; \
 }
 
@@ -163,19 +162,6 @@ case GateType::TYPE: { \
     } \
     break;\
 }
-
-#define CASE_SINGLE2(TYPE, OP) \
-case GateType::TYPE: { \
-    for (int j = threadIdx.x; j < m; j += blockSize) { \
-        int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
-        int hi = lo | (1 << targetQubit); \
-        lo ^= lo >> 3 & 7; \
-        hi ^= hi >> 3 & 7; \
-        OP; \
-    } \
-    break;\
-}
-
 
 #define CASE_LO_HI(TYPE, OP_LO, OP_HI) \
 case GateType::TYPE: { \
@@ -249,10 +235,14 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
         if (!controlIsGlobal) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 2);
-                int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
-                int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
-                int maskSmall = (1 << smallQubit) - 1;
-                int maskLarge = (1 << largeQubit) - 1;
+                int lo = loArr[(controlQubit * 10 + targetQubit) << THREAD_DEP | threadIdx.x];
+                int hi = lo ^ (1 << targetQubit) ^ (((1 << targetQubit) >> 3) & 7);
+                int add = 512;
+                if (controlQubit == 9 || targetQubit == 9) {
+                    add = 256;
+                    if (controlQubit == 8 || targetQubit == 8)
+                        add = 128;
+                }
                 switch (deviceGates[i].type) {
                     CASE_CONTROL(CNOT, XSingle(lo, hi))
                     CASE_CONTROL(CY, YSingle(lo, hi))
@@ -298,7 +288,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 continue;
             }
             if (!targetIsGlobal) {
-                int lo = loArr[targetQubit << THREAD_DEP | threadIdx.x];
+                int lo = loArr[(targetQubit * 11) << THREAD_DEP | threadIdx.x];
                 int hi = lo ^ (1 << targetQubit) ^ (((1 << targetQubit) >> 3) & 7);
                 int add[4];
                 if (targetQubit < 8) {
@@ -359,8 +349,6 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
             }
         }
         __syncthreads();
-        // if (blockIdx.x == 0 && threadIdx.x == 0)
-        //     printf("\n====================\n");
     }
 }
 
@@ -409,7 +397,7 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
 
 #if BACKEND == 1 || BACKEND == 3
 void initControlIdx() {
-    int loIdx_host[11][10][128];
+    int loIdx_host[10][10][128];
     int shiftAt_host[10][10];
     loIdx_device.resize(MyGlobalVars::numGPUs);
     shiftAt_device.resize(MyGlobalVars::numGPUs);
@@ -422,20 +410,45 @@ void initControlIdx() {
         loIdx_host[0][0][i] = (i << 1) ^ ((i & 4) >> 2);
 
     for (int i = 0; i < 128; i++)
-        loIdx_host[0][1][i] = (((i >> 4) << 5) | (i & 15)) ^ ((i & 2) << 3);
+        loIdx_host[1][1][i] = (((i >> 4) << 5) | (i & 15)) ^ ((i & 2) << 3);
 
     for (int i = 0; i < 128; i++)
-        loIdx_host[0][2][i] = (((i >> 5) << 6) | (i & 31)) ^ ((i & 4) << 3);
+        loIdx_host[2][2][i] = (((i >> 5) << 6) | (i & 31)) ^ ((i & 4) << 3);
     
     for (int q = 3; q < 10; q++)
         for (int i = 0; i < 128; i++)
-            loIdx_host[0][q][i] = ((i >> q) << (q + 1)) | (i & ((1 << q) - 1));
+            loIdx_host[q][q][i] = ((i >> q) << (q + 1)) | (i & ((1 << q) - 1));
 
-    // for (int q = 0; q < 10; q++) {
-    //     for (int i = 0; i < 128; i++)
-    //         printf("%d ", loIdx_host[0][q][i]);
-    //     printf("\n");
-    // }
+    int delta[10][10];
+    for (int c = 0; c < 10; c++) {
+        for (int t = 0; t < 10; t++) {
+            if (c == t) continue;
+            std::vector<int> a[8];
+            for (int i = 0; i < 1024; i++) {
+                int p = i ^ ((i >> 3) & 7);
+                if ((p >> c & 1) && !(p >> t & 1)) {
+                    a[i & 7].push_back(i);
+                }
+            }
+            for (int i = 0; i < 8; i++) {
+                if (a[i].size() == 0) {
+                    for (int j = i + 1; j < 8; j++) {
+                        if (a[j].size() == 64) {
+                            std::vector<int> tmp = a[j];
+                            a[j].clear();
+                            for (int k = 0; k < 64; k += 2) {
+                                a[i].push_back(tmp[k]);
+                                a[j].push_back(tmp[k+1]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < 128; i++)
+                loIdx_host[c][t][i] = a[i & 7][i / 8];
+        }
+    }
 
     loIdx_device.resize(MyGlobalVars::numGPUs);
     shiftAt_device.resize(MyGlobalVars::numGPUs);
