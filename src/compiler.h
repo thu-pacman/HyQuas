@@ -20,19 +20,29 @@ private:
 
 class OneLayerCompiler {
 public:
-    OneLayerCompiler(int numQubits, int localSize, qindex localQubits, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
-    // OneLayerCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
-    LocalGroup run();
-    // LocalGroup run(State s, bool usePerGate, bool useBLAS);
-private:
+    OneLayerCompiler(int numQubits, const std::vector<Gate>& inputGates);
+protected:
     int numQubits;
+    std::vector<Gate> remainGates;
+    GateGroup getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
+};
+
+class SimpleCompiler: public OneLayerCompiler {
+public:
+    SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
+    LocalGroup run();
+private:
     int localSize;
     qindex localQubits;
     bool enableGlobal;
     qindex whiteList;
     qindex required;
-    std::vector<Gate> remainGates;
-    bool advance;
-    GateGroup getGroup(bool full[], qindex related[], bool enableGlobal);
-    void remove(GateGroup& gg);
+};
+
+class AdvanceCompiler: public OneLayerCompiler {
+public:
+    AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
+    LocalGroup run(State &state, bool usePerGate, bool useBLAS);
+private:
+    qindex localQubits;
 };
