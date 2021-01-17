@@ -54,6 +54,15 @@ else()
     MESSAGE(STATUS "Float type: Float")
 endif(USE_DOUBLE)
 
+
+set(COALESCE "3" CACHE STRING "coalescing size")
+MESSAGE(STATUS "coalesce = ${COALESCE}")
+add_definitions(-DCOALESCE_GLOBAL_DEFINED=${COALESCE})
+
+set(MAT "6" CACHE STRING "mat size")
+MESSAGE(STATUS "mat size = ${MAT}")
+add_definitions(-DBLAS_MAT_LIMIT_DEFINED=${MAT})
+
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
 add_executable(main main.cpp)
