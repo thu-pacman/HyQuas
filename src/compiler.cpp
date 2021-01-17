@@ -57,21 +57,21 @@ Schedule Compiler::run() {
     Schedule schedule;
     for (size_t i = 0; i < localGroup.fullGroups.size(); i++) {
         auto& gg = localGroup.fullGroups[i];
+        LocalGroup lg;
+        OneLayerCompiler overlapCompiler(numQubits, LOCAL_QUBIT_SIZE, -1ll, moveBack[i], true);
+        lg.overlapGroups = overlapCompiler.run().fullGroups;
+        for (auto& newGG: lg.overlapGroups)
+            newGG.backend = Backend::PerGate;
 #if BACKEND==3
-        OneLayerCompiler shareCompiler(numQubits, BLAS_MAT_LIMIT, localGroup.fullGroups[i].relatedQubits, gg.gates, false);
+        OneLayerCompiler fullCompiler(numQubits, BLAS_MAT_LIMIT, localGroup.fullGroups[i].relatedQubits, gg.gates, false);
 #else
-        OneLayerCompiler shareCompiler(numQubits, LOCAL_QUBIT_SIZE, -1ll, gg.gates, true);
+        OneLayerCompiler fullCompiler(numQubits, LOCAL_QUBIT_SIZE, -1ll, gg.gates, true);
 #endif
-        schedule.localGroups.push_back(shareCompiler.run());
-        schedule.localGroups.back().relatedQubits = gg.relatedQubits;
-        for (auto& newGG: schedule.localGroups.back().fullGroups)
+        lg.fullGroups = fullCompiler.run().fullGroups;
+        for (auto& newGG: lg.fullGroups)
             newGG.backend = BACKEND == 3 ? Backend::BLAS : Backend::PerGate;
-        if (!moveBack[i].empty()) {
-            OneLayerCompiler shareCompiler2(numQubits, LOCAL_QUBIT_SIZE, -1ll, moveBack[i], true);
-            schedule.localGroups.back().overlapGroups = shareCompiler2.run().fullGroups;
-            for (auto& newGG: schedule.localGroups.back().overlapGroups)
-                newGG.backend = Backend::PerGate;
-        }
+        lg.relatedQubits = gg.relatedQubits;
+        schedule.localGroups.push_back(std::move(lg));
     }
     return schedule;
 }
