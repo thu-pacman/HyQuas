@@ -22,7 +22,7 @@ int Circuit::run(bool copy_back) {
     auto start = chrono::system_clock::now();
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
-#elif BACKEND == 1 || BACKEND == 3
+#elif BACKEND == 1 || BACKEND == 3 || BACKEND == 4
     Executor(deviceStateVec, numQubits, schedule).run();
 #elif BACKEND == 2
     gates.clear();
@@ -106,7 +106,7 @@ qComplex Circuit::ampAt(qindex idx) {
 
 void Circuit::compile() {
     Logger::add("Total Gates %d", int(gates.size()));
-#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3
+#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4
     Compiler compiler(numQubits, gates);
     schedule = compiler.run();
     int totalGroups = 0;

@@ -173,16 +173,28 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         qindex related[numQubits];
         bool full[numQubits];
         memset(full, 0, sizeof(full));
-        memset(related, 0, sizeof(related));
+        auto fillRelated = [this](qindex related[], const std::vector<int>& layout) {
+            for (int i = 0; i < numQubits; i++) {
+                related[i] = 0;
+                for (int j = 0; j < COALESCE_GLOBAL; j++)
+                    related[i] |= ((qindex) 1) << layout[j];
+            }
+        };
         GateGroup gg;
-        if (usePerGate) {
+        if (usePerGate && useBLAS) {
+            UNREACHABLE();
+        } else if (usePerGate && !useBLAS) {
+            fillRelated(related, state.layout);
             gg = getGroup(full, related, true, perGateSize, -1ll);
             gg.backend = Backend::PerGate;
             state = gg.initState(state, cuttSize);
-        } else {
+        } else if (!usePerGate && useBLAS) {
+            memset(related, 0, sizeof(related));
             gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
             state = gg.initState(state, cuttSize);
+        } else {
+            UNREACHABLE();
         }
         lg.relatedQubits |= gg.relatedQubits;
         removeGates(remainGates, gg.gates);
