@@ -77,19 +77,30 @@ Schedule Compiler::run() {
 }
 
 OneLayerCompiler::OneLayerCompiler(int numQubits, int localSize, qindex localQubits, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList, qindex required):
-    numQubits(numQubits), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required), remainGates(inputGates) {}
+    numQubits(numQubits), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required), remainGates(inputGates), advance(false) {}
 
 LocalGroup OneLayerCompiler::run() {
+    assert(!advance);
     LocalGroup lg;
     lg.relatedQubits = 0;
     int cnt = 0;
-    while (true) {
-        GateGroup gg = getGroup();
+    while (remainGates.size() > 0) {
+        qindex related[numQubits];
+        bool full[numQubits];
+        memset(full, 0, sizeof(full));
+        memset(related, 0, sizeof(related));
+        if (whiteList) {
+            for (int i = 0; i < numQubits; i++)
+                if (!(whiteList >> i & 1))
+                    full[i] = 1;
+            for (int i = 0; i < numQubits; i++)
+                related[i] = required;
+        }
+
+        GateGroup gg = getGroup(full, related, enableGlobal);
         lg.fullGroups.push_back(gg.copyGates());
         lg.relatedQubits |= gg.relatedQubits;
         removeGates(remainGates, gg.gates);
-        if (remainGates.size() == 0)
-            break;
         if (whiteList != 0)
             break;
         cnt ++;
@@ -98,18 +109,10 @@ LocalGroup OneLayerCompiler::run() {
     return std::move(lg);
 }
 
-GateGroup OneLayerCompiler::getGroup() {
+GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableGlobal) {
     GateGroup cur[numQubits];
-    bool full[numQubits];
-    memset(full, 0, sizeof(full));
-    if (whiteList) {
-        for (int i = 0; i < numQubits; i++)
-            if (!(whiteList >> i & 1))
-                full[i] = 1;
-        for (int i = 0; i < numQubits; i++)
-            cur[i].relatedQubits = required;
-    }
-
+    for (int i = 0; i < numQubits; i++)
+        cur[i].relatedQubits = related[i];
     auto canMerge2 = [&](const GateGroup& a, const GateGroup & b) {
         return bitCount(a.relatedQubits | b.relatedQubits) <= localSize;
     };

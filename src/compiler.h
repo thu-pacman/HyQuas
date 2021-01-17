@@ -21,7 +21,9 @@ private:
 class OneLayerCompiler {
 public:
     OneLayerCompiler(int numQubits, int localSize, qindex localQubits, std::vector<Gate> inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
+    // OneLayerCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
     LocalGroup run();
+    // LocalGroup run(State s, bool usePerGate, bool useBLAS);
 private:
     int numQubits;
     int localSize;
@@ -30,6 +32,7 @@ private:
     qindex whiteList;
     qindex required;
     std::vector<Gate> remainGates;
-    GateGroup getGroup();
+    bool advance;
+    GateGroup getGroup(bool full[], qindex related[], bool enableGlobal);
     void remove(GateGroup& gg);
 };
