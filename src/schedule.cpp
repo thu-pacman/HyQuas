@@ -43,6 +43,7 @@ GateGroup GateGroup::copyGates() {
     GateGroup ret;
     ret.gates = this->gates;
     ret.relatedQubits = this->relatedQubits;
+    ret.backend = this->backend;
     return std::move(ret);
 }
 

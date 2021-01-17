@@ -59,18 +59,27 @@ Schedule Compiler::run() {
     for (size_t i = 0; i < localGroup.fullGroups.size(); i++) {
         auto& gg = localGroup.fullGroups[i];
         LocalGroup lg;
-        SimpleCompiler overlapCompiler(numQubits, LOCAL_QUBIT_SIZE, -1ll, moveBack[i], true);
-        lg.overlapGroups = overlapCompiler.run().fullGroups;
-        for (auto& newGG: lg.overlapGroups)
-            newGG.backend = Backend::PerGate;
-#if BACKEND==3
-        SimpleCompiler fullCompiler(numQubits, BLAS_MAT_LIMIT, localGroup.fullGroups[i].relatedQubits, gg.gates, false);
-#else
-        SimpleCompiler fullCompiler(numQubits, LOCAL_QUBIT_SIZE, -1ll, gg.gates, true);
-#endif
-        lg.fullGroups = fullCompiler.run().fullGroups;
-        for (auto& newGG: lg.fullGroups)
-            newGG.backend = BACKEND == 3 ? Backend::BLAS : Backend::PerGate;
+        AdvanceCompiler overlapCompiler(numQubits, gg.relatedQubits, moveBack[i]);
+        lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+        AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, gg.gates);
+        switch (BACKEND) {
+            case 1: {
+                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                break;
+            }
+            case 3: {
+                lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                break;
+            }
+            case 4: {
+                lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                break;
+            }
+            default: {
+                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                break;
+            }
+        }
         lg.relatedQubits = gg.relatedQubits;
         schedule.localGroups.push_back(std::move(lg));
     }
@@ -83,8 +92,8 @@ OneLayerCompiler::OneLayerCompiler(int numQubits, const std::vector<Gate> &input
 SimpleCompiler::SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList, qindex required):
     OneLayerCompiler(numQubits, inputGates), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required) {}
 
-// AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates):
-//     OneLayerCompiler(numQubits, inputGates), localQubits(localQubits) {}
+AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates):
+    OneLayerCompiler(numQubits, inputGates), localQubits(localQubits) {}
 
 LocalGroup SimpleCompiler::run() {
     LocalGroup lg;
@@ -115,6 +124,32 @@ LocalGroup SimpleCompiler::run() {
     return std::move(lg);
 }
 
+LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int perGateSize, int blasSize) {
+    assert(usePerGate || useBLAS);
+    LocalGroup lg;
+    lg.relatedQubits = 0;
+    int cnt = 0;
+    while (remainGates.size() > 0) {
+        qindex related[numQubits];
+        bool full[numQubits];
+        memset(full, 0, sizeof(full));
+        memset(related, 0, sizeof(related));
+        GateGroup gg;
+        if (usePerGate) {
+            gg = getGroup(full, related, true, perGateSize, -1ll);
+            gg.backend = Backend::PerGate;
+        } else {
+            gg = getGroup(full, related, false, blasSize, localQubits);
+            gg.backend = Backend::BLAS;
+        }
+        lg.fullGroups.push_back(gg.copyGates());
+        lg.relatedQubits |= gg.relatedQubits;
+        removeGates(remainGates, gg.gates);
+        cnt ++;
+        assert(cnt < 1000);
+    }
+    return std::move(lg);
+}
 
 GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
     GateGroup cur[numQubits];
