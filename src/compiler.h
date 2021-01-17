@@ -10,7 +10,7 @@ public:
     Schedule run();
 private:
     void fillLocals(LocalGroup& lg);
-    std::vector<std::vector<Gate>> moveToNext(LocalGroup& lg);
+    std::vector<std::pair<std::vector<Gate>, qindex>> moveToNext(LocalGroup& lg);
     int numQubits;
     int localSize;
     int shareSize;
@@ -42,7 +42,7 @@ private:
 class AdvanceCompiler: public OneLayerCompiler {
 public:
     AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
-    LocalGroup run(State &state, bool usePerGate, bool useBLAS, int preGateSize, int blasSize);
+    LocalGroup run(State &state, bool usePerGate, bool useBLAS, int preGateSize, int blasSize, int cuttSize);
 private:
     qindex localQubits;
 };

@@ -72,7 +72,7 @@ struct LocalGroup {
     LocalGroup(LocalGroup&&) = default;
 
     bool contains(int i) { return (relatedQubits >> i) & 1; }
-    State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals);
+    State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
     State initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals);
     std::vector<unsigned char> serialize() const;
     static LocalGroup deserialize(const unsigned char* arr, int& cur);
@@ -85,7 +85,6 @@ struct Schedule {
     void dump(int numQubits);
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);
-    void initCuttPlans(int numQubits);
     void initMatrix(int numQubits);
 };
 

@@ -280,16 +280,13 @@ State GateGroup::initState(const State& oldState, int numLocalQubits) {
     UNREACHABLE();
 }
 
-State LocalGroup::initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals) {
+State LocalGroup::initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     auto pos = oldState.pos, layout = oldState.layout;
     int overlapCnt = bitCount(overlapGlobals);
     std::vector<int> perm = gen_perm_vector(numLocalQubits);
     std::vector<int> newBuffer;
     if (overlapCnt > 0) {
-        qindex overlapRelated = 0;
-        for (auto& gg: overlapGroups)
-            overlapRelated |= gg.relatedQubits;
         int need = MyGlobalVars::bit - overlapCnt;
         for (int i = numLocalQubits - 1; i >= 0; i--) {
             int x = layout[i];
@@ -361,12 +358,6 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
     auto newState = State(pos, layout);
     this->state = newState;
-    for (auto& gg: overlapGroups) {
-        newState = gg.initState(newState, numLocalQubits - MyGlobalVars::bit);
-    }
-    for (auto& gg: fullGroups) {
-        newState = gg.initState(newState, numLocalQubits);
-    }
     return newState;
 }
 
@@ -401,9 +392,6 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
 #endif
     auto newState = State(pos, layout);
     this->state = newState;
-    for (auto& gg: fullGroups) {
-        newState = gg.initState(newState, numLocalQubits);
-    }
     return newState;
 }
 
@@ -599,53 +587,6 @@ void GateGroup::initMatrix(int numLocalQubit) {
 
 
 #if BACKEND == 1 || BACKEND == 3
-void Schedule::initCuttPlans(int numQubits) {
-    int numLocalQubits = numQubits - MyGlobalVars::bit;
-    State state(numQubits);
-
-    // printf("len %d\n", dim.size());
-    for (size_t lgID = 0; lgID < localGroups.size(); lgID++) {
-        auto& localGroup = localGroups[lgID];
-        std::vector<int> newGlobals;
-        std::vector<int> newLocals;
-        for (int i = 0; i < numQubits; i++) {
-            if (! (localGroup.relatedQubits >> i & 1)) {
-                newGlobals.push_back(i);
-            }
-        }
-        assert(newGlobals.size() == MyGlobalVars::bit);
-        
-        auto globalPos = [numQubits, numLocalQubits](const std::vector<int>& layout, int x) {
-            auto pos = std::find(layout.data() + numLocalQubits, layout.data() + numQubits, x);
-            return std::make_tuple(pos != layout.data() + numQubits, pos - layout.data() - numLocalQubits);
-        };
-
-        int overlapGlobals = 0;
-        int overlapCnt = 0;
-        // put overlapped global qubit into the previous position
-        for (size_t i = 0; i < newGlobals.size(); i++) {
-            bool isGlobal;
-            int p;
-            std::tie(isGlobal, p) = globalPos(state.layout, newGlobals[i]);
-            if (isGlobal) {
-                std::swap(newGlobals[p], newGlobals[i]);
-                overlapGlobals |= qindex(1) << p;
-                overlapCnt ++;
-            }
-        }
-#ifdef SHOW_SCHEDULE
-        printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
-#endif
-
-        if (lgID == 0) {
-            state = localGroup.initFirstGroupState(state, numQubits, newGlobals);
-        } else {
-            state = localGroup.initState(state, numQubits, newGlobals, overlapGlobals);
-        }
-    }
-    finalState = state;
-}
-
 void Schedule::initMatrix(int numQubits) {
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
@@ -658,10 +599,6 @@ void Schedule::initMatrix(int numQubits) {
 }
 
 #else
-void Schedule::initCuttPlans(int numQubits) {
-    UNREACHABLE()
-}
-
 void Schedule::initMatrix() {
     UNREACHABLE()
 }

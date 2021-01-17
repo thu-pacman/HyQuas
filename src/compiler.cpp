@@ -28,9 +28,9 @@ void Compiler::fillLocals(LocalGroup& lg) {
     }
 }
 
-std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
-    std::vector<std::vector<Gate>> result;
-    result.push_back(std::vector<Gate>());
+std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGroup& lg) {
+    std::vector<std::pair<std::vector<Gate>, qindex>> result;
+    result.push_back(make_pair(std::vector<Gate>(), 0));
     for (size_t i = 1; i < lg.fullGroups.size(); i++) {
         std::vector<Gate> gates = lg.fullGroups[i-1].gates;
         std::reverse(gates.begin(), gates.end());
@@ -43,7 +43,7 @@ std::vector<std::vector<Gate>> Compiler::moveToNext(LocalGroup& lg) {
         std::reverse(toRemoveGates.begin(), toRemoveGates.end());
         
         removeGates(lg.fullGroups[i-1].gates, toRemoveGates);
-        result.push_back(toRemoveGates);
+        result.push_back(make_pair(toRemoveGates, toRemove.fullGroups[0].relatedQubits));
         lg.fullGroups[i].relatedQubits |= toRemove.relatedQubits;
     }
     return std::move(result);
@@ -55,34 +55,74 @@ Schedule Compiler::run() {
     auto moveBack = moveToNext(localGroup);
     fillLocals(localGroup);
     Schedule schedule;
-    State state;
-    for (size_t i = 0; i < localGroup.fullGroups.size(); i++) {
-        auto& gg = localGroup.fullGroups[i];
+    State state(numQubits);
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    for (size_t id = 0; id < localGroup.fullGroups.size(); id++) {
+        auto& gg = localGroup.fullGroups[id];
+
+        std::vector<int> newGlobals;
+        std::vector<int> newLocals;
+        for (int i = 0; i < numQubits; i++) {
+            if (! (gg.relatedQubits >> i & 1)) {
+                newGlobals.push_back(i);
+            }
+        }
+        assert(newGlobals.size() == MyGlobalVars::bit);
+        
+        auto globalPos = [this, numLocalQubits](const std::vector<int>& layout, int x) {
+            auto pos = std::find(layout.data() + numLocalQubits, layout.data() + numQubits, x);
+            return std::make_tuple(pos != layout.data() + numQubits, pos - layout.data() - numLocalQubits);
+        };
+
+        int overlapGlobals = 0;
+        int overlapCnt = 0;
+        // put overlapped global qubit into the previous position
+        for (size_t i = 0; i < newGlobals.size(); i++) {
+            bool isGlobal;
+            int p;
+            std::tie(isGlobal, p) = globalPos(state.layout, newGlobals[i]);
+            if (isGlobal) {
+                std::swap(newGlobals[p], newGlobals[i]);
+                overlapGlobals |= qindex(1) << p;
+                overlapCnt ++;
+            }
+        }
+#ifdef SHOW_SCHEDULE
+        printf("globals: "); for (auto x: newGlobals) printf("%d ", x); printf("\n");
+#endif
+
         LocalGroup lg;
-        AdvanceCompiler overlapCompiler(numQubits, gg.relatedQubits, moveBack[i]);
-        lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+        lg.relatedQubits = gg.relatedQubits;
+        if (id == 0) {
+            state = lg.initFirstGroupState(state, numQubits, newGlobals);
+        } else {
+            state = lg.initState(state, numQubits, newGlobals, overlapGlobals, moveBack[id].second);
+        }
+
+        AdvanceCompiler overlapCompiler(numQubits, gg.relatedQubits, moveBack[id].first);
+        lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
         AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, gg.gates);
         switch (BACKEND) {
             case 1: {
-                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             case 3: {
-                lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             case 4: {
-                lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             default: {
-                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT).fullGroups;
+                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
         }
-        lg.relatedQubits = gg.relatedQubits;
         schedule.localGroups.push_back(std::move(lg));
     }
+    schedule.finalState = state;
     return schedule;
 }
 
@@ -124,7 +164,7 @@ LocalGroup SimpleCompiler::run() {
     return std::move(lg);
 }
 
-LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int perGateSize, int blasSize) {
+LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int perGateSize, int blasSize, int cuttSize) {
     assert(usePerGate || useBLAS);
     LocalGroup lg;
     lg.relatedQubits = 0;
@@ -138,13 +178,15 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         if (usePerGate) {
             gg = getGroup(full, related, true, perGateSize, -1ll);
             gg.backend = Backend::PerGate;
+            state = gg.initState(state, cuttSize);
         } else {
             gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
+            state = gg.initState(state, cuttSize);
         }
-        lg.fullGroups.push_back(gg.copyGates());
         lg.relatedQubits |= gg.relatedQubits;
         removeGates(remainGates, gg.gates);
+        lg.fullGroups.push_back(std::move(gg));
         cnt ++;
         assert(cnt < 1000);
     }

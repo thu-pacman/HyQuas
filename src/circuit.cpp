@@ -112,7 +112,6 @@ void Circuit::compile() {
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
-    schedule.initCuttPlans(numQubits);
     schedule.initMatrix(numQubits);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
