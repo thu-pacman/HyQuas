@@ -2,12 +2,15 @@
 #include <vector>
 #include <cutt.h>
 #include <memory>
+#include <string>
 #include "utils.h"
 #include "gate.h"
 
 enum class Backend {
     None, PerGate, BLAS
 };
+
+std::string to_string(Backend b);
 
 struct State {
     std::vector<int> pos;

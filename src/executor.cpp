@@ -328,8 +328,9 @@ void Executor::applyGateGroup(const GateGroup& gg, int sliceID) {
         cudaEventDestroy(start[i]);
         cudaEventDestroy(stop[i]);
     }
-    printf("[ApplyGateGroup] time for %x %d %d %s: [min=%f, max=%f, avg=%f]\n",
-            gg.relatedQubits, (int)gg.gates.size(), gg.backend, sliceID == -1 ? "full" : "slice", 
+
+    printf("[ApplyGateGroup] time for %x %d %s %s: [min=%f, max=%f, avg=%f]\n",
+            gg.relatedQubits, (int)gg.gates.size(), to_string(gg.backend).c_str(), sliceID == -1 ? "full" : "slice", 
             min_time, max_time, sum_time / MyGlobalVars::numGPUs);
 #endif
     // printf("Group End\n");

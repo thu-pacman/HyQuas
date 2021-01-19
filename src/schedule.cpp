@@ -6,6 +6,15 @@
 #include <omp.h>
 #include <dbg.h>
 
+std::string to_string(Backend b) {
+    switch (b) {
+        case Backend::None: return "None";
+        case Backend::PerGate: return "PerGate";
+        case Backend::BLAS: return "BLAS";
+    }
+    UNREACHABLE();
+}
+
 GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     GateGroup ret;
     ret.relatedQubits = a.relatedQubits | b.relatedQubits;

@@ -182,7 +182,30 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         };
         GateGroup gg;
         if (usePerGate && useBLAS) {
-            UNREACHABLE();
+            // get the gate group for pergate backend
+            fillRelated(related, state.layout);
+            GateGroup pg = getGroup(full, related, true, perGateSize, -1ll);
+            // get the gate group for blas backend
+            memset(related, 0, sizeof(related));
+            GateGroup blas = getGroup(full, related, false, blasSize, localQubits);
+
+            if (pg.gates.empty()) {
+                gg = std::move(blas);
+                gg.backend = Backend::BLAS;
+            } else if (blas.gates.empty()) {
+                gg = std::move(pg);
+                gg.backend = Backend::PerGate;
+            } else {
+                // TODO: select the backend in a cleverer way
+                if (rand() & 1) {
+                    gg = std::move(blas);
+                    gg.backend = Backend::BLAS;
+                } else {
+                    gg = std::move(pg);
+                    gg.backend = Backend::PerGate;
+                }
+            }
+            state = gg.initState(state, cuttSize);
         } else if (usePerGate && !useBLAS) {
             fillRelated(related, state.layout);
             gg = getGroup(full, related, true, perGateSize, -1ll);
