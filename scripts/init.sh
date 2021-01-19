@@ -20,7 +20,7 @@ case $(hostname -s) in
     echo "scc cluster"
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /odirgft
-    spack load openmpi@3.1.5 /vblaz63
+    spack load openmpi@3.1.4 /cmuktug
     ;;
   hanzo)
     echo "hanzo cluster"
