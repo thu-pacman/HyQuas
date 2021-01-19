@@ -1,6 +1,7 @@
 #include "executor.h"
 
 #include <cuda_runtime.h>
+#include <algorithm>
 
 #include "utils.h"
 #include "assert.h"
@@ -280,11 +281,15 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
 
 void Executor::applyGateGroup(const GateGroup& gg, int sliceID) {
 #ifdef MEASURE_STAGE
-    // TODO multistream
-    cudaEvent_t start, stop;
-    checkCudaErrors(cudaEventCreate(&start));
-    checkCudaErrors(cudaEventCreate(&stop));
-    checkCudaErrors(cudaEventRecord(start, 0));
+    cudaEvent_t start[MyGlobalVars::numGPUs], stop[MyGlobalVars::numGPUs];
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        checkCudaErrors(cudaSetDevice(i));
+        checkCudaErrors(cudaEventCreate(&start[i]));
+        checkCudaErrors(cudaEventCreate(&stop[i]));    
+    }
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        checkCudaErrors(cudaEventRecord(start[i], MyGlobalVars::streams[i]));
+    }
 #endif
     switch (gg.backend) {
         case Backend::PerGate: {
@@ -309,13 +314,23 @@ void Executor::applyGateGroup(const GateGroup& gg, int sliceID) {
     setState(gg.state);
 #ifdef MEASURE_STAGE
     // TODO multistream support
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    float time;
-    cudaEventElapsedTime(&time, start, stop);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    printf("[Group] time for %x: %f\n", gg.relatedQubits, time);
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        checkCudaErrors(cudaEventRecord(stop[i], MyGlobalVars::streams[i]));
+    }
+    float min_time = 1e100, max_time = 0, sum_time = 0;
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        float time;
+        cudaEventSynchronize(stop[i]);
+        cudaEventElapsedTime(&time, start[i], stop[i]);
+        min_time = std::min(min_time, time);
+        max_time = std::max(max_time, time);
+        sum_time += time;
+        cudaEventDestroy(start[i]);
+        cudaEventDestroy(stop[i]);
+    }
+    printf("[ApplyGateGroup] time for %x %d %d %s: [min=%f, max=%f, avg=%f]\n",
+            gg.relatedQubits, (int)gg.gates.size(), gg.backend, sliceID == -1 ? "full" : "slice", 
+            min_time, max_time, sum_time / MyGlobalVars::numGPUs);
 #endif
     // printf("Group End\n");
 }
