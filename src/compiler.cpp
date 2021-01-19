@@ -172,7 +172,6 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     while (remainGates.size() > 0) {
         qindex related[numQubits];
         bool full[numQubits];
-        memset(full, 0, sizeof(full));
         auto fillRelated = [this](qindex related[], const std::vector<int>& layout) {
             for (int i = 0; i < numQubits; i++) {
                 related[i] = 0;
@@ -183,9 +182,11 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         GateGroup gg;
         if (usePerGate && useBLAS) {
             // get the gate group for pergate backend
+            memset(full, 0, sizeof(full));
             fillRelated(related, state.layout);
             GateGroup pg = getGroup(full, related, true, perGateSize, -1ll);
             // get the gate group for blas backend
+            memset(full, 0, sizeof(full));
             memset(related, 0, sizeof(related));
             GateGroup blas = getGroup(full, related, false, blasSize, localQubits);
 
@@ -198,21 +199,23 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             } else {
                 // TODO: select the backend in a cleverer way
                 if (rand() & 1) {
-                    gg = std::move(blas);
-                    gg.backend = Backend::BLAS;
-                } else {
                     gg = std::move(pg);
                     gg.backend = Backend::PerGate;
+                } else {
+                    gg = std::move(blas);
+                    gg.backend = Backend::BLAS;
                 }
             }
             state = gg.initState(state, cuttSize);
         } else if (usePerGate && !useBLAS) {
             fillRelated(related, state.layout);
+            memset(full, 0, sizeof(full));
             gg = getGroup(full, related, true, perGateSize, -1ll);
             gg.backend = Backend::PerGate;
             state = gg.initState(state, cuttSize);
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
+            memset(full, 0, sizeof(full));
             gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
             state = gg.initState(state, cuttSize);
