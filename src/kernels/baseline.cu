@@ -238,6 +238,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 int maskSmall = (1 << smallQubit) - 1;
                 int maskLarge = (1 << largeQubit) - 1;
                 switch (deviceGates[i].type) {
+                    FOLLOW_NEXT(CCX)
                     CASE_CONTROL(CNOT, XSingle(lo, hi))
                     CASE_CONTROL(CY, YSingle(lo, hi))
                     CASE_CONTROL(CZ, ZHi(hi))

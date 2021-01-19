@@ -244,6 +244,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         add = 128;
                 }
                 switch (deviceGates[i].type) {
+                    FOLLOW_NEXT(CCX)
                     CASE_CONTROL(CNOT, XSingle(lo, hi))
                     CASE_CONTROL(CY, YSingle(lo, hi))
                     CASE_CONTROL(CZ, ZHi(hi))
