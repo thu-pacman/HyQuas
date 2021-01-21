@@ -297,7 +297,7 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     std::vector<int> perm = gen_perm_vector(numLocalQubits);
     std::vector<int> newBuffer;
     if (overlapCnt > 0) {
-        int need = MyGlobalVars::bit - overlapCnt;
+        int need = overlapCnt;
         for (int i = numLocalQubits - 1; i >= 0; i--) {
             int x = layout[i];
             if (std::find(newGlobals.begin(), newGlobals.end(), x) == newGlobals.end() && !(overlapRelated >> x & 1)) {
@@ -313,6 +313,8 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
             newBuffer.push_back(newGlobals[i]);
     assert(newBuffer.size() == MyGlobalVars::bit);
     for (int i = 0, c = numLocalQubits - MyGlobalVars::bit; i < MyGlobalVars::bit; i++, c++) {
+        if (layout[c] == newBuffer[i])
+            continue;
         std::swap(perm[pos[newBuffer[i]]], perm[c]);
         int swappedQid = layout[c];
         pos[swappedQid] = pos[newBuffer[i]];

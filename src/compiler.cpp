@@ -3,6 +3,7 @@
 #include <cstring>
 #include <algorithm>
 #include <assert.h>
+#include <set>
 #include "dbg.h"
 
 Compiler::Compiler(int numQubits, std::vector<Gate> inputGates):
@@ -38,6 +39,10 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
         SimpleCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit, numQubits - 2 * MyGlobalVars::bit, gates,
                                         true, lg.fullGroups[i-1].relatedQubits, lg.fullGroups[i].relatedQubits);
         LocalGroup toRemove = backCompiler.run();
+        if (toRemove.fullGroups.size() == 0) {
+            result.push_back(make_pair(std::vector<Gate>(), 0));
+            continue;
+        }
         assert(toRemove.fullGroups.size() == 1);
         std::vector<Gate> toRemoveGates = toRemove.fullGroups[0].gates;
         std::reverse(toRemoveGates.begin(), toRemoveGates.end());
@@ -51,6 +56,7 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
 
 Schedule Compiler::run() {
     SimpleCompiler localCompiler(numQubits, localSize, localSize, gates, true);
+    // ChunkCompiler localCompiler(numQubits, localSize, 21, gates);
     LocalGroup localGroup = localCompiler.run();
     auto moveBack = moveToNext(localGroup);
     fillLocals(localGroup);
@@ -77,14 +83,23 @@ Schedule Compiler::run() {
         int overlapGlobals = 0;
         int overlapCnt = 0;
         // put overlapped global qubit into the previous position
-        for (size_t i = 0; i < newGlobals.size(); i++) {
-            bool isGlobal;
-            int p;
-            std::tie(isGlobal, p) = globalPos(state.layout, newGlobals[i]);
-            if (isGlobal) {
-                std::swap(newGlobals[p], newGlobals[i]);
-                overlapGlobals |= qindex(1) << p;
-                overlapCnt ++;
+        bool modified = true;
+        while (modified) {
+            modified = false;
+            overlapGlobals = 0;
+            overlapCnt = 0;
+            for (size_t i = 0; i < newGlobals.size(); i++) {
+                bool isGlobal;
+                int p;
+                std::tie(isGlobal, p) = globalPos(state.layout, newGlobals[i]);
+                if (isGlobal) {
+                    std::swap(newGlobals[p], newGlobals[i]);
+                    overlapGlobals |= qindex(1) << p;
+                    overlapCnt ++;
+                    if (p != int(i)) {
+                        modified = true;
+                    }
+                }
             }
         }
 #ifdef SHOW_SCHEDULE
@@ -316,4 +331,48 @@ GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableG
         }
     }
     return std::move(selected);
+}
+
+ChunkCompiler::ChunkCompiler(int numQubits, int localSize, int chunkSize, const std::vector<Gate> &inputGates):
+    OneLayerCompiler(numQubits, inputGates), localSize(localSize), chunkSize(chunkSize) {}
+
+LocalGroup ChunkCompiler::run() {
+    std::set<int> locals;
+    for (int i = 0; i < localSize; i++)
+        locals.insert(i);
+    LocalGroup lg;
+    GateGroup cur;
+    cur.relatedQubits = 0;
+    for (int i = 0; i < remainGates.size(); i++) {
+        if (remainGates[i].isDiagonal() || locals.find(remainGates[i].targetQubit) != locals.end()) {
+            cur.addGate(remainGates[i], -1ll, 1);
+            continue;
+        }
+        qindex newRelated = 0;
+        for (auto x: locals)
+            newRelated |= ((qindex) 1) << x;
+        cur.relatedQubits = newRelated;
+        lg.relatedQubits |= newRelated;
+        lg.fullGroups.push_back(std::move(cur));
+        cur = GateGroup(); cur.relatedQubits = 0;
+        cur.addGate(remainGates[i], -1ll, 1);
+        std::set<int> cur_locals;
+        for (int j = chunkSize + 1; j < numQubits; j++)
+            if (locals.find(j) != locals.end())
+                cur_locals.insert(j);
+        for (int j = i + 1; j < remainGates.size() && cur_locals.size() > 1; j++) {
+            if (!remainGates[i].isDiagonal())
+                cur_locals.erase(remainGates[i].targetQubit);
+        }
+        int to_move = *cur_locals.begin();
+        locals.erase(to_move);
+        locals.insert(remainGates[i].targetQubit);
+    }
+    qindex newRelated = 0;
+        for (auto x: locals)
+            newRelated |= ((qindex) 1) << x;
+    cur.relatedQubits = newRelated;
+    lg.relatedQubits |= cur.relatedQubits;
+    lg.fullGroups.push_back(std::move(cur));
+    return std::move(lg);
 }

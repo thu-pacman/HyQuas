@@ -46,3 +46,11 @@ public:
 private:
     qindex localQubits;
 };
+
+class ChunkCompiler: public OneLayerCompiler {
+public:
+    ChunkCompiler(int numQubits, int localSize, int chunkSize, const std::vector<Gate> &inputGates);
+    LocalGroup run();
+private:
+    int localSize, chunkSize;
+};
