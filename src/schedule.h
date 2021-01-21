@@ -39,6 +39,7 @@ struct GateGroup {
     Backend backend;
     std::vector<std::unique_ptr<qComplex[]>> matrix;
     std::vector<qComplex*> deviceMats;
+    int matQubit;
 
     GateGroup(GateGroup&&) = default;
     GateGroup& operator = (GateGroup&&) = default;

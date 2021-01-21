@@ -273,6 +273,7 @@ State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
         checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
         cuttPlans.push_back(plan);
     }
+    this->matQubit = std::max(numMatQubits, MIN_MAT_SIZE);
     State newState = State(pos, layout);
     this->state = newState;
     return newState;
@@ -453,8 +454,8 @@ for (int i = 0; i < n; i++) { \
 
 void GateGroup::initCPUMatrix(int numLocalQubit) {
     auto& pos = state.pos;
-    int numMatQubits = bitCount(relatedQubits);
-    assert(numMatQubits <= BLAS_MAT_LIMIT);
+    int numMatQubits = this->matQubit;
+    assert(numMatQubits <= std::max(BLAS_MAT_LIMIT, MIN_MAT_SIZE));
     int n = 1 << numMatQubits;
     matrix.clear();
     matrix.resize(MyGlobalVars::numGPUs);
@@ -571,7 +572,7 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
 void GateGroup::initGPUMatrix() {
     assert(deviceMats.size() == 0);
     deviceMats.clear();
-    int n = 1 << bitCount(relatedQubits);
+    int n = 1 << this->matQubit;
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         qComplex realMat[n][n];

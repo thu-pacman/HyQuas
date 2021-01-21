@@ -31,6 +31,11 @@ case $(hostname -s) in
     rsync -avz nico4:~/QCSimulator/src $HOME/QCSimulator
     rsync -avz nico4:~/QCSimulator/micro-benchmark $HOME/QCSimulator 
     ;;
+  nova)
+    echo "nova cluster"
+    source /opt/spack/share/spack/setup-env.sh
+    spack load cuda@11 /njgeoec
+    spack load openmpi /dfes7hw
 esac
 
 cd $HOME/QCSimulator/build

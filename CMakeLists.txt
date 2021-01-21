@@ -63,6 +63,10 @@ set(MAT "6" CACHE STRING "mat size")
 MESSAGE(STATUS "mat size = ${MAT}")
 add_definitions(-DBLAS_MAT_LIMIT_DEFINED=${MAT})
 
+set(MIN_MAT "4" CACHE STRING "min mat size")
+MESSAGE(STATUS "min mat size = ${MIN_MAT}")
+add_definitions(-DMIN_MAT_SIZE_DEFINED=${MIN_MAT})
+
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 add_subdirectory("src")
 add_executable(main main.cpp)
