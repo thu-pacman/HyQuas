@@ -412,7 +412,7 @@ void Executor::applyBlasGroup(const GateGroup& gg) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
-        int K = 1 << bitCount(gg.relatedQubits);
+        int K = 1 << gg.matQubit;
         checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
             K, numElements / K, K, // M, N, K
             &alpha, gg.deviceMats[g], K, // alpha, a, lda
@@ -427,7 +427,7 @@ void Executor::applyBlasGroupSliced(const GateGroup& gg, int sliceID) {
     int numElements = 1 << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     int partSize = 1 << numLocalQubits;
-    int K = 1 << bitCount(gg.relatedQubits);
+    int K = 1 << gg.matQubit;
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
