@@ -4,11 +4,7 @@
 #include "gate.h"
 
 #define GATE_NUM 24
-#define DEVICE_TYPES 2
-
-enum class Devices {
-    V100 = 0, A100 = 1
-};
+#define MAX_QBITS 40
 
 /*
 * build performance model to choose between BLAS and perGate backend
@@ -103,33 +99,16 @@ private:
     };
 
     // pergate single gate performance for 512 runs with 28 qbits
-    double pergate_single_perf[DEVICE_TYPES][GATE_NUM][LOCAL_QUBIT_SIZE];
+    double pergate_single_perf[MAX_QBITS + 1][GATE_NUM][LOCAL_QUBIT_SIZE];
     // pergate control gate performance for 512 runs with 28 qbits
-    double pergate_ctr_perf[DEVICE_TYPES][GATE_NUM][LOCAL_QUBIT_SIZE][LOCAL_QUBIT_SIZE];
+    double pergate_ctr_perf[MAX_QBITS + 1][GATE_NUM][LOCAL_QUBIT_SIZE][LOCAL_QUBIT_SIZE];
     // overhead of one pergate group
-    const double pergate_group_overhead = 4.0;
+    double BLAS_perf[MAX_QBITS + 1][MAX_QBITS + 1];
+    double cutt_cost[MAX_QBITS + 1];
+    bool num_qbits_loaded_param[MAX_QBITS + 1];
+    const double pergate_group_overhead = 2.0;
 
-    Evaluator() {
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::U1)], V100_U1, sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::U2)], V100_U2, sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::U3)], V100_U3, sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::H )], V100_H , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::X )], V100_X , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::Y )], V100_Y , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::Z )], V100_Z , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::S )], V100_S , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::T )], V100_T , sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::RX)], V100_RX, sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::RY)], V100_RY, sizeof(double) * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_single_perf[int(Devices::V100)][int(GateType::RZ)], V100_RZ, sizeof(double) * LOCAL_QUBIT_SIZE);
-
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CNOT)], V100_CN , sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CY  )], V100_CY , sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CZ  )], V100_CZ , sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CRX )], V100_CRX, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CRY )], V100_CRY, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-        memcpy(pergate_ctr_perf[int(Devices::V100)][int(GateType::CRZ )], V100_CRZ, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
-    }
+    Evaluator();
     
     static Evaluator* instance_ptr;
 public:
@@ -139,8 +118,11 @@ public:
         }
         return instance_ptr;
     }
-    double perfPerGate(const GateGroup* gg, Devices device = Devices::V100);
-    double perfBLAS(int numQubits, int blasSize, Devices device = Devices::V100);
+    void loadPergateSingle(int numQubits, FILE* qbit_param, GateType gate_type);
+    void loadPergateCtr(int numQubits, FILE* qbit_param, GateType gate_type);
+    void loadParam(int numQubits);
+    double perfPerGate(int numQubits, const GateGroup* gg);
+    double perfBLAS(int numQubits, int blasSize);
     // return True if choose pergate over BLAS
-    bool PerGateOrBLAS(const GateGroup* gg_pergate, const GateGroup* gg_blas, int numQubits, int blasSize, Devices device = Devices::V100);
+    bool PerGateOrBLAS(const GateGroup* gg_pergate, const GateGroup* gg_blas, int numQubits, int blasSize);
 };
