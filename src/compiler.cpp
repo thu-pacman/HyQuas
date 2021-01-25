@@ -248,7 +248,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             gg = getGroup(full, related, true, perGateSize, -1ll);
             gg.backend = Backend::PerGate;
 
-            Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
+            // Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
 
             state = gg.initState(state, cuttSize);
         } else if (!usePerGate && useBLAS) {
@@ -257,7 +257,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
 
-            Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
+            // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
 
             state = gg.initState(state, cuttSize);
         } else {

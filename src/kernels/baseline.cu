@@ -380,7 +380,10 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
 }
 
 #if BACKEND == 1 || BACKEND == 3 || BACKEND == 4
-void initControlIdx() {}
+void initControlIdx() {
+    loIdx_device.resize(MyGlobalVars::numGPUs);
+    shiftAt_device.resize(MyGlobalVars::numGPUs);
+}
 #endif
 
 void copyGatesToSymbol(KernelGate* hostGates, int numGates, cudaStream_t& stream, int gpuID) {
