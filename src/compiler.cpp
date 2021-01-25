@@ -248,8 +248,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             gg = getGroup(full, related, true, perGateSize, -1ll);
             gg.backend = Backend::PerGate;
 
-            Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(&gg));
-            //Logger::add("perf pergate : test");
+            Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
 
             state = gg.initState(state, cuttSize);
         } else if (!usePerGate && useBLAS) {
@@ -270,7 +269,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         cnt ++;
         assert(cnt < 1000);
     }
-    Logger::add("local group cnt : %d", cnt);
+    //Logger::add("local group cnt : %d", cnt);
     return std::move(lg);
 }
 
