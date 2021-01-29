@@ -50,8 +50,14 @@ std::pair<std::string, std::vector<qreal>> parse_gate(char buf[]) {
         if (st[0] == 'p' && st[1] == 'i' && st[2] == '*') {
             param = pi;
             st = st.erase(0, 3);
+        } else if (st[0] == 'p' && st[1] == 'i' && st[2] == '/') {
+            param = -pi;
+            st = st.erase(0, 3);
         }
-        param *= std::stod(st);
+        if (param > 0)
+            param *= std::stod(st);
+        else
+            param = pi / std::stod(st);
         params.push_back(param);
         if (buf[i] == ')')
             break;
@@ -167,7 +173,7 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
                 assert(qid.size() == 2);
                 c->addGate(Gate::CRZ(qid[0], qid[1], gate.second[0]));
                 // printf("crz %d %d %f\n", qid[0], qid[1], gate.second[0]);
-            }  else if (strcmp(buffer, "cu1") == 0) {
+            }  else if (gate.first == "cu1") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);
                 auto qid = parse_qid(buffer);
@@ -180,7 +186,7 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
                 auto qid = parse_qid(buffer);
                 assert(qid.size() == 1);
                 c->addGate(Gate::U1(qid[0], gate.second[0]));
-                // printf("rx %d %f\n", qid[0], gate.second[0]);
+                // printf("u1 %d %f\n", qid[0], gate.second[0]);
             } else if (gate.first == "u3") {
                 assert(gate.second.size() == 3);
                 fscanf(f, "%s", buffer);
