@@ -42,8 +42,8 @@ int Circuit::run(bool copy_back) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaProfilerStop());
     }
-    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-    Logger::add("Time Cost: %d ms", int(duration.count()));
+    auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+    Logger::add("Time Cost: %d us", int(duration.count()));
     result.resize(1ll << numQubits);
     if (copy_back) {
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);

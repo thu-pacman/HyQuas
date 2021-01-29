@@ -10,7 +10,7 @@ include_directories(${PROJECT_SOURCE_DIR}/third-party/dbg-macro)
 MESSAGE(STATUS "Found CUTT: ${CUTT}")
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${OpenMP_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo -keep")
+set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_80 -code=sm_80 --ptxas-options=-v -lineinfo -keep")
 set(BACKEND "group" CACHE STRING "Backend mode, one of [serial, group, group-serial, blas]")
 MESSAGE(STATUS "Backend: ${BACKEND}")
 
@@ -68,10 +68,14 @@ set(MIN_MAT "4" CACHE STRING "min mat size")
 MESSAGE(STATUS "min mat size = ${MIN_MAT}")
 add_definitions(-DMIN_MAT_SIZE_DEFINED=${MIN_MAT})
 
+set(THREAD_DEP "7" CACHE STRING "thread dep")
+MESSAGE(STATUS "thread_dep = ${THREAD_DEP}")
+add_definitions(-DTHREAD_DEP_DEFINED=${THREAD_DEP})
+
 if (EVALUATOR_PREPROCESS)
     set(PROCESS process)
-    cuda_add_executable(process evaluator-preprocess/process.cu)
-    target_link_libraries(process QCSimulator ${CUTT} ${CUDA_CUBLAS_LIBRARIES})
+    add_executable(process evaluator-preprocess/process.cpp)
+    target_link_libraries(process QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES})
     add_definitions(-DUSE_EVALUATOR_PREPROCESS)
 endif(EVALUATOR_PREPROCESS)
 

@@ -150,7 +150,7 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 UNREACHABLE()
         }
     }
-    return tim_pred / 512 + pergate_group_overhead;
+    return tim_pred / 1000 / 512 + pergate_group_overhead;
 }
 
 double Evaluator::perfBLAS(int numQubits, int blasSize) {

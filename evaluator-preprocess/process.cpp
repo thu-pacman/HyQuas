@@ -3,14 +3,16 @@
 #include <cstring>
 #include <regex>
 #include <cmath>
+#include <cuda.h>
+#include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cuComplex.h>
 #include "circuit.h"
 #include "logger.h"
 using namespace std;
 
-#define DIFF_QUBIT_NUMS 3
-int qubit_nums[DIFF_QUBIT_NUMS] = {25, 26, 28};
+#define DIFF_QUBIT_NUMS 2
+int qubit_nums[DIFF_QUBIT_NUMS] = {28, 25};
 
 FILE* curr_file;
 

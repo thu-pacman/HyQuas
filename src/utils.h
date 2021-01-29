@@ -35,7 +35,7 @@ typedef cuFloatComplex qComplex;
 
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 const int BLAS_MAT_LIMIT = BLAS_MAT_LIMIT_DEFINED;
-const int THREAD_DEP = 7; // 1 << THREAD_DEP threads per block
+const int THREAD_DEP = THREAD_DEP_DEFINED; // 1 << THREAD_DEP threads per block
 const int COALESCE_GLOBAL = COALESCE_GLOBAL_DEFINED;
 const int MAX_GATE = 600;
 const int MIN_MAT_SIZE = MIN_MAT_SIZE_DEFINED;
