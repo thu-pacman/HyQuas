@@ -256,7 +256,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             memset(full, 0, sizeof(full));
             gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
-
+            
             // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
 
             state = gg.initState(state, cuttSize);
@@ -277,16 +277,20 @@ GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableG
     GateGroup cur[numQubits];
     for (int i = 0; i < numQubits; i++)
         cur[i].relatedQubits = related[i];
-    auto canMerge2 = [&](const GateGroup& a, const GateGroup & b) {
-        return bitCount(a.relatedQubits | b.relatedQubits) <= localSize;
+    auto canMerge2 = [&](const GateGroup& a, const GateGroup & b, const Gate& g) {
+        qindex newRelated = a.relatedQubits | b.relatedQubits;
+        newRelated = GateGroup::newRelated(newRelated, g, localQubits, enableGlobal);
+        return bitCount(newRelated) <= localSize;
     };
-    auto canMerge3 = [&](const GateGroup& a, const GateGroup &b, const GateGroup &c) {
-        return bitCount(a.relatedQubits | b.relatedQubits | c.relatedQubits) <= localSize;
+    auto canMerge3 = [&](const GateGroup& a, const GateGroup &b, const GateGroup &c, const Gate& g) {
+        qindex newRelated = a.relatedQubits | b.relatedQubits | c.relatedQubits;
+        newRelated = GateGroup::newRelated(newRelated, g, localQubits, enableGlobal);
+        return bitCount(newRelated) <= localSize;
     };
-
+    
     for (auto& gate: remainGates) {
         if (gate.isC2Gate()) {
-            if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit])) {
+            if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit], gate)) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.controlQubit2]);
                 newGroup = GateGroup::merge(std::move(newGroup), cur[gate.targetQubit]);
                 newGroup.addGate(gate, localQubits, enableGlobal);
@@ -297,7 +301,7 @@ GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableG
                 full[gate.controlQubit2] = full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
         } else if (gate.isControlGate()) {
-            if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit])) {
+            if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit], gate)) {
                 GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.targetQubit]);
                 newGroup.addGate(gate, localQubits, enableGlobal);
                 cur[gate.controlQubit] = newGroup.copyGates();
@@ -317,7 +321,7 @@ GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableG
         size_t mx = selected.gates.size();
         int qid = -1;
         for (int i = 0; i < numQubits; i++) {
-            if (canMerge2(selected, cur[i]) && cur[i].gates.size() > 0) {
+            if (bitCount(selected.relatedQubits | cur[i].relatedQubits) <= localSize && cur[i].gates.size() > 0) {
                 GateGroup newGroup = GateGroup::merge(cur[i], selected);
                 if (newGroup.gates.size() > mx) {
                     mx = newGroup.gates.size();

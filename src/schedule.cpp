@@ -32,9 +32,8 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
     return std::move(ret);
 }
 
-void GateGroup::addGate(const Gate& gate, qindex localQubits, bool enableGlobal) {
-    gates.push_back(gate);
-    if (enableGlobal) {
+ qindex GateGroup::newRelated(qindex relatedQubits, const Gate& gate, qindex localQubits, bool enableGlobal) {
+      if (enableGlobal) {
         if (!gate.isDiagonal()) {
             relatedQubits |= qindex(1) << gate.targetQubit;
         }
@@ -46,6 +45,12 @@ void GateGroup::addGate(const Gate& gate, qindex localQubits, bool enableGlobal)
         if (gate.controlQubit2 != -1 && (localQubits >> gate.controlQubit2 & 1))
             relatedQubits |= qindex(1) << gate.controlQubit2;
     }
+    return relatedQubits;
+ }
+
+void GateGroup::addGate(const Gate& gate, qindex localQubits, bool enableGlobal) {
+    gates.push_back(gate);
+    relatedQubits = newRelated(relatedQubits, gate, localQubits, enableGlobal);
 }
 
 GateGroup GateGroup::copyGates() {

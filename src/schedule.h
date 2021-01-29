@@ -47,6 +47,7 @@ struct GateGroup {
     GateGroup copyGates();
 
     static GateGroup merge(const GateGroup& a, const GateGroup& b);
+    static qindex newRelated(qindex old, const Gate& g, qindex localQubits, bool enableGlobal);
     void addGate(const Gate& g, qindex localQubits, bool enableGlobal);
     
     bool contains(int i) { return (relatedQubits >> i) & 1; }
