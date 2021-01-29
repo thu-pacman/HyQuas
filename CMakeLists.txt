@@ -81,7 +81,7 @@ add_executable(main main.cpp)
 target_link_libraries(main QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES})
 
 if (MICRO_BENCH)
-    set(BENCHMARKS local-single local-ctr)
+    set(BENCHMARKS local-single local-ctr two-group-h)
     foreach(BENCHMARK IN LISTS BENCHMARKS)
         add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
         target_link_libraries(${BENCHMARK} QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES})
