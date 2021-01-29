@@ -28,8 +28,8 @@ case $(hostname -s) in
     export PATH=$HOME/package/cmake-3.19.2-Linux-x86_64/bin:$PATH
     spack load cuda@10.2.89 /odirgft
     spack load openmpi@3.1.6
-    rsync -avz nico4:~/QCSimulator/src $HOME/QCSimulator
-    rsync -avz nico4:~/QCSimulator/micro-benchmark $HOME/QCSimulator 
+    # rsync -avz nico4:~/QCSimulator/src $HOME/QCSimulator
+    # rsync -avz nico4:~/QCSimulator/micro-benchmark $HOME/QCSimulator 
     ;;
   nova)
     echo "nova cluster"

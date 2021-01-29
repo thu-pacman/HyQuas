@@ -10,7 +10,7 @@ include_directories(${PROJECT_SOURCE_DIR}/third-party/dbg-macro)
 MESSAGE(STATUS "Found CUTT: ${CUTT}")
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${OpenMP_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_80 -code=sm_80 --ptxas-options=-v -lineinfo -keep")
+set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo -keep")
 set(BACKEND "group" CACHE STRING "Backend mode, one of [serial, group, group-serial, blas]")
 MESSAGE(STATUS "Backend: ${BACKEND}")
 
