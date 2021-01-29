@@ -2,3 +2,7 @@ build/
 tests/
 evaluator-preprocess/parameter-files
 .vscode/
+*.sqlite
+*.qdrep
+*.log
+*.profile
