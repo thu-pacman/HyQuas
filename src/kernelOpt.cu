@@ -98,11 +98,20 @@ __device__ __forceinline__ void SHi(int hiIdx) {
     shm[hiIdx] = make_qComplex(-hi.y, hi.x);
 }
 
+__device__ __forceinline__ void SDGHi(int hiIdx) {
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(hi.y, -hi.x);
+}
+
 __device__ __forceinline__ void THi(int hiIdx) {
     qComplex hi = shm[hiIdx];
     shm[hiIdx] = make_qComplex(recRoot2 * (hi.x - hi.y), recRoot2 * (hi.x + hi.y));
 }
 
+__device__ __forceinline__ void TDGHi(int hiIdx) {
+    qComplex hi = shm[hiIdx];
+    shm[hiIdx] = make_qComplex(recRoot2 * (hi.x + hi.y), recRoot2 * (hi.x - hi.y));
+}
 __device__ __forceinline__ void GIISingle(int loIdx, int hiIdx) {
     qComplex lo = shm[loIdx];
     shm[loIdx] = make_qComplex(-lo.y, lo.x);
@@ -250,6 +259,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_CONTROL(CZ, ZHi(hi))
                     CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
                     CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
+                    CASE_CONTROL(CU1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     CASE_CONTROL(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
                     default: {
                         assert(false);
@@ -269,17 +279,30 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                         }
                     }
                 } else {
-                    if (deviceGates[i].type == GateType::CRZ) {
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                            x ^= x >> 3 & 7;
-                            RZHi(x, deviceGates[i].r00, -deviceGates[i].i00);
+                    switch (deviceGates[i].type) {
+                        case GateType::CZ: {
+                            for (int j = threadIdx.x; j < m; j += blockSize) {
+                                int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                                x ^= x >> 3 & 7;
+                                ZHi(x);
+                            }
+                            break;    
                         }
-                    } else {
-                        for (int j = threadIdx.x; j < m; j += blockSize) {
-                            int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
-                            x ^= x >> 3 & 7;
-                            ZHi(x);
+                        case GateType::CU1: {
+                            for (int j = threadIdx.x; j < m; j += blockSize) {
+                                int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                                x ^= x >> 3 & 7;
+                                U1Hi(x, make_qComplex(deviceGates[i].r11, deviceGates[i].i11));
+                            }
+                            break;
+                        }
+                        case GateType::CRZ: {
+                            for (int j = threadIdx.x; j < m; j += blockSize) {
+                                int x = ((j >> controlQubit) << (controlQubit + 1)) | (j & maskControl)  | (1 << controlQubit);
+                                x ^= x >> 3 & 7;
+                                RZHi(x, deviceGates[i].r00, -deviceGates[i].i00);
+                            }
+                            break;
                         }
                     }
                 }
@@ -301,6 +324,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                 }
                 switch (deviceGates[i].type) {
                     FOLLOW_NEXT(GOC)
+                    FOLLOW_NEXT(CU1)
                     CASE_SINGLE(U1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     FOLLOW_NEXT(U2)
                     CASE_SINGLE(U3, USingle(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)));
@@ -319,7 +343,9 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     FOLLOW_NEXT(RZ)
                     CASE_SINGLE(CRZ, RZSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i00))
                     CASE_SINGLE(S, SHi(hi))
+                    CASE_SINGLE(SDG, SDGHi(hi))
                     CASE_SINGLE(T, THi(hi))
+                    CASE_SINGLE(TDG, TDGHi(hi))
                     CASE_SINGLE(GII, GIISingle(lo, hi))
                     CASE_SINGLE(GZZ, GZZSingle(lo, hi))
                     CASE_SINGLE(GCC, GCCSingle(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00)))
@@ -336,8 +362,11 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     FOLLOW_NEXT(Z)
                     CASE_SKIPLO_HI(CZ, ZHi(j))
                     CASE_SKIPLO_HI(S, SHi(j))
+                    CASE_SKIPLO_HI(SDG, SDGHi(j))
                     CASE_SKIPLO_HI(T, THi(j))
+                    CASE_SKIPLO_HI(TDG, TDGHi(j))
                     FOLLOW_NEXT(GOC)
+                    FOLLOW_NEXT(CU1)
                     CASE_SKIPLO_HI(U1, U1Hi(j, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     LOHI_SAME(GII, GII(j))
                     LOHI_SAME(GZZ, GZZ(j))

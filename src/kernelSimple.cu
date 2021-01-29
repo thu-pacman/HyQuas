@@ -152,6 +152,16 @@ __global__ void CRZKernel(qComplex* a, int numQubit_, int controlQubit, int targ
 }
 
 template <unsigned int blockSize>
+__global__ void CU1Kernel(qComplex* a, int numQubit_, int controlQubit, int targetQubit, qreal alpha, qreal beta) {
+    CONTROL_GATE_BEGIN {
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
+    } CONTROL_GATE_END
+}
+
+template <unsigned int blockSize>
 __global__ void U1Kernel(qComplex* a, int numQubit_, int targetQubit, qreal alpha, qreal beta) {
     SINGLE_GATE_BEGIN {
         qreal hiReal = a[hi].x;
@@ -241,12 +251,32 @@ __global__ void SKernel(qComplex* a, int numQubit_, int targetQubit) {
 }
 
 template <unsigned int blockSize>
+__global__ void SDGKernel(qComplex* a, int numQubit_, int targetQubit) {
+    SINGLE_GATE_BEGIN {
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = hiImag;
+        a[hi].y = -hiReal;
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
 __global__ void TKernel(qComplex* a, int numQubit_, int targetQubit, qreal recRoot2) {
     SINGLE_GATE_BEGIN {
         qreal hiReal = a[hi].x;
         qreal hiImag = a[hi].y;
         a[hi].x = recRoot2 * (hiReal - hiImag);
         a[hi].y = recRoot2 * (hiReal + hiImag);
+    } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void TDGKernel(qComplex* a, int numQubit_, int targetQubit, qreal recRoot2) {
+    SINGLE_GATE_BEGIN {
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = recRoot2 * (hiReal + hiImag);
+        a[hi].y = recRoot2 * (hiImag - hiReal);
     } SINGLE_GATE_END
 }
 
@@ -324,6 +354,11 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
                     deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].x, gate.mat[1][0].x);
                 break;
             }
+            case GateType::CU1: {
+                CU1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[1][1].x, gate.mat[1][1].y);
+                break;
+            }
             case GateType::CRZ: {
                 CRZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                     deviceStateVec, numQubit_, gate.controlQubit, gate.targetQubit, gate.mat[0][0].x, - gate.mat[0][0].y);
@@ -365,7 +400,15 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
                 SKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
                 break;
             }
+            case GateType::SDG: {
+                SKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit);
+                break;
+            }
             case GateType::T: {
+                TKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
+                break;
+            }
+            case GateType::TDG: {
                 TKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, 1/sqrt(2));
                 break;
             }

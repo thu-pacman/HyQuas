@@ -126,11 +126,23 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
             assert(qid.size() == 1);
             c->addGate(Gate::S(qid[0]));
             // printf("s %d\n", qid[0]);
+        } else if (strcmp(buffer, "sdg") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::SDG(qid[0]));
+            // printf("s %d\n", qid[0]);
         } else if (strcmp(buffer, "t") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);
             assert(qid.size() == 1);
             c->addGate(Gate::T(qid[0]));
+            // printf("t %d\n", qid[0]);
+        }  else if (strcmp(buffer, "tdg") == 0) {
+            fscanf(f, "%s", buffer);
+            auto qid = parse_qid(buffer);
+            assert(qid.size() == 1);
+            c->addGate(Gate::TDG(qid[0]));
             // printf("t %d\n", qid[0]);
         } else {
             auto gate = parse_gate(buffer);
@@ -155,6 +167,13 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
                 assert(qid.size() == 2);
                 c->addGate(Gate::CRZ(qid[0], qid[1], gate.second[0]));
                 // printf("crz %d %d %f\n", qid[0], qid[1], gate.second[0]);
+            }  else if (strcmp(buffer, "cu1") == 0) {
+                assert(gate.second.size() == 1);
+                fscanf(f, "%s", buffer);
+                auto qid = parse_qid(buffer);
+                assert(qid.size() == 2);
+                c->addGate(Gate::CU1(qid[0], qid[1], gate.second[0]));
+                // printf("cu1 %d %d %f\n", qid[0], qid[1], gate.second[0]);
             } else if (gate.first == "u1") {
                 assert(gate.second.size() == 1);
                 fscanf(f, "%s", buffer);

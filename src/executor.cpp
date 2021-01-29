@@ -170,6 +170,17 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
                         return KernelGate::ID();
                     }
                 }
+                case GateType::CU1: {
+                    if (IS_HIGH_PART(part_id, t)) {
+                        return KernelGate(
+                            GateType::U1,
+                            toID.at(c), 1 - IS_SHARE_QUBIT(c),
+                            gate.mat
+                        );
+                    } else {
+                        return KernelGate::ID();
+                    }
+                }
                 case GateType::CRZ: { // GOC(c)
                     qComplex mat[2][2] = {make_qComplex(1), make_qComplex(0), make_qComplex(0), IS_HIGH_PART(part_id, t) ? gate.mat[1][1]: gate.mat[0][0]};
                     return KernelGate(
@@ -206,6 +217,16 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
                             );
                         } else {
                             return KernelGate::ID();
+                        }
+                    }
+                    case GateType::CU1: {
+                        if (IS_HIGH_PART(part_id, t)) {
+                            qComplex mat[2][2] = {gate.mat[1][1], make_qComplex(0), make_qComplex(0), gate.mat[1][1]};
+                            return KernelGate(
+                                GateType::GCC,
+                                0, 0,
+                                mat
+                            );
                         }
                     }
                     case GateType::CRZ: {
@@ -255,7 +276,26 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
                         return KernelGate::ID();
                     }
                 }
+                case GateType::SDG: {
+                    // FIXME
+                    if (IS_HIGH_PART(part_id, t)) {
+                        qComplex val = make_qComplex(0, -1);
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
+                        return KernelGate(GateType::GCC, 0, 0, mat);
+                    } else {
+                        return KernelGate::ID();
+                    }
+                }
                 case GateType::T: {
+                    if (IS_HIGH_PART(part_id, t)) {
+                        qComplex val = gate.mat[1][1];
+                        qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
+                        return KernelGate(GateType::GCC, 0, 0, mat);
+                    } else {
+                        return KernelGate::ID();
+                    }
+                }
+                case GateType::TDG: {
                     if (IS_HIGH_PART(part_id, t)) {
                         qComplex val = gate.mat[1][1];
                         qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};

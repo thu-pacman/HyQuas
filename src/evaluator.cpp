@@ -14,7 +14,9 @@ Evaluator::Evaluator() {
     memcpy(pergate_single_perf[28][int(GateType::Y )], V100_Y , sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::Z )], V100_Z , sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::S )], V100_S , sizeof(double) * LOCAL_QUBIT_SIZE);
+    memcpy(pergate_single_perf[28][int(GateType::SDG )], V100_SDG , sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::T )], V100_T , sizeof(double) * LOCAL_QUBIT_SIZE);
+    memcpy(pergate_single_perf[28][int(GateType::TDG )], V100_TDG , sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::RX)], V100_RX, sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::RY)], V100_RY, sizeof(double) * LOCAL_QUBIT_SIZE);
     memcpy(pergate_single_perf[28][int(GateType::RZ)], V100_RZ, sizeof(double) * LOCAL_QUBIT_SIZE);
@@ -24,6 +26,7 @@ Evaluator::Evaluator() {
     memcpy(pergate_ctr_perf[28][int(GateType::CZ  )], V100_CZ , sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
     memcpy(pergate_ctr_perf[28][int(GateType::CRX )], V100_CRX, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
     memcpy(pergate_ctr_perf[28][int(GateType::CRY )], V100_CRY, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
+    memcpy(pergate_ctr_perf[28][int(GateType::CU1 )], V100_CU1, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
     memcpy(pergate_ctr_perf[28][int(GateType::CRZ )], V100_CRZ, sizeof(double) * LOCAL_QUBIT_SIZE * LOCAL_QUBIT_SIZE);
 
     BLAS_perf[28][6] = 23.068396;
@@ -60,7 +63,9 @@ void Evaluator::loadParam(int numQubits) {
         loadPergateSingle(numQubits, qbit_param, GateType::Y );
         loadPergateSingle(numQubits, qbit_param, GateType::Z );
         loadPergateSingle(numQubits, qbit_param, GateType::S );
+        loadPergateSingle(numQubits, qbit_param, GateType::SDG);
         loadPergateSingle(numQubits, qbit_param, GateType::T );
+        loadPergateSingle(numQubits, qbit_param, GateType::TDG);
         loadPergateSingle(numQubits, qbit_param, GateType::RX);
         loadPergateSingle(numQubits, qbit_param, GateType::RY);
         loadPergateSingle(numQubits, qbit_param, GateType::RZ);
@@ -70,6 +75,7 @@ void Evaluator::loadParam(int numQubits) {
         loadPergateCtr(numQubits, qbit_param, GateType::CZ  );
         loadPergateCtr(numQubits, qbit_param, GateType::CRX );
         loadPergateCtr(numQubits, qbit_param, GateType::CRY );
+        loadPergateCtr(numQubits, qbit_param, GateType::CU1 );
         loadPergateCtr(numQubits, qbit_param, GateType::CRZ );
 
         for (int K = 1, i = 0; K < 1024; K <<= 1, i++) {
@@ -107,6 +113,8 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRX)][0][2]; break;
             case GateType::CRY : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRY)][0][2]; break;
+            case GateType::CU1 :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CU1)][0][2]; break;
             case GateType::CRZ : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRZ)][0][2]; break;
             case GateType::U1 : 
@@ -125,8 +133,12 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 tim_pred += pergate_single_perf[numQubits][int(GateType::Z)][1]; break;
             case GateType::S : 
                 tim_pred += pergate_single_perf[numQubits][int(GateType::S)][1]; break;
+            case GateType::SDG : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::SDG)][1]; break;
             case GateType::T : 
                 tim_pred += pergate_single_perf[numQubits][int(GateType::T)][1]; break;
+            case GateType::TDG : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::TDG)][1]; break;
             case GateType::RX : 
                 tim_pred += pergate_single_perf[numQubits][int(GateType::RX)][1]; break;
             case GateType::RY : 

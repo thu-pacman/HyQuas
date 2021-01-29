@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CRX, CRY, CRZ, U1, U2, U3, H, X, Y, Z, S, T, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
+    CCX, CNOT, CY, CZ, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, S, SDG, T, TDG, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
 };
 
 struct Gate {
@@ -25,7 +25,7 @@ struct Gate {
         return controlQubit2 != -1;
     }
     bool isDiagonal() const {
-        return type == GateType::CZ || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::T || type == GateType::RZ;
+        return type == GateType::CZ || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ;
     }
     static Gate CCX(int c1, int c2, int targetQubit);
     static Gate CNOT(int controlQubit, int targetQubit);
@@ -33,6 +33,7 @@ struct Gate {
     static Gate CZ(int controlQubit, int targetQubit);
     static Gate CRX(int controlQubit, int targetQubit, qreal angle);
     static Gate CRY(int controlQubit, int targetQubit, qreal angle);
+    static Gate CU1(int controlQubit, int targetQubit, qreal lambda);
     static Gate CRZ(int controlQubit, int targetQubit, qreal angle);
     static Gate U1(int targetQubit, qreal lambda);
     static Gate U2(int targetQubit, qreal phi, qreal lambda);
@@ -41,8 +42,10 @@ struct Gate {
     static Gate X(int targetQubit);
     static Gate Y(int targetQubit);
     static Gate Z(int targetQubit);
-    static Gate S(int targetQubit); 
+    static Gate S(int targetQubit);
+    static Gate SDG(int targetQubit); 
     static Gate T(int targetQubit);
+    static Gate TDG(int targetQubit);
     static Gate RX(int targetQubit, qreal angle);
     static Gate RY(int targetQubit, qreal angle);
     static Gate RZ(int targetQubit, qreal angle);
