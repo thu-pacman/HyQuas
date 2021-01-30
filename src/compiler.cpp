@@ -33,6 +33,12 @@ void Compiler::fillLocals(LocalGroup& lg) {
 
 std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGroup& lg) {
     std::vector<std::pair<std::vector<Gate>, qindex>> result;
+#ifndef ENABLE_OVERLAP
+    for (int i = 0; i < lg.fullGroups.size(); i++) {
+        result.push_back(make_pair(std::vector<Gate>(), 0));
+    }
+    return std::move(result);
+#endif
     result.push_back(make_pair(std::vector<Gate>(), 0));
     for (size_t i = 1; i < lg.fullGroups.size(); i++) {
         std::vector<Gate> gates = lg.fullGroups[i-1].gates;
@@ -116,23 +122,30 @@ Schedule Compiler::run() {
             state = lg.initState(state, numQubits, newGlobals, overlapGlobals, moveBack[id].second);
         }
 
-        AdvanceCompiler overlapCompiler(numQubits, gg.relatedQubits, moveBack[id].first);
-        lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
+        qindex overlapLocals = gg.relatedQubits;
+        if (id > 0)
+            overlapLocals &= localGroup.fullGroups[id - 1].relatedQubits;
+
+        AdvanceCompiler overlapCompiler(numQubits, overlapLocals, moveBack[id].first);
         AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, gg.gates);
         switch (BACKEND) {
             case 1: {
+                lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             case 3: {
+                lg.overlapGroups = overlapCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             case 4: {
+                lg.overlapGroups = overlapCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
             default: {
+                lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
