@@ -10,7 +10,7 @@ include_directories(${PROJECT_SOURCE_DIR}/third-party/dbg-macro)
 MESSAGE(STATUS "Found CUTT: ${CUTT}")
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${OpenMP_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo -keep")
+set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_80 -code=sm_80 --ptxas-options=-v -lineinfo -keep")
 set(BACKEND "group" CACHE STRING "Backend mode, one of [serial, group, group-serial, blas]")
 MESSAGE(STATUS "Backend: ${BACKEND}")
 
@@ -85,7 +85,7 @@ add_executable(main main.cpp)
 target_link_libraries(main QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES})
 
 if (MICRO_BENCH)
-    set(BENCHMARKS local-single local-ctr two-group-h)
+    set(BENCHMARKS local-single local-ctr two-group-h bench-blas)
     foreach(BENCHMARK IN LISTS BENCHMARKS)
         add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
         target_link_libraries(${BENCHMARK} QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES})
