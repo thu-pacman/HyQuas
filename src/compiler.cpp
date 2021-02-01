@@ -134,7 +134,8 @@ Schedule Compiler::run() {
                 lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
-            case 3: {
+            case 3: // no break
+            case 5: {
                 lg.overlapGroups = overlapCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
@@ -145,8 +146,7 @@ Schedule Compiler::run() {
                 break;
             }
             default: {
-                lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
-                lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
+                UNREACHABLE()
                 break;
             }
         }
@@ -214,46 +214,32 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             // get the gate group for pergate backend
             memset(full, 0, sizeof(full));
             fillRelated(related, state.layout);
-            GateGroup pg = getGroup(full, related, true, perGateSize, -1ll);
-            // get the gate group for blas backend
-            memset(full, 0, sizeof(full));
-            memset(related, 0, sizeof(related));
-            GateGroup blas = getGroup(full, related, false, blasSize, localQubits);
-
-            if (pg.gates.empty()) {
-                gg = std::move(blas);
-                gg.backend = Backend::BLAS;
-            } else if (blas.gates.empty()) {
-                gg = std::move(pg);
-                gg.backend = Backend::PerGate;
+            GateGroup best = getGroup(full, related, true, perGateSize, -1ll);
+            best.backend = Backend::PerGate;
+            double bestEff;
+            if (best.gates.size() == 0) {
+                bestEff = 1e10;
             } else {
-                // TODO: select the backend in a cleverer way
-                /*if (rand() & 1) {
-                    gg = std::move(pg);
-                    gg.backend = Backend::PerGate;
-                } else {
-                    gg = std::move(blas);
-                    gg.backend = Backend::BLAS;
-                }*/
-                /*
-                int pg_sz = pg.gates.size();
-                int blas_sz = blas.gates.size();
-                if(pg_sz * 0.8 > blas_sz) {
-                    gg = std::move(pg);
-                    gg.backend = Backend::PerGate;
-                } else {
-                    gg = std::move(blas);
-                    gg.backend = Backend::BLAS;
-                }*/
-                if(Evaluator::getInstance() -> PerGateOrBLAS(&pg, &blas, numQubits, blasSize)) {
-                    gg = std::move(pg);
-                    gg.backend = Backend::PerGate;
-                } else {
-                    gg = std::move(blas);
-                    gg.backend = Backend::BLAS;    
-                }
-                //Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(&pg));
+                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits, &best) / best.gates.size();
+                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits, &best), (int)best.gates.size(), bestEff);
             }
+
+            for (int matSize = 3; matSize < 10; matSize ++) {
+                memset(full, 0, sizeof(full));
+                memset(related, 0, sizeof(related));
+                GateGroup blas = getGroup(full, related, false, matSize, localQubits);
+                blas.backend = Backend::BLAS;
+                if (blas.gates.size() ==0)
+                    continue;
+                double eff = Evaluator::getInstance() -> perfBLAS(numQubits, matSize) / blas.gates.size();
+                // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits, matSize), (int) blas.gates.size(), eff);
+                if (eff < bestEff) {
+                    best = std::move(blas);
+                    eff = bestEff;
+                }
+            }
+
+            gg = std::move(best);
             state = gg.initState(state, cuttSize);
         } else if (usePerGate && !useBLAS) {
             fillRelated(related, state.layout);
@@ -267,7 +253,11 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
             memset(full, 0, sizeof(full));
-            gg = getGroup(full, related, false, blasSize, localQubits);
+            if (BACKEND == 3) {
+                gg = getGroup(full, related, false, blasSize, localQubits);
+            } else {
+                gg = getGroupAdvance(blasSize, localQubits);
+            }
             gg.backend = Backend::BLAS;
             
             // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
@@ -284,6 +274,12 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     }
     //Logger::add("local group cnt : %d", cnt);
     return std::move(lg);
+}
+
+GateGroup AdvanceCompiler::getGroupAdvance(int localSize, qindex localQubits) {
+    GateGroup ret;
+    UNREACHABLE()
+    return ret;
 }
 
 GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
@@ -323,8 +319,9 @@ GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableG
                 full[gate.controlQubit] = full[gate.targetQubit] = 1;
             }
         } else {
-            if (!full[gate.targetQubit])
+            if (!full[gate.targetQubit]) {
                 cur[gate.targetQubit].addGate(gate, localQubits, enableGlobal);
+            }
         }
     }
 

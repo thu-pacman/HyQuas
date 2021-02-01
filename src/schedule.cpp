@@ -116,7 +116,7 @@ void Schedule::dump(int numQubits) {
         printf("\n\n");
     }
     fflush(stdout);
-#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4
+#if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     for (size_t i = 0; i < localGroups.size(); i++) {
         const LocalGroup& lg = localGroups[i];
         printf("Global: ");
@@ -603,7 +603,7 @@ void GateGroup::initMatrix(int numLocalQubit) {
 }
 
 
-#if BACKEND == 1 || BACKEND == 3 || BACKEND == 4
+#if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
 void Schedule::initMatrix(int numQubits) {
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
