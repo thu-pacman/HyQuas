@@ -235,7 +235,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
                 // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits, matSize), (int) blas.gates.size(), eff);
                 if (eff < bestEff) {
                     best = std::move(blas);
-                    eff = bestEff;
+                    bestEff = eff;
                 }
             }
 
