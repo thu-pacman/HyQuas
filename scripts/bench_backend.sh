@@ -1,9 +1,10 @@
 #!/bin/bash
+
 export CUDA_VISIBLE_DEVICES=0
 head=../build/logs/`date +%Y%m%d-%H%M%S`
 
-source ../scripts/init.sh -DBACKEND=group -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off -DMICRO_BENCH=on -DUSE_DOUBLE=on -DEVALUATOR_PREPROCESS=on
-CUDA_VISIBLE_DEVICES=0 ../build/process
+# source ../scripts/init.sh -DBACKEND=group -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off -DMICRO_BENCH=on -DUSE_DOUBLE=on -DEVALUATOR_PREPROCESS=on
+# CUDA_VISIBLE_DEVICES=0 ../build/process
 
 name=$head-group
 mkdir -p $name
