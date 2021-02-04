@@ -113,7 +113,12 @@ void Circuit::compile() {
     auto mid = chrono::system_clock::now();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
-    Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
+    int fullGates = 0, overlapGates = 0;
+    for (auto& lg: schedule.localGroups) {
+        for (auto& gg: lg.fullGroups) fullGates += gg.gates.size();
+        for (auto& gg: lg.overlapGroups) overlapGates += gg.gates.size();
+    }
+    Logger::add("Total Groups: %d %d %d %d", int(schedule.localGroups.size()), totalGroups, fullGates, overlapGates);
     schedule.initMatrix(numQubits);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
