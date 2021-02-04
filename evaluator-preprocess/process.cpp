@@ -11,8 +11,8 @@
 #include "logger.h"
 using namespace std;
 
-#define DIFF_QUBIT_NUMS 2
-int qubit_nums[DIFF_QUBIT_NUMS] = {28, 25};
+#define DIFF_QUBIT_NUMS 7
+int qubit_nums[DIFF_QUBIT_NUMS] = {22, 23, 24, 25, 26, 27, 28};
 
 FILE* curr_file;
 

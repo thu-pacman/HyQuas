@@ -220,19 +220,19 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             if (best.gates.size() == 0) {
                 bestEff = 1e10;
             } else {
-                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits, &best) / best.gates.size();
-                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits, &best), (int)best.gates.size(), bestEff);
+                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, &best) / best.gates.size();
+                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, &best), (int)best.gates.size(), bestEff);
             }
 
-            for (int matSize = 3; matSize < 10; matSize ++) {
+            for (int matSize = 4; matSize < 8; matSize ++) {
                 memset(full, 0, sizeof(full));
                 memset(related, 0, sizeof(related));
                 GateGroup blas = getGroup(full, related, false, matSize, localQubits);
                 blas.backend = Backend::BLAS;
                 if (blas.gates.size() ==0)
                     continue;
-                double eff = Evaluator::getInstance() -> perfBLAS(numQubits, matSize) / blas.gates.size();
-                // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits, matSize), (int) blas.gates.size(), eff);
+                double eff = Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize) / blas.gates.size();
+                // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize), (int) blas.gates.size(), eff);
                 if (eff < bestEff) {
                     best = std::move(blas);
                     bestEff = eff;

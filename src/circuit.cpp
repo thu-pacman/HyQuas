@@ -105,10 +105,12 @@ qComplex Circuit::ampAt(qindex idx) {
 }
 
 void Circuit::compile() {
+    auto start = chrono::system_clock::now();
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     Compiler compiler(numQubits, gates);
     schedule = compiler.run();
+    auto mid = chrono::system_clock::now();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     Logger::add("Total Groups: %d %d", int(schedule.localGroups.size()), totalGroups);
@@ -119,6 +121,10 @@ void Circuit::compile() {
 #else
     schedule.finalState = State(numQubits);
 #endif
+    auto end = chrono::system_clock::now();
+    auto duration1 = chrono::duration_cast<chrono::microseconds>(mid - start);
+    auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);
+    Logger::add("Compile Time: %d us %d us", int(duration1.count()), int(duration2.count()));
 }
 
 void Circuit::printState() {
