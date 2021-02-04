@@ -137,6 +137,7 @@ public:
     void loadPergateCtr(int numQubits, FILE* qbit_param, GateType gate_type);
     void loadParam(int numQubits);
     double perfPerGate(int numQubits, const GateGroup* gg);
+    double perfPerGate(int numQubits, const std::vector<GateType>& types);
     double perfBLAS(int numQubits, int blasSize);
     // return True if choose pergate over BLAS
     bool PerGateOrBLAS(const GateGroup* gg_pergate, const GateGroup* gg_blas, int numQubits, int blasSize);

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <set>
 #include "schedule.h"
 #include "utils.h"
 #include "gate.h"
@@ -43,9 +44,11 @@ class AdvanceCompiler: public OneLayerCompiler {
 public:
     AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
     LocalGroup run(State &state, bool usePerGate, bool useBLAS, int preGateSize, int blasSize, int cuttSize);
-    GateGroup getGroupAdvance(int localSize, qindex localQubits);
+    std::vector<int> getGroupAdvance(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
+    void removeGatesAdvance(const std::vector<int>& remove);
 private:
     qindex localQubits;
+    std::set<int> remain;
 };
 
 class ChunkCompiler: public OneLayerCompiler {

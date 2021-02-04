@@ -167,6 +167,14 @@ AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, std::vector<
 
 LocalGroup SimpleCompiler::run() {
     LocalGroup lg;
+    if (localSize == numQubits) {
+        GateGroup gg;
+        for (auto& g: remainGates)
+            gg.addGate(g, localQubits, enableGlobal);
+        lg.relatedQubits = gg.relatedQubits;
+        lg.fullGroups.push_back(gg.copyGates());
+        return std::move(lg);
+    }
     lg.relatedQubits = 0;
     int cnt = 0;
     while (remainGates.size() > 0) {
@@ -199,6 +207,11 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     LocalGroup lg;
     lg.relatedQubits = 0;
     int cnt = 0;
+    if (usePerGate && useBLAS) {
+        remain.clear();
+        for (int i = 0; i < remainGates.size(); i++)
+            remain.insert(i);
+    }
     while (remainGates.size() > 0) {
         qindex related[numQubits];
         bool full[numQubits];
@@ -210,37 +223,50 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             }
         };
         GateGroup gg;
+        std::vector<int> advanceIDX;
         if (usePerGate && useBLAS) {
             // get the gate group for pergate backend
             memset(full, 0, sizeof(full));
             fillRelated(related, state.layout);
-            GateGroup best = getGroup(full, related, true, perGateSize, -1ll);
-            best.backend = Backend::PerGate;
+            qindex cacheRelated = related[0];
+            std::vector<int> bestIDX = getGroupAdvance(full, related, true, perGateSize, -1ll);
+            Backend bestBackend = Backend::PerGate;
             double bestEff;
-            if (best.gates.size() == 0) {
+            if (bestIDX.size() == 0) {
                 bestEff = 1e10;
             } else {
-                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, &best) / best.gates.size();
-                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, &best), (int)best.gates.size(), bestEff);
+                std::vector<GateType> tys;
+                for (auto& x: bestIDX) tys.push_back(remainGates[x].type);
+                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys) / bestIDX.size();
+                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int)bestIDX.size(), bestEff);
             }
 
             for (int matSize = 4; matSize < 8; matSize ++) {
                 memset(full, 0, sizeof(full));
                 memset(related, 0, sizeof(related));
-                GateGroup blas = getGroup(full, related, false, matSize, localQubits);
-                blas.backend = Backend::BLAS;
-                if (blas.gates.size() ==0)
+                std::vector<int> idx = getGroupAdvance(full, related, false, matSize, localQubits);
+                if (idx.size() ==0)
                     continue;
-                double eff = Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize) / blas.gates.size();
-                // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize), (int) blas.gates.size(), eff);
+                double eff = Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize) / idx.size();
+                // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize), (int) idx.size(), eff);
                 if (eff < bestEff) {
-                    best = std::move(blas);
+                    bestIDX = idx;
+                    bestBackend = Backend::BLAS;
                     bestEff = eff;
                 }
             }
-
-            gg = std::move(best);
+            advanceIDX = bestIDX;
+            if (bestBackend == Backend::PerGate) {
+                for (auto& x: bestIDX)
+                    gg.addGate(remainGates[x], -1, true);
+                gg.relatedQubits |= cacheRelated;
+            } else {
+                for (auto& x: bestIDX)
+                    gg.addGate(remainGates[x], localQubits, false);
+            }
+            gg.backend = bestBackend;
             state = gg.initState(state, cuttSize);
+            // printf("BACKEND %s\n", bestBackend == Backend::BLAS ? "blas" : "pergate");
         } else if (usePerGate && !useBLAS) {
             fillRelated(related, state.layout);
             memset(full, 0, sizeof(full));
@@ -253,11 +279,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
             memset(full, 0, sizeof(full));
-            if (BACKEND == 3) {
-                gg = getGroup(full, related, false, blasSize, localQubits);
-            } else {
-                gg = getGroupAdvance(blasSize, localQubits);
-            }
+            gg = getGroup(full, related, false, blasSize, localQubits);
             gg.backend = Backend::BLAS;
             
             // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
@@ -267,7 +289,11 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             UNREACHABLE();
         }
         lg.relatedQubits |= gg.relatedQubits;
-        removeGates(remainGates, gg.gates);
+        if (usePerGate && useBLAS) {
+            removeGatesAdvance(advanceIDX);
+        } else {
+            removeGates(remainGates, gg.gates);
+        }
         lg.fullGroups.push_back(std::move(gg));
         cnt ++;
         assert(cnt < 1000);
@@ -276,10 +302,141 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     return std::move(lg);
 }
 
-GateGroup AdvanceCompiler::getGroupAdvance(int localSize, qindex localQubits) {
-    GateGroup ret;
-    UNREACHABLE()
-    return ret;
+std::vector<int> AdvanceCompiler::getGroupAdvance(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
+    std::vector<int> cur[numQubits];
+    int cnt = 0;
+    for (auto& x: remain) {
+        cnt ++;
+        if (cnt % 100 == 0) {
+            bool live = false;
+            for (int i = 0; i < numQubits; i++)
+                if (!full[i])
+                    live = true;
+            if (!live)
+                break;
+        }
+        auto& gate = remainGates[x];
+        if (gate.isControlGate()) {
+            if (!full[gate.controlQubit] && !full[gate.targetQubit]) { 
+                int c = gate.controlQubit, t = gate.targetQubit;
+                qindex newRelated = related[c] | related[t];
+                newRelated = GateGroup::newRelated(newRelated, gate, localQubits, enableGlobal);
+                if (bitCount(newRelated) <= localSize) {
+                    std::vector<int> new_cur;
+                    auto ic = cur[c].begin();
+                    auto it = cur[t].begin();
+                    while (ic != cur[c].end() || it != cur[t].end()) {
+                        if (ic == cur[c].end()) {
+                            new_cur.push_back(*it);
+                            it ++;
+                        } else if (it == cur[t].end()) {
+                            new_cur.push_back(*ic);
+                            ic ++;
+                        } else {
+                            if (*ic < *it) {
+                                new_cur.push_back(*ic);
+                                ic ++;
+                            } else if (*ic > *it) {
+                                new_cur.push_back(*it);
+                                it ++;
+                            } else { // *ic == *it
+                                new_cur.push_back(*ic);
+                                ic ++; it ++;
+                            }
+                        }
+                    }
+                    new_cur.push_back(x);
+                    cur[c] = new_cur;
+                    cur[t]= new_cur;
+                    related[c] = related[t] = newRelated;
+                    continue;
+                }
+            }
+            full[gate.controlQubit] = full[gate.targetQubit] = 1;
+        } else {
+            if (!full[gate.targetQubit]) {
+                cur[gate.targetQubit].push_back(x);
+                related[gate.targetQubit] = GateGroup::newRelated(related[gate.targetQubit], gate, localQubits, enableGlobal);
+            }
+        }
+    }
+
+    std::set<int> selected;
+    std::set<int> curset[numQubits];
+    for (int i = 0; i < numQubits; i++)
+        curset[i].insert(cur[i].begin(), cur[i].end());
+    bool blocked[numQubits];
+    memset(blocked, 0, sizeof(blocked));
+    qindex selectedRelated = 0;
+    while (true) {
+        int mx = 0, id = -1;
+        for (int i = 0; i < numQubits; i++)
+            if (!blocked[i] && curset[i].size() > mx) {
+                if (bitCount(selectedRelated | related[i]) <= localSize) {
+                    mx = curset[i].size();
+                    id = i;
+                } else {
+                    blocked[i] = true;
+                }
+            }
+        if (mx == 0)
+            break;
+        for (auto& x: curset[id]) {
+            selected.insert(x);
+        }
+        selectedRelated |= related[id];
+        blocked[id] = true;
+        for (int i = 0; i < numQubits; i++)
+            if (!blocked[i] && !curset[i].empty()) {
+                if ((related[i] | selectedRelated) == selectedRelated) {
+                    for (auto& x: curset[i])
+                        selected.insert(x);
+                    blocked[i] = true;
+                } else {
+                    for (auto& x: curset[id])
+                        curset[i].erase(x);
+                }
+            }
+    }
+    
+    if (!enableGlobal) {
+        return std::vector<int>(selected.begin(), selected.end());
+    }
+
+    memset(blocked, 0, sizeof(blocked));
+    cnt = 0;
+    for (auto& x: remain) {
+        cnt ++;
+        if (cnt % 100 == 0) {
+            bool live = false;
+            for (int i = 0; i < numQubits; i++)
+                if (!full[i])
+                    live = true;
+            if (!live)
+                break;
+        }
+        if (selected.find(x) != selected.end()) continue;
+        auto& g = remainGates[x];
+        if (g.isDiagonal() && enableGlobal) {
+            if (g.isControlGate()) {
+                if (!blocked[g.controlQubit] && !blocked[g.targetQubit]) {
+                    selected.insert(x);
+                } else {
+                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
+                }
+            } else {
+                if (!blocked[g.targetQubit]) {
+                    selected.insert(x);
+                }
+            }
+        } else {
+            if (g.isControlGate()) {
+                blocked[g.controlQubit] = 1;
+            }
+            blocked[g.targetQubit] = 1;
+        }
+    }
+    return std::vector<int>(selected.begin(), selected.end());;
 }
 
 GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
@@ -416,4 +573,12 @@ LocalGroup ChunkCompiler::run() {
     lg.relatedQubits |= cur.relatedQubits;
     lg.fullGroups.push_back(std::move(cur));
     return std::move(lg);
+}
+
+
+void AdvanceCompiler::removeGatesAdvance(const std::vector<int>& remove) {
+    for (auto& x: remove)
+        remain.erase(x);
+    if (remain.empty())
+        remainGates.clear();
 }

@@ -153,6 +153,63 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
     return tim_pred / 1000 / 512 + pergate_group_overhead;
 }
 
+double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types) {
+    double tim_pred = pergate_group_overhead;
+    loadParam(numQubits);
+    for(auto ty : types) {
+        switch(ty) {
+            case GateType::CCX : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
+            case GateType::CNOT : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
+            case GateType::CY : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CY)][0][2]; break;
+            case GateType::CZ : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CZ)][0][2]; break;
+            case GateType::CRX : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRX)][0][2]; break;
+            case GateType::CRY : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRY)][0][2]; break;
+            case GateType::CU1 :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CU1)][0][2]; break;
+            case GateType::CRZ : 
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRZ)][0][2]; break;
+            case GateType::U1 : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::U1)][1]; break;
+            case GateType::U2 : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::U2)][1]; break;
+            case GateType::U3 : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::U3)][1]; break;
+            case GateType::H : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::H)][1]; break;
+            case GateType::X : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::X)][1]; break;
+            case GateType::Y : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::Y)][1]; break;
+            case GateType::Z : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::Z)][1]; break;
+            case GateType::S : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::S)][1]; break;
+            case GateType::SDG : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::SDG)][1]; break;
+            case GateType::T : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::T)][1]; break;
+            case GateType::TDG : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::TDG)][1]; break;
+            case GateType::RX : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::RX)][1]; break;
+            case GateType::RY : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::RY)][1]; break;
+            case GateType::RZ : 
+                tim_pred += pergate_single_perf[numQubits][int(GateType::RZ)][1]; break;
+            default:
+                printf("meet wrong gate : %s\n", Gate::get_name(ty).c_str());
+                UNREACHABLE()
+        }
+    }
+    return tim_pred / 1000 / 512 + pergate_group_overhead;   
+}
+
 double Evaluator::perfBLAS(int numQubits, int blasSize) {
     loadParam(numQubits);
     //double bias = (numQubits < 28) ? ((qindex)1 << (28 - numQubits)) : (1.0 / ((qindex)1 << (numQubits - 28)));
