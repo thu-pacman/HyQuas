@@ -616,7 +616,7 @@ void Schedule::initMatrix(int numQubits) {
 }
 
 #else
-void Schedule::initMatrix() {
+void Schedule::initMatrix(int numQubits) {
     UNREACHABLE()
 }
 #endif

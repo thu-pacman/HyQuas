@@ -10,14 +10,14 @@
 
 #ifdef USE_DOUBLE
 typedef double qreal;
-typedef int qindex;
+typedef long long qindex;
 typedef cuDoubleComplex qComplex;
 #define make_qComplex make_cuDoubleComplex
 #define MPI_Complex MPI_C_DOUBLE_COMPLEX
 #define cublasGEMM cublasZgemm
 #else
 typedef float qreal;
-typedef int qindex;
+typedef long long qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX

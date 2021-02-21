@@ -34,7 +34,7 @@ private:
 
     // internal
     void prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits); // allocate threadBias
-    std::map<int, int> getLogicShareMap(int relatedQubits, int numLocalQubits) const; // input: physical, output logic -> share
+    std::map<int, int> getLogicShareMap(qindex relatedQubits, int numLocalQubits) const; // input: physical, output logic -> share
 
     State state;
     State oldState;

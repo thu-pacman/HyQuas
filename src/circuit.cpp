@@ -80,7 +80,7 @@ void Circuit::dumpGates() {
 }
 
 qindex Circuit::toPhysicalID(qindex idx) {
-    int id = 0;
+    qindex id = 0;
     auto& pos = schedule.finalState.pos;
     for (int i = 0; i < numQubits; i++) {
         if (idx >> i & 1)
@@ -90,7 +90,7 @@ qindex Circuit::toPhysicalID(qindex idx) {
 }
 
 qindex Circuit::toLogicID(qindex idx) {
-    int id = 0;
+    qindex id = 0;
     auto& pos = schedule.finalState.pos;
     for (int i = 0; i < numQubits; i++) {
         if (idx >> pos[i] & 1)
@@ -124,6 +124,7 @@ void Circuit::compile() {
     schedule.dump(numQubits);
 #endif
 #else
+    auto mid = chrono::system_clock::now();
     schedule.finalState = State(numQubits);
 #endif
     auto end = chrono::system_clock::now();
@@ -138,9 +139,9 @@ void Circuit::printState() {
         printf("%d %.12f: %.12f %.12f\n", i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
     }
     std::vector<std::pair<qindex, qComplex>> largeAmps;
-    for (int i = 0; i < (1 << numQubits); i++) {
+    for (qindex i = 0; i < (1ll << numQubits); i++) {
         if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
-            int logicID = toLogicID(i);
+            qindex logicID = toLogicID(i);
             if (logicID >= 128) {
                 largeAmps.push_back(make_pair(toLogicID(i), result[i]));
             }

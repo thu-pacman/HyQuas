@@ -34,7 +34,7 @@ void Compiler::fillLocals(LocalGroup& lg) {
 std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGroup& lg) {
     std::vector<std::pair<std::vector<Gate>, qindex>> result;
 #ifndef ENABLE_OVERLAP
-    for (int i = 0; i < lg.fullGroups.size(); i++) {
+    for (size_t i = 0; i < lg.fullGroups.size(); i++) {
         result.push_back(make_pair(std::vector<Gate>(), 0));
     }
     return std::move(result);
@@ -88,7 +88,7 @@ Schedule Compiler::run() {
             return std::make_tuple(pos != layout.data() + numQubits, pos - layout.data() - numLocalQubits);
         };
 
-        int overlapGlobals = 0;
+        qindex overlapGlobals = 0;
         int overlapCnt = 0;
         // put overlapped global qubit into the previous position
         bool modified = true;
