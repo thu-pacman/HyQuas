@@ -16,14 +16,29 @@ int qubit_nums[DIFF_QUBIT_NUMS] = {22, 23, 24, 25, 26, 27, 28};
 
 FILE* curr_file;
 
+#define CALC_ALL_PARAM 0
+#define CALC_PARTIAL_PARAM 1
+const int param_type = CALC_PARTIAL_PARAM;
+
 void procPerGateSingle(int numQubits) {
     int num_gates = 512;
     for (int i = int(GateType::U1); i < int(GateType::TOTAL); i++) {
         printf("single gate %s\n", Gate::get_name(GateType(i)).c_str());
-        for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
+        if(param_type == CALC_ALL_PARAM) {
+            for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
+                Circuit c(numQubits);
+                for (int k = 0; k < num_gates; k++) {
+                    c.addGate(Gate::random(j, j + 1, GateType(i)));
+                }
+                c.compile();
+                int time = c.run(false);
+                fprintf(curr_file, "%d ", time);
+            }
+        }
+        else {
             Circuit c(numQubits);
             for (int k = 0; k < num_gates; k++) {
-                c.addGate(Gate::random(j, j + 1, GateType(i)));
+                c.addGate(Gate::random(1, 1 + 1, GateType(i)));
             }
             c.compile();
             int time = c.run(false);
@@ -38,18 +53,29 @@ void procPerGateCtr(int numQubits) {
     int num_gates = 512;
     for (int g = int(GateType::CNOT); g <= int(GateType::CRZ); g++) {
         printf("control gate %s\n", Gate::get_name(GateType(g)).c_str());
-        for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
-            for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
-                if (i == j) { fprintf(curr_file, "0 "); continue; }
-                Circuit c(numQubits);
-                for (int k = 0; k < num_gates; k++) {
-                    c.addGate(Gate::control(i, j, GateType(g)));
+        if(param_type == CALC_ALL_PARAM) {
+            for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
+                for (int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
+                    if (i == j) { fprintf(curr_file, "0 "); continue; }
+                    Circuit c(numQubits);
+                    for (int k = 0; k < num_gates; k++) {
+                        c.addGate(Gate::control(i, j, GateType(g)));
+                    }
+                    c.compile();
+                    int time = c.run(false);
+                    fprintf(curr_file, "%d ", time);
                 }
-                c.compile();
-                int time = c.run(false);
-                fprintf(curr_file, "%d ", time);
+                fprintf(curr_file, "\n");
             }
-            fprintf(curr_file, "\n");
+        }
+        else {
+            Circuit c(numQubits);
+            for (int k = 0; k < num_gates; k++) {
+                c.addGate(Gate::control(0, 2, GateType(g)));
+            }
+            c.compile();
+            int time = c.run(false);
+            fprintf(curr_file, "%d ", time);
         }
         fprintf(curr_file, "\n");
     }
@@ -68,7 +94,7 @@ void procBLAS(int numQubits) {
     cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0), beta = make_cuDoubleComplex(0.0, 0.0);
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
-    checkCudaErrors(cudaEventCreate(&stop));    
+    checkCudaErrors(cudaEventCreate(&stop));
     for (int K = 1; K < 1024; K <<= 1) {
         printf("blas calculating K = %d\n", K);
         double sum_time = 0.0;
@@ -142,6 +168,8 @@ void process(int numQubits) {
     printf("processing qubit number : %d\n", numQubits);
     string file_name = string("../evaluator-preprocess/parameter-files/") + to_string(numQubits) + string("qubits.out"); 
     curr_file = fopen(file_name.c_str(), "w");
+    fprintf(curr_file, "%d\n", param_type);
+
     procPerGateSingle(numQubits);
     procPerGateCtr(numQubits);
     procBLAS(numQubits);

@@ -6,6 +6,9 @@
 #define GATE_NUM 24
 #define MAX_QBITS 40
 
+#define CALC_ALL_PARAM 0
+#define CALC_PARTIAL_PARAM 1
+
 /*
 * build performance model to choose between BLAS and perGate backend
 * Is a singleton class
@@ -122,6 +125,8 @@ private:
     double cutt_cost[MAX_QBITS + 1];
     bool num_qbits_loaded_param[MAX_QBITS + 1];
     const double pergate_group_overhead = 2.0;
+
+    int param_type;
 
     Evaluator();
     

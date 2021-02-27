@@ -35,16 +35,26 @@ Evaluator::Evaluator() {
 }
 
 void Evaluator::loadPergateSingle(int numQubits, FILE* qbit_param, GateType gate_type) {
-    for(int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
-        fscanf(qbit_param, "%lf", &pergate_single_perf[numQubits][int(gate_type)][i]);
+    if(param_type == CALC_ALL_PARAM) {
+        for(int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
+            fscanf(qbit_param, "%lf", &pergate_single_perf[numQubits][int(gate_type)][i]);
+        }
+    }
+    else {
+        fscanf(qbit_param, "%lf", &pergate_single_perf[numQubits][int(gate_type)][1]);
     }
 }
 
 void Evaluator::loadPergateCtr(int numQubits, FILE* qbit_param, GateType gate_type) {
-    for(int i = 0; i < LOCAL_QUBIT_SIZE; i++)
-        for(int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
-            fscanf(qbit_param, "%lf", &pergate_ctr_perf[numQubits][int(gate_type)][i][j]);
-        }
+    if(param_type == CALC_ALL_PARAM) {
+        for(int i = 0; i < LOCAL_QUBIT_SIZE; i++)
+            for(int j = 0; j < LOCAL_QUBIT_SIZE; j++) {
+                fscanf(qbit_param, "%lf", &pergate_ctr_perf[numQubits][int(gate_type)][i][j]);
+            }
+    }
+    else {
+        fscanf(qbit_param, "%lf", &pergate_ctr_perf[numQubits][int(gate_type)][0][2]);       
+    }
 } 
 
 void Evaluator::loadParam(int numQubits) {
@@ -55,6 +65,8 @@ void Evaluator::loadParam(int numQubits) {
     std::string param_file_name = std::string("../evaluator-preprocess/parameter-files/") 
         + std::to_string(numQubits) + std::string("qubits.out");
     if((qbit_param = fopen(param_file_name.c_str(), "r"))) {
+        fscanf(qbit_param, "%d", &param_type);
+
         loadPergateSingle(numQubits, qbit_param, GateType::U1);
         loadPergateSingle(numQubits, qbit_param, GateType::U2);
         loadPergateSingle(numQubits, qbit_param, GateType::U3);
