@@ -513,7 +513,7 @@ void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enu
     }
     qindex hostThreadBias[1 << THREAD_DEP];
     assert((threadHot | enumerate) == relatedQubits);
-    for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
+    for (qindex i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
         hostThreadBias[i] = j;
     }
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {

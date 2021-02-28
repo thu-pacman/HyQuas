@@ -407,7 +407,7 @@ __device__ void fetchData(qComplex* a, qindex* threadBias, qindex idx, qindex bl
 
 __device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
     qindex bias = blockBias | threadBias[threadIdx.x];
-    for (qindex x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
+    for (qindex x = ((qindex(1) << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
