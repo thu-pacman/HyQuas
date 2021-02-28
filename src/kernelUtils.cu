@@ -18,6 +18,9 @@ __global__ void printVectorKernel(qComplex *data, int n) { // with gridDim == 1 
     printf("\n");
 }
 
+__global__ void whileTrueKernel() {
+    while (true);
+}
 
 void isnanTest(qComplex* data, int n, cudaStream_t& stream) {
     isnanTestKernel<<<1, 32, 0, stream>>>(data, n / 32);
@@ -25,4 +28,8 @@ void isnanTest(qComplex* data, int n, cudaStream_t& stream) {
 
 void printVector(qComplex* data, int n, cudaStream_t& stream) {
     printVectorKernel<<<1, 1, 0, stream>>>(data, n);
+}
+
+void whileTrue() {
+    whileTrueKernel<<<1,1>>>();
 }
