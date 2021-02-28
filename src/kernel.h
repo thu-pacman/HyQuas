@@ -23,7 +23,7 @@ void initControlIdx();
 void copyGatesToSymbol(KernelGate* hostGates, int numGates, cudaStream_t& stream, int gpuID);
 
 // call cudaSetDevice() before this function
-void launchExecutor(int gridDim, qComplex* deviceStateVec, qindex* threadBias, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate, cudaStream_t& stream, int gpuID);
+void launchExecutor(int gridDim, qComplex* deviceStateVec, unsigned int* threadBias, int numLocalQubits, int numGates, unsigned int blockHot, unsigned int enumerate, cudaStream_t& stream, int gpuID);
 
 
 // kernelUtils

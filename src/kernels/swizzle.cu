@@ -382,7 +382,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
     }
 }
 
-__device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex blockHot, qindex enumerate, int numLocalQubits) {
+__device__ void fetchData(qComplex* a, qindex* threadBias, qindex idx, qindex blockHot, qindex enumerate, int numLocalQubits) {
     if (threadIdx.x == 0) {
         int bid = blockIdx.x;
         qindex bias = 0;
@@ -397,7 +397,7 @@ __device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex b
     }
     __syncthreads();
     qindex bias = blockBias | threadBias[threadIdx.x];
-    for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
+    for (qindex x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
@@ -407,7 +407,7 @@ __device__ void fetchData(qComplex* a, qindex* threadBias,  qindex idx, qindex b
 
 __device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
     qindex bias = blockBias | threadBias[threadIdx.x];
-    for (int x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
+    for (qindex x = ((1 << (LOCAL_QUBIT_SIZE - THREAD_DEP)) - 1) << THREAD_DEP | threadIdx.x, y = enumerate;
         x >= 0;
         x -= (1 << THREAD_DEP), y = enumerate & (y - 1)) {
         
@@ -417,7 +417,7 @@ __device__ void saveData(qComplex* a, qindex* threadBias, qindex enumerate) {
 
 template <unsigned int blockSize>
 __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, int numLocalQubits, int numGates, qindex blockHot, qindex enumerate) {
-    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    qindex idx = qindex(blockIdx.x) * blockSize + threadIdx.x;
     fetchData(a, threadBias, idx, blockHot, enumerate, numLocalQubits);
     __syncthreads();
     doCompute<blockSize>(numGates, loArr, shiftAt);

@@ -237,7 +237,7 @@ State GateGroup::initPerGateState(const State& oldState) {
 State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
     std::vector<int> pos = oldState.pos;
     std::vector<int> layout = oldState.layout;
-    std::vector<int> dim(numLocalQubits + 1, 2);
+    std::vector<int> dim(numLocalQubits, 2);
 
     std::vector<int> toGlobal; // qubit id
     std::vector<int> toLocal; // qubit id
@@ -267,17 +267,18 @@ State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
     printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
     printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
 #endif
-    // complex have two floats
-    perm.push_back(0);
-    for (int i = perm.size() - 1; i; i--) {
-        perm[i] = perm[i-1] + 1;
-    }
-    perm[0] = 0;
+    // complex have two floats -> use double2
+    // perm.push_back(0);
+    // for (int i = perm.size() - 1; i; i--) {
+    //     perm[i] = perm[i-1] + 1;
+    // }
+    // perm[0] = 0;
+    
     cuttPlans.clear();
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         cuttHandle plan;
         checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
         cuttPlans.push_back(plan);
     }
     this->matQubit = std::max(numMatQubits, MIN_MAT_SIZE);
@@ -335,12 +336,12 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
     printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
 #endif
-    // complex have two floats
-    perm.push_back(0);
-    for (int i = perm.size() - 1; i; i--) {
-        perm[i] = perm[i-1] + 1;
-    }
-    perm[0] = 0;
+    // complex have two floats -> use double2
+    // perm.push_back(0);
+    // for (int i = perm.size() - 1; i; i--) {
+    //     perm[i] = perm[i-1] + 1;
+    // }
+    // perm[0] = 0;
 
     int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
     for (int i = 0; i < MyGlobalVars::bit; i++) {
@@ -368,11 +369,11 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     a2aComm = newComm;
     a2aCommSize = MyGlobalVars::numGPUs >> overlapCnt;
     cuttPlans.clear();
-    std::vector<int> dim(numLocalQubits + 1, 2);
+    std::vector<int> dim(numLocalQubits, 2);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         cuttHandle plan;
         checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits + 1, dim.data(), perm.data(), sizeof(qComplex) / 2, MyGlobalVars::streams[g]));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
         cuttPlans.push_back(plan);
     }
     auto newState = State(pos, layout);
@@ -618,7 +619,7 @@ void Schedule::initMatrix(int numQubits) {
 }
 
 #else
-void Schedule::initMatrix() {
+void Schedule::initMatrix(int numQubits) {
     UNREACHABLE()
 }
 #endif

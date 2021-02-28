@@ -4,20 +4,21 @@
 #include <cuComplex.h>
 #include <mpi.h>
 #include <cuda.h>
+#include <cutt.h>
 #include <cuda_runtime.h>
 #include <memory>
 #include <cublas_v2.h>
 
 #ifdef USE_DOUBLE
 typedef double qreal;
-typedef int qindex;
+typedef long long qindex;
 typedef cuDoubleComplex qComplex;
 #define make_qComplex make_cuDoubleComplex
 #define MPI_Complex MPI_C_DOUBLE_COMPLEX
 #define cublasGEMM cublasZgemm
 #else
 typedef float qreal;
-typedef int qindex;
+typedef long long qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX
@@ -40,8 +41,7 @@ const int COALESCE_GLOBAL = COALESCE_GLOBAL_DEFINED;
 const int MAX_GATE = 600;
 const int MIN_MAT_SIZE = MIN_MAT_SIZE_DEFINED;
 
-static const char *cublasGetErrorString(cublasStatus_t error)
-{
+static const char *cublasGetErrorString(cublasStatus_t error) {
     switch (error)
     {
         case CUBLAS_STATUS_SUCCESS:
@@ -66,6 +66,24 @@ static const char *cublasGetErrorString(cublasStatus_t error)
     UNREACHABLE()
 }
 
+static const char *cuttGetErrorString(cuttResult error) {
+    switch (error) {
+        case CUTT_INVALID_PLAN:
+            return "CUTT_INVALID_PLAN";
+        case CUTT_INVALID_PARAMETER:
+            return "CUTT_INVALID_PARAMETER";
+        case CUTT_INVALID_DEVICE:
+            return "CUTT_INVALID_DEVICE";
+        case CUTT_INTERNAL_ERROR:
+            return "CUTT_INTERNAL_ERROR";
+        case CUTT_UNDEFINED_ERROR:
+            return "CUTT_UNDEFINED_ERROR";
+        default:
+            return "<unknown>";
+    }
+    UNREACHABLE()
+}
+
 #define checkCudaErrors(stmt) {                                 \
     cudaError_t err = stmt;                            \
     if (err != cudaSuccess) {                          \
@@ -77,7 +95,7 @@ static const char *cublasGetErrorString(cublasStatus_t error)
 #define checkCuttErrors(stmt) {                                 \
     cuttResult err = stmt;                            \
     if (err != CUTT_SUCCESS) {                          \
-      fprintf(stderr, "%s in file %s, function %s, line %i.\n", #stmt, __FILE__, __FUNCTION__, __LINE__); \
+      fprintf(stderr, "%s in file %s, function %s, line %i: %04d %s\n", #stmt, __FILE__, __FUNCTION__, __LINE__, err, cuttGetErrorString(err)); \
       exit(1); \
     }                                                  \
 }

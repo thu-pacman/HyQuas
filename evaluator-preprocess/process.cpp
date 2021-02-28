@@ -90,7 +90,7 @@ void procBLAS(int numQubits) {
     checkCudaErrors(cudaMalloc(&result, sizeof(cuDoubleComplex) << numQubits));
     cublasHandle_t handle;
     checkBlasErrors(cublasCreate(&handle));
-    int numElements = 1 << numQubits;
+    qindex numElements = qindex(1) << numQubits;
     cuDoubleComplex alpha = make_cuDoubleComplex(1.0, 0.0), beta = make_cuDoubleComplex(0.0, 0.0);
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
@@ -125,25 +125,25 @@ void procBLAS(int numQubits) {
     checkCudaErrors(cudaFree(result));
 }
 
-void procCutt(int numQbits) {
-    numQbits += 1;
+void procCutt(int numQubits) {
+    numQubits += 1;
     double *in, *out;
-    checkCudaErrors(cudaMalloc(&in, sizeof(double) * (1 << numQbits)));
-    checkCudaErrors(cudaMalloc(&out, sizeof(double) * (1 << numQbits)));
-    int dim[numQbits];
-    for (int i = 0; i < numQbits; i++) dim[i] = 2;
+    checkCudaErrors(cudaMalloc(&in, sizeof(double) << numQubits));
+    checkCudaErrors(cudaMalloc(&out, sizeof(double) << numQubits));
+    int dim[numQubits];
+    for (int i = 0; i < numQubits; i++) dim[i] = 2;
     int total = 0;
     double sum_time = 0.0;
     for (int change = 1; change <= 20; change ++) {
-        int perm[numQbits];
+        int perm[numQubits];
         printf("Cutt calculating  change = %d\n", change);
         for (int tt = 0; tt < 100; tt++) {
-            for (int i = 0; i < numQbits; i++) perm[i] = i;
+            for (int i = 0; i < numQubits; i++) perm[i] = i;
             for (int i = 0; i < change; i++) {
-                std::swap(perm[rand() % numQbits], perm[rand() % numQbits]);
+                std::swap(perm[rand() % numQubits], perm[rand() % numQubits]);
             }
             cuttHandle plan;
-            checkCuttErrors(cuttPlan(&plan, numQbits, dim, perm, sizeof(double), 0));
+            checkCuttErrors(cuttPlan(&plan, numQubits, dim, perm, sizeof(double), 0));
             cudaEvent_t start, stop;
             float time;
             checkCudaErrors(cudaEventCreate(&start));

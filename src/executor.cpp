@@ -19,7 +19,7 @@ Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, Schedul
     }
     std::vector<qreal> ret;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
-    int numElements = 1 << numLocalQubits;
+    qindex numElements = qindex(1) << numLocalQubits;
     deviceBuffer.resize(MyGlobalVars::numGPUs);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         deviceBuffer[g] = deviceStateVec[g] + numElements;        
@@ -67,9 +67,9 @@ void Executor::transpose(std::vector<cuttHandle> plans) {
 
 void Executor::all2all(int commSize, std::vector<int> comm) {
     int numLocalQubit = numQubits - MyGlobalVars::bit;
-    int numElements = 1 << numLocalQubit;
+    qindex numElements = 1ll << numLocalQubit;
     int numPart = numSlice / commSize;
-    int partSize = numElements / numSlice;
+    qindex partSize = numElements / numSlice;
     commEvents.resize(numSlice * MyGlobalVars::numGPUs);
     partID.resize(numSlice * MyGlobalVars::numGPUs);
     int sliceID = 0;
@@ -386,7 +386,7 @@ void Executor::applyPerGateGroup(GateGroup& gg) {
     }
     qindex relatedQubits = toPhyQubitSet(relatedLogicQb);
     
-    qindex blockHot, enumerate;
+    unsigned int blockHot, enumerate;
     prepareBitMap(relatedQubits, blockHot, enumerate, numLocalQubits);
 
     // initialize gates
@@ -400,7 +400,7 @@ void Executor::applyPerGateGroup(GateGroup& gg) {
            hostGates[g * gates.size() + i] = getGate(gates[i], g, numLocalQubits, relatedLogicQb, toID);
         }
     }
-    qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
+    qindex gridDim = (qindex(1) << numLocalQubits) >> LOCAL_QUBIT_SIZE;
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         copyGatesToSymbol(hostGates, gates.size(), MyGlobalVars::streams[g], g);
@@ -418,7 +418,7 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     }
     qindex relatedQubits = toPhyQubitSet(relatedLogicQb);
     
-    qindex blockHot, enumerate;
+    unsigned int blockHot, enumerate;
     prepareBitMap(relatedQubits, blockHot, enumerate, numLocalQubits);
 
     // initialize gates
@@ -427,7 +427,7 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     KernelGate hostGates[MyGlobalVars::numGPUs * gates.size()];
     assert(gates.size() < MAX_GATE);
     
-    int partSize = 1 << numLocalQubits;
+    qindex partSize = qindex(1) << numLocalQubits;
     int numSlice = MyGlobalVars::numGPUs;
     #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
@@ -439,7 +439,7 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         copyGatesToSymbol(hostGates, gates.size(), MyGlobalVars::streams[g], g);
-        qindex gridDim = (1 << numLocalQubits) >> LOCAL_QUBIT_SIZE;
+        qindex gridDim = (qindex(1) << numLocalQubits) >> LOCAL_QUBIT_SIZE;
         int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
         launchExecutor(gridDim, deviceStateVec[g] + pID * partSize, threadBias[g], numLocalQubits, gates.size(), blockHot, enumerate, MyGlobalVars::streams[g], g);
     }
@@ -447,10 +447,8 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
 
 void Executor::applyBlasGroup(GateGroup& gg) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
-    
     gg.initMatrix(numLocalQubits);
-
-    int numElements = 1 << numLocalQubits;
+    qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
@@ -467,13 +465,11 @@ void Executor::applyBlasGroup(GateGroup& gg) {
 
 void Executor::applyBlasGroupSliced(GateGroup& gg, int sliceID) {
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
-    
     if(sliceID == 0)
         gg.initMatrix(numLocalQubits);
-    
-    int numElements = 1 << numLocalQubits;
+    qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
-    int partSize = 1 << numLocalQubits;
+    qindex partSize = qindex(1) << numLocalQubits;
     int K = 1 << gg.matQubit;
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
@@ -509,7 +505,7 @@ qindex Executor::fillRelatedQubits(qindex relatedLogicQb) const {
     return relatedLogicQb;
 }
 
-void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits) {
+void Executor::prepareBitMap(qindex relatedQubits, unsigned int& blockHot, unsigned int& enumerate, int numLocalQubits) {
     blockHot = (qindex(1) << numLocalQubits) - 1 - relatedQubits;
     enumerate = relatedQubits;
     qindex threadHot = 0;
@@ -518,18 +514,17 @@ void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enu
         threadHot += x;
         enumerate -= x;
     }
-    qindex hostThreadBias[1 << THREAD_DEP];
+    unsigned int hostThreadBias[1 << THREAD_DEP];
     assert((threadHot | enumerate) == relatedQubits);
-    for (int i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
+    for (qindex i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
         hostThreadBias[i] = j;
     }
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaMemcpyAsync(threadBias[g], hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
     }
-    // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
 }
 
-std::map<int, int> Executor::getLogicShareMap(int relatedQubits, int numLocalQubits) const{
+std::map<int, int> Executor::getLogicShareMap(qindex relatedQubits, int numLocalQubits) const{
     int shareCnt = 0;
     int localCnt = 0;
     int globalCnt = 0;
