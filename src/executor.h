@@ -9,18 +9,18 @@
 
 class Executor {
 public:
-    Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule);
+    Executor(std::vector<qComplex*> deviceStateVec, int numQubits, Schedule& schedule);
     void run();
 private:
     // instructions
     void transpose(std::vector<cuttHandle> plans);
     void all2all(int commSize, std::vector<int> comm);
     void setState(const State& newState) { state = newState; }
-    void applyGateGroup(const GateGroup& gg, int sliceID = -1);
-    void applyPerGateGroup(const GateGroup& gg);
-    void applyBlasGroup(const GateGroup& gg);
-    void applyPerGateGroupSliced(const GateGroup& gg, int sliceID);
-    void applyBlasGroupSliced(const GateGroup& gg, int sliceID);
+    void applyGateGroup(GateGroup& gg, int sliceID = -1);
+    void applyPerGateGroup(GateGroup& gg);
+    void applyBlasGroup(GateGroup& gg);
+    void applyPerGateGroupSliced(GateGroup& gg, int sliceID);
+    void applyBlasGroupSliced(GateGroup& gg, int sliceID);
     void finalize();
     void storeState();
     void loadState();
@@ -49,6 +49,6 @@ private:
     int numSlice, numSliceBit;
 
     //schedule
-    const Schedule& schedule;
+    Schedule& schedule;
     
 };

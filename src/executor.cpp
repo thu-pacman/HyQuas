@@ -8,7 +8,7 @@
 #include "kernel.h"
 #include "dbg.h"
 
-Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, const Schedule& schedule):
+Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, Schedule& schedule):
     deviceStateVec(deviceStateVec),
     numQubits(numQubits),
     schedule(schedule) {
@@ -319,7 +319,7 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
     }
 }
 
-void Executor::applyGateGroup(const GateGroup& gg, int sliceID) {
+void Executor::applyGateGroup(GateGroup& gg, int sliceID) {
 #ifdef MEASURE_STAGE
     cudaEvent_t start[MyGlobalVars::numGPUs], stop[MyGlobalVars::numGPUs];
     for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
@@ -376,7 +376,7 @@ void Executor::applyGateGroup(const GateGroup& gg, int sliceID) {
     // printf("Group End\n");
 }
 
-void Executor::applyPerGateGroup(const GateGroup& gg) {
+void Executor::applyPerGateGroup(GateGroup& gg) {
     auto& gates = gg.gates;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     // initialize blockHot, enumerate, threadBias
@@ -408,7 +408,7 @@ void Executor::applyPerGateGroup(const GateGroup& gg) {
     }
 }
 
-void Executor::applyPerGateGroupSliced(const GateGroup& gg, int sliceID) {
+void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     auto& gates = gg.gates;
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
     // initialize blockHot, enumerate, threadBias
@@ -445,8 +445,11 @@ void Executor::applyPerGateGroupSliced(const GateGroup& gg, int sliceID) {
     }
 }
 
-void Executor::applyBlasGroup(const GateGroup& gg) {
+void Executor::applyBlasGroup(GateGroup& gg) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
+    
+    gg.initMatrix(numLocalQubits);
+
     int numElements = 1 << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
@@ -462,8 +465,12 @@ void Executor::applyBlasGroup(const GateGroup& gg) {
     }
 }
 
-void Executor::applyBlasGroupSliced(const GateGroup& gg, int sliceID) {
+void Executor::applyBlasGroupSliced(GateGroup& gg, int sliceID) {
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
+    
+    if(sliceID == 0)
+        gg.initMatrix(numLocalQubits);
+    
     int numElements = 1 << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     int partSize = 1 << numLocalQubits;

@@ -119,7 +119,7 @@ void Circuit::compile() {
         for (auto& gg: lg.overlapGroups) overlapGates += gg.gates.size();
     }
     Logger::add("Total Groups: %d %d %d %d", int(schedule.localGroups.size()), totalGroups, fullGates, overlapGates);
-    schedule.initMatrix(numQubits);
+    //schedule.initMatrix(numQubits);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
 #endif
