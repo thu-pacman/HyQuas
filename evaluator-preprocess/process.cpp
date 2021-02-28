@@ -86,7 +86,7 @@ void procBLAS(int numQubits) {
     cuDoubleComplex* mat;
     cuDoubleComplex* result;
     checkCudaErrors(cudaMalloc(&arr, sizeof(cuDoubleComplex) << numQubits));
-    checkCudaErrors(cudaMalloc(&mat, sizeof(cuDoubleComplex) << numQubits));
+    checkCudaErrors(cudaMalloc(&mat, sizeof(cuDoubleComplex) << 20));
     checkCudaErrors(cudaMalloc(&result, sizeof(cuDoubleComplex) << numQubits));
     cublasHandle_t handle;
     checkBlasErrors(cublasCreate(&handle));
@@ -126,10 +126,9 @@ void procBLAS(int numQubits) {
 }
 
 void procCutt(int numQubits) {
-    numQubits += 1;
     double *in, *out;
-    checkCudaErrors(cudaMalloc(&in, sizeof(double) << numQubits));
-    checkCudaErrors(cudaMalloc(&out, sizeof(double) << numQubits));
+    checkCudaErrors(cudaMalloc(&in, sizeof(double2) << numQubits));
+    checkCudaErrors(cudaMalloc(&out, sizeof(double2) << numQubits));
     int dim[numQubits];
     for (int i = 0; i < numQubits; i++) dim[i] = 2;
     int total = 0;
