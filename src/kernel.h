@@ -29,3 +29,4 @@ void launchExecutor(int gridDim, qComplex* deviceStateVec, unsigned int* threadB
 // kernelUtils
 void isnanTest(qComplex* data, int n, cudaStream_t& stream);
 void printVector(qComplex* data, int n, cudaStream_t& stream);
+void whileTrue();
