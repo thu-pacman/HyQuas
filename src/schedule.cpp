@@ -607,9 +607,6 @@ void GateGroup::initMatrix(int numLocalQubit) {
 
 #if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
 void Schedule::initMatrix(int numQubits) {
-
-    auto start = std::chrono::system_clock::now();
-
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
             gg.initMatrix(numQubits - 2 * MyGlobalVars::bit);
@@ -618,10 +615,6 @@ void Schedule::initMatrix(int numQubits) {
             gg.initMatrix(numQubits - MyGlobalVars::bit);
         }
     }
-
-    auto end = std::chrono::system_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    Logger::add("Init Time: %d us", int(duration.count()));
 }
 
 #else
