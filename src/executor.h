@@ -33,7 +33,7 @@ private:
     KernelGate getGate(const Gate& gate, int part_id, int numLocalQubits, qindex relatedLogicQb, const std::map<int, int>& toID) const;
 
     // internal
-    void prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits); // allocate threadBias
+    void prepareBitMap(qindex relatedQubits, unsigned int& blockHot, unsigned int& threadBias, int numLocalQubits); // allocate threadBias
     std::map<int, int> getLogicShareMap(qindex relatedQubits, int numLocalQubits) const; // input: physical, output logic -> share
 
     State state;
@@ -42,7 +42,7 @@ private:
     std::vector<int> partID; // partID[slice][gpuID]
 
     // constants
-    std::vector<qindex*> threadBias;
+    std::vector<unsigned int*> threadBias;
     std::vector<qComplex*> deviceStateVec;
     std::vector<qComplex*> deviceBuffer;
     int numQubits;

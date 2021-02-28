@@ -386,7 +386,7 @@ void Executor::applyPerGateGroup(const GateGroup& gg) {
     }
     qindex relatedQubits = toPhyQubitSet(relatedLogicQb);
     
-    qindex blockHot, enumerate;
+    unsigned int blockHot, enumerate;
     prepareBitMap(relatedQubits, blockHot, enumerate, numLocalQubits);
 
     // initialize gates
@@ -418,7 +418,7 @@ void Executor::applyPerGateGroupSliced(const GateGroup& gg, int sliceID) {
     }
     qindex relatedQubits = toPhyQubitSet(relatedLogicQb);
     
-    qindex blockHot, enumerate;
+    unsigned int blockHot, enumerate;
     prepareBitMap(relatedQubits, blockHot, enumerate, numLocalQubits);
 
     // initialize gates
@@ -502,7 +502,7 @@ qindex Executor::fillRelatedQubits(qindex relatedLogicQb) const {
     return relatedLogicQb;
 }
 
-void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enumerate, int numLocalQubits) {
+void Executor::prepareBitMap(qindex relatedQubits, unsigned int& blockHot, unsigned int& enumerate, int numLocalQubits) {
     blockHot = (qindex(1) << numLocalQubits) - 1 - relatedQubits;
     enumerate = relatedQubits;
     qindex threadHot = 0;
@@ -511,7 +511,7 @@ void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enu
         threadHot += x;
         enumerate -= x;
     }
-    qindex hostThreadBias[1 << THREAD_DEP];
+    unsigned int hostThreadBias[1 << THREAD_DEP];
     assert((threadHot | enumerate) == relatedQubits);
     for (qindex i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
         hostThreadBias[i] = j;
@@ -519,7 +519,6 @@ void Executor::prepareBitMap(qindex relatedQubits, qindex& blockHot, qindex& enu
     for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
         checkCudaErrors(cudaMemcpyAsync(threadBias[g], hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
     }
-    // printf("related %x blockHot %x enumerate %x hostThreadBias[5] %x\n", relatedQubits, blockHot, enumerate, hostThreadBias[5]);
 }
 
 std::map<int, int> Executor::getLogicShareMap(qindex relatedQubits, int numLocalQubits) const{
