@@ -25,7 +25,9 @@ public:
 protected:
     int numQubits;
     std::vector<Gate> remainGates;
-    GateGroup getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
+    std::vector<int> getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
+    void removeGatesOpt(const std::vector<int>& remove);
+    std::set<int> remain;
 };
 
 class SimpleCompiler: public OneLayerCompiler {
@@ -44,11 +46,8 @@ class AdvanceCompiler: public OneLayerCompiler {
 public:
     AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
     LocalGroup run(State &state, bool usePerGate, bool useBLAS, int preGateSize, int blasSize, int cuttSize);
-    std::vector<int> getGroupAdvance(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
-    void removeGatesAdvance(const std::vector<int>& remove);
 private:
     qindex localQubits;
-    std::set<int> remain;
 };
 
 class ChunkCompiler: public OneLayerCompiler {

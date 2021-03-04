@@ -55,7 +55,7 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
         std::vector<Gate> toRemoveGates = toRemove.fullGroups[0].gates;
         std::reverse(toRemoveGates.begin(), toRemoveGates.end());
         
-        removeGates(lg.fullGroups[i-1].gates, toRemoveGates);
+        removeGates(lg.fullGroups[i-1].gates, toRemoveGates); // TODO: can we optimize this remove?
         result.push_back(make_pair(toRemoveGates, toRemove.fullGroups[0].relatedQubits));
         lg.fullGroups[i].relatedQubits |= toRemove.relatedQubits;
     }
@@ -176,6 +176,9 @@ LocalGroup SimpleCompiler::run() {
         return std::move(lg);
     }
     lg.relatedQubits = 0;
+    remain.clear();
+    for (int i = 0; i < remainGates.size(); i++)
+        remain.insert(i);
     int cnt = 0;
     while (remainGates.size() > 0) {
         qindex related[numQubits];
@@ -190,10 +193,13 @@ LocalGroup SimpleCompiler::run() {
                 related[i] = required;
         }
 
-        GateGroup gg = getGroup(full, related, enableGlobal, localSize, localQubits);
-        lg.fullGroups.push_back(gg.copyGates());
+        std::vector<int> idx = getGroupOpt(full, related, enableGlobal, localSize, localQubits);
+        GateGroup gg;
+        for (auto& x: idx)
+            gg.addGate(remainGates[x], localQubits, enableGlobal);
+        lg.fullGroups.push_back(gg.copyGates()); // TODO: redundant copy?
         lg.relatedQubits |= gg.relatedQubits;
-        removeGates(remainGates, gg.gates);
+        removeGatesOpt(idx);
         if (whiteList != 0)
             break;
         cnt ++;
@@ -207,11 +213,9 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     LocalGroup lg;
     lg.relatedQubits = 0;
     int cnt = 0;
-    if (usePerGate && useBLAS) {
-        remain.clear();
-        for (int i = 0; i < remainGates.size(); i++)
-            remain.insert(i);
-    }
+    remain.clear();
+    for (int i = 0; i < remainGates.size(); i++)
+        remain.insert(i);
     while (remainGates.size() > 0) {
         qindex related[numQubits];
         bool full[numQubits];
@@ -223,77 +227,70 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             }
         };
         GateGroup gg;
-        std::vector<int> advanceIDX;
+        std::vector<int> ggIdx;
+        Backend ggBackend;
+        qindex cacheRelated = 0;
         if (usePerGate && useBLAS) {
             // get the gate group for pergate backend
             memset(full, 0, sizeof(full));
             fillRelated(related, state.layout);
-            qindex cacheRelated = related[0];
-            std::vector<int> bestIDX = getGroupAdvance(full, related, true, perGateSize, -1ll);
-            Backend bestBackend = Backend::PerGate;
+            cacheRelated = related[0];
+            ggIdx = getGroupOpt(full, related, true, perGateSize, -1ll);
+            ggBackend = Backend::PerGate;
             double bestEff;
-            if (bestIDX.size() == 0) {
+            if (ggIdx.size() == 0) {
                 bestEff = 1e10;
             } else {
                 std::vector<GateType> tys;
-                for (auto& x: bestIDX) tys.push_back(remainGates[x].type);
-                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys) / bestIDX.size();
+                for (auto& x: ggIdx) tys.push_back(remainGates[x].type);
+                bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys) / ggIdx.size();
                 // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int)bestIDX.size(), bestEff);
             }
 
             for (int matSize = 4; matSize < 8; matSize ++) {
                 memset(full, 0, sizeof(full));
                 memset(related, 0, sizeof(related));
-                std::vector<int> idx = getGroupAdvance(full, related, false, matSize, localQubits);
+                std::vector<int> idx = getGroupOpt(full, related, false, matSize, localQubits);
                 if (idx.size() ==0)
                     continue;
                 double eff = Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize) / idx.size();
                 // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize), (int) idx.size(), eff);
                 if (eff < bestEff) {
-                    bestIDX = idx;
-                    bestBackend = Backend::BLAS;
+                    ggIdx = idx;
+                    ggBackend = Backend::BLAS;
                     bestEff = eff;
                 }
-            }
-            advanceIDX = bestIDX;
-            if (bestBackend == Backend::PerGate) {
-                for (auto& x: bestIDX)
-                    gg.addGate(remainGates[x], -1, true);
-                gg.relatedQubits |= cacheRelated;
-            } else {
-                for (auto& x: bestIDX)
-                    gg.addGate(remainGates[x], localQubits, false);
-            }
-            gg.backend = bestBackend;
-            state = gg.initState(state, cuttSize);
+            }    
             // printf("BACKEND %s\n", bestBackend == Backend::BLAS ? "blas" : "pergate");
         } else if (usePerGate && !useBLAS) {
             fillRelated(related, state.layout);
             memset(full, 0, sizeof(full));
-            gg = getGroup(full, related, true, perGateSize, -1ll);
-            gg.backend = Backend::PerGate;
-
+            cacheRelated = related[0];
+            ggIdx = getGroupOpt(full, related, true, perGateSize, -1ll);
+            ggBackend = Backend::PerGate;
             // Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
-
-            state = gg.initState(state, cuttSize);
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
             memset(full, 0, sizeof(full));
-            gg = getGroup(full, related, false, blasSize, localQubits);
-            gg.backend = Backend::BLAS;
-            
+            ggIdx = getGroupOpt(full, related, false, blasSize, localQubits);
+            GateGroup gg;
+            ggBackend = Backend::BLAS;
             // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
-
-            state = gg.initState(state, cuttSize);
         } else {
             UNREACHABLE();
         }
-        lg.relatedQubits |= gg.relatedQubits;
-        if (usePerGate && useBLAS) {
-            removeGatesAdvance(advanceIDX);
+        if (ggBackend == Backend::PerGate) {
+            for (auto& x: ggIdx)
+                gg.addGate(remainGates[x], -1ll, true);
+            gg.relatedQubits |= cacheRelated;
         } else {
-            removeGates(remainGates, gg.gates);
+            for (auto& x: ggIdx)
+                gg.addGate(remainGates[x], localQubits, false);
         }
+        gg.backend = ggBackend;
+        state = gg.initState(state, cuttSize);
+        removeGatesOpt(ggIdx);
+        lg.relatedQubits |= gg.relatedQubits;
         lg.fullGroups.push_back(std::move(gg));
         cnt ++;
         assert(cnt < 1000);
@@ -302,7 +299,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     return std::move(lg);
 }
 
-std::vector<int> AdvanceCompiler::getGroupAdvance(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
+std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
     std::vector<int> cur[numQubits];
     int cnt = 0;
     for (auto& x: remain) {
@@ -439,97 +436,6 @@ std::vector<int> AdvanceCompiler::getGroupAdvance(bool full[], qindex related[],
     return std::vector<int>(selected.begin(), selected.end());;
 }
 
-GateGroup OneLayerCompiler::getGroup(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
-    GateGroup cur[numQubits];
-    for (int i = 0; i < numQubits; i++)
-        cur[i].relatedQubits = related[i];
-    auto canMerge2 = [&](const GateGroup& a, const GateGroup & b, const Gate& g) {
-        qindex newRelated = a.relatedQubits | b.relatedQubits;
-        newRelated = GateGroup::newRelated(newRelated, g, localQubits, enableGlobal);
-        return bitCount(newRelated) <= localSize;
-    };
-    auto canMerge3 = [&](const GateGroup& a, const GateGroup &b, const GateGroup &c, const Gate& g) {
-        qindex newRelated = a.relatedQubits | b.relatedQubits | c.relatedQubits;
-        newRelated = GateGroup::newRelated(newRelated, g, localQubits, enableGlobal);
-        return bitCount(newRelated) <= localSize;
-    };
-    
-    for (auto& gate: remainGates) {
-        if (gate.isC2Gate()) {
-            if (!full[gate.controlQubit2] && !full[gate.controlQubit] && !full[gate.targetQubit] && canMerge3(cur[gate.controlQubit2], cur[gate.controlQubit], cur[gate.targetQubit], gate)) {
-                GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.controlQubit2]);
-                newGroup = GateGroup::merge(std::move(newGroup), cur[gate.targetQubit]);
-                newGroup.addGate(gate, localQubits, enableGlobal);
-                cur[gate.controlQubit2] = newGroup.copyGates();
-                cur[gate.controlQubit] = newGroup.copyGates();
-                cur[gate.targetQubit] = newGroup.copyGates();
-            } else {
-                full[gate.controlQubit2] = full[gate.controlQubit] = full[gate.targetQubit] = 1;
-            }
-        } else if (gate.isControlGate()) {
-            if (!full[gate.controlQubit] && !full[gate.targetQubit] && canMerge2(cur[gate.controlQubit], cur[gate.targetQubit], gate)) {
-                GateGroup newGroup = GateGroup::merge(cur[gate.controlQubit], cur[gate.targetQubit]);
-                newGroup.addGate(gate, localQubits, enableGlobal);
-                cur[gate.controlQubit] = newGroup.copyGates();
-                cur[gate.targetQubit] = newGroup.copyGates();
-            } else {
-                full[gate.controlQubit] = full[gate.targetQubit] = 1;
-            }
-        } else {
-            if (!full[gate.targetQubit]) {
-                cur[gate.targetQubit].addGate(gate, localQubits, enableGlobal);
-            }
-        }
-    }
-
-    GateGroup selected;
-    selected.relatedQubits = 0;
-    while (true) {
-        size_t mx = selected.gates.size();
-        int qid = -1;
-        for (int i = 0; i < numQubits; i++) {
-            if (bitCount(selected.relatedQubits | cur[i].relatedQubits) <= localSize && cur[i].gates.size() > 0) {
-                GateGroup newGroup = GateGroup::merge(cur[i], selected);
-                if (newGroup.gates.size() > mx) {
-                    mx = newGroup.gates.size();
-                    qid = i;
-                }
-            }
-        }
-        if (mx == selected.gates.size())
-            break;
-        selected = GateGroup::merge(cur[qid], selected);
-    }
-
-    std::vector<int> usedID;
-    for (auto& g: selected.gates) usedID.push_back(g.gateID);
-    std::sort(usedID.begin(), usedID.end());
-    bool blocked[numQubits];
-    memset(blocked, 0, sizeof(blocked));
-    for (auto& g: remainGates) {
-        if (std::binary_search(usedID.begin(), usedID.end(), g.gateID)) continue;
-        if (g.isDiagonal() && enableGlobal) {
-            // TODO: Diagonal C2 Gate
-            if (g.isControlGate()) {
-                if (!blocked[g.controlQubit] && !blocked[g.targetQubit]) {
-                    selected.gates.push_back(g);
-                } else {
-                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
-                }
-            } else {
-                if (!blocked[g.targetQubit]) {
-                    selected.gates.push_back(g);
-                }
-            }
-        } else {
-            if (g.isControlGate()) {
-                blocked[g.controlQubit] = 1;
-            }
-            blocked[g.targetQubit] = 1;
-        }
-    }
-    return std::move(selected);
-}
 
 ChunkCompiler::ChunkCompiler(int numQubits, int localSize, int chunkSize, const std::vector<Gate> &inputGates):
     OneLayerCompiler(numQubits, inputGates), localSize(localSize), chunkSize(chunkSize) {}
@@ -576,7 +482,7 @@ LocalGroup ChunkCompiler::run() {
 }
 
 
-void AdvanceCompiler::removeGatesAdvance(const std::vector<int>& remove) {
+void OneLayerCompiler::removeGatesOpt(const std::vector<int>& remove) {
     for (auto& x: remove)
         remain.erase(x);
     if (remain.empty())
