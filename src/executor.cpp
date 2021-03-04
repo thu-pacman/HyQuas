@@ -35,7 +35,6 @@ void Executor::run() {
         auto& localGroup = schedule.localGroups[lgID];
         if (lgID > 0) {
             this->transpose(localGroup.cuttPlans);
-            this->allBarrier();
             this->all2all(localGroup.a2aCommSize, localGroup.a2aComm);
             this->setState(localGroup.state);
             this->storeState();
@@ -46,7 +45,6 @@ void Executor::run() {
                     this->applyGateGroup(gg, s);
                 }
             }
-            this->allBarrier();
         } else {
             this->setState(localGroup.state);
             assert(localGroup.overlapGroups.size() == 0);
@@ -73,12 +71,24 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     commEvents.resize(numSlice * MyGlobalVars::numGPUs);
     partID.resize(numSlice * MyGlobalVars::numGPUs);
     int sliceID = 0;
+    cudaEvent_t lastGroupEvent[MyGlobalVars::numGPUs];
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCudaErrors(cudaEventCreate(&lastGroupEvent[g]));
+        checkCudaErrors(cudaEventRecord(lastGroupEvent[g], MyGlobalVars::streams[g]));
+    }
     for (int xr = 0; xr < commSize; xr++) {
         for (int p = 0; p < numPart; p++) {
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                 int b = a ^ xr;
                 int srcPart = a % commSize * numPart + p;
                 int dstPart = b % commSize * numPart + p;
+                if (p == 0) {
+                    checkCudaErrors(cudaStreamWaitEvent(
+                        MyGlobalVars::streams_comm[comm[a]],
+                        lastGroupEvent[comm[b]], 0)
+                    );
+                }
                 checkCudaErrors(cudaMemcpyAsync(
                     deviceStateVec[comm[a]] + dstPart * partSize,
                     deviceBuffer[comm[b]] + srcPart * partSize,
