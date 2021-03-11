@@ -2,12 +2,16 @@
 
 #include <cstdio>
 #include <cuComplex.h>
-#include <mpi.h>
 #include <cuda.h>
 #include <cutt.h>
 #include <cuda_runtime.h>
 #include <memory>
 #include <cublas_v2.h>
+
+#if USE_MPI
+#include <mpi.h>
+#include <nccl.h>
+#endif
 
 #ifdef USE_DOUBLE
 typedef double qreal;
@@ -27,6 +31,19 @@ typedef cuFloatComplex qComplex;
 
 #define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
 #define DESERIALIZE_STEP(x) { x = *reinterpret_cast<const decltype(x)*>(arr + cur); cur += sizeof(x); }
+
+#define SERIALIZE_VECTOR(x, result) { \
+    auto tmp_chars = reinterpret_cast<const unsigned char*>(x.data()); \
+    result.insert(result.end(), tmp_chars, tmp_chars + sizeof(decltype(x)::value_type) * x.size()); \
+}
+
+#define DESERIALIZE_VECTOR(x, size) { \
+    x.resize(size); \
+    auto tmp_size = sizeof(decltype(x)::value_type) * size; \
+    memcpy(x.data(), arr + cur, tmp_size); \
+    cur += tmp_size; \
+}
+
 
 #define UNREACHABLE() { \
     printf("file %s line %i: unreachable!\n", __FILE__, __LINE__); \
@@ -108,12 +125,36 @@ static const char *cuttGetErrorString(cuttResult error) {
     } \
 }
 
+#define checkMPIErrors(stmt) {                          \
+  int err = stmt;                                      \
+  if(err != MPI_SUCCESS) {                          \
+    fprintf(stderr, "%s in file %s, function %s, line %i: %04d\n", #stmt, __FILE__, __FUNCTION__, __LINE__, err); \
+      exit(1); \
+  }                                                 \
+}
+
+#define checkNCCLErrors(stmt) {                         \
+  ncclResult_t err= stmt;                             \
+  if (err != ncclSuccess) {                            \
+    fprintf(stderr, "%s in file %s, function %s, line %i: %04d %s\n", #stmt, __FILE__, __FUNCTION__, __LINE__, err, ncclGetErrorString(err)); \
+      exit(1); \
+  }                                                 \
+}
+
 namespace MyGlobalVars {
     extern int numGPUs;
+    extern int localGPUs;
     extern int bit;
     extern std::unique_ptr<cudaStream_t[]> streams;
     extern std::unique_ptr<cudaStream_t[]> streams_comm;
     extern std::unique_ptr<cublasHandle_t[]> blasHandles;
+    void init();
+};
+
+namespace MyMPI {
+    extern int rank;
+    extern int commSize;
+    extern int commBit;
     void init();
 };
 
@@ -135,3 +176,5 @@ bool isUnitary(std::unique_ptr<qComplex[]>& mat, int n);
 
 qComplex make_qComplex(qreal x);
 bool operator < (const qComplex& a, const qComplex& b);
+
+int get_bit(int n);

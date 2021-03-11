@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstdio>
 #include <stdarg.h>
+#include <utils.h>
 
 class Logger {
     static Logger* instance;
@@ -23,8 +24,14 @@ public:
     inline static void print() {
 #ifdef SHOW_SUMMARY
         Logger::init();
+        char proc_info[100];
+        if (USE_MPI) {
+            sprintf(proc_info, "[%d]", MyMPI::rank);
+        } else {
+            sprintf(proc_info, "%s", ""); // printf("") will cause compilee warning "-Wformat-zero-length"
+        }
         for (auto& s: instance -> infos) {
-            std::cout << "Logger: " << s << std::endl;
+            std::cout << proc_info << "Logger: " << s << std::endl;
         }
         instance -> infos.clear();
 #endif

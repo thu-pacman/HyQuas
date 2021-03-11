@@ -34,12 +34,14 @@ struct GateGroup {
     std::vector<Gate> gates;
     qindex relatedQubits;
     State state;
+    std::vector<int> cuttPerm;
+    int matQubit;
+    Backend backend;
+
     std::vector<cuttHandle> cuttPlans;
 
-    Backend backend;
     std::vector<std::unique_ptr<qComplex[]>> matrix;
     std::vector<qComplex*> deviceMats;
-    int matQubit;
 
     GateGroup(GateGroup&&) = default;
     GateGroup& operator = (GateGroup&&) = default;
@@ -61,23 +63,27 @@ struct GateGroup {
     void initCPUMatrix(int numLocalQubit);
     void initGPUMatrix();
     void initMatrix(int numLocalQubit);
+    void initCuttPlans(int numLocalQubits);
 };
 
 struct LocalGroup {
     State state;
-    std::vector<cuttHandle> cuttPlans;
     int a2aCommSize;
     std::vector<int> a2aComm;
+    std::vector<int> cuttPerm;
 
     std::vector<GateGroup> overlapGroups;
     std::vector<GateGroup> fullGroups;
     qindex relatedQubits;
 
+    std::vector<cuttHandle> cuttPlans;
+    
     LocalGroup() = default;
     LocalGroup(LocalGroup&&) = default;
 
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
+    void initCuttPlans(int numLocalQubits, bool isFirstGroup = false);
     State initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals);
     std::vector<unsigned char> serialize() const;
     static LocalGroup deserialize(const unsigned char* arr, int& cur);
@@ -91,6 +97,7 @@ struct Schedule {
     std::vector<unsigned char> serialize() const;
     static Schedule deserialize(const unsigned char* arr, int& cur);
     void initMatrix(int numQubits);
+    void initCuttPlans(int numLocalQubits);
 };
 
 void removeGates(std::vector<Gate>& remain, const std::vector<Gate>& remove); // remain := remain - remove        

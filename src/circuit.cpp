@@ -15,7 +15,7 @@ using namespace std;
 
 int Circuit::run(bool copy_back) {
     kernelInit(deviceStateVec, numQubits);
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaProfilerStart());
     }
@@ -38,7 +38,7 @@ int Circuit::run(bool copy_back) {
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #endif
     auto end = chrono::system_clock::now();
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaProfilerStop());
     }
@@ -47,11 +47,11 @@ int Circuit::run(bool copy_back) {
     result.resize(1ll << numQubits);
     if (copy_back) {
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
-        for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
         }
     }
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         kernelDestroy(deviceStateVec[g]);
     }
     return duration.count();
@@ -104,7 +104,7 @@ qComplex Circuit::ampAt(qindex idx) {
     return make_qComplex(result[id].x, result[id].y);
 }
 
-void Circuit::compile() {
+void Circuit::compileRun() {
     auto start = chrono::system_clock::now();
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
@@ -132,6 +132,30 @@ void Circuit::compile() {
     auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);
     Logger::add("Compile Time: %d us %d us", int(duration1.count()), int(duration2.count()));
 }
+
+void Circuit::compile() {
+    compileRun();
+#if USE_MPI
+    if (MyMPI::rank == 0) {
+        compileRun();
+        auto s = schedule.serialize();
+        int bufferSize = (int) s.size();
+        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+    } else {
+         int bufferSize;
+        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        unsigned char* buffer = new unsigned char [bufferSize];
+        MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        int cur = 0;
+        schedule = Schedule::deserialize(buffer, cur);
+        delete[] buffer;
+        fflush(stdout);
+    }
+#endif
+    schedule.initCuttPlans(numQubits - MyGlobalVars::bit);
+}
+
 
 void Circuit::printState() {
     for (int i = 0; i < 128; i++) {

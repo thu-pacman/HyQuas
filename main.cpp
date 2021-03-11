@@ -231,6 +231,9 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
 }
 
 int main(int argc, char* argv[]) {
+    if (USE_MPI) {
+        MyMPI::init();
+    }
     MyGlobalVars::init();
     std::unique_ptr<Circuit> c;
     if (argc != 2) {
@@ -240,7 +243,12 @@ int main(int argc, char* argv[]) {
     c = parse_circuit(std::string(argv[1]));
     c->compile();
     c->run();
-    c->printState();
+    if (!USE_MPI || MyMPI::rank == 0) {
+        c->printState();
+    }
     Logger::print();
+    if (USE_MPI) {
+        checkMPIErrors(MPI_Finalize());
+    }
     return 0;
 }

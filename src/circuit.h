@@ -22,6 +22,7 @@ public:
 private:
     qindex toPhysicalID(qindex idx);
     qindex toLogicID(qindex idx);
+    void compileRun();
     std::vector<Gate> gates;
     std::vector<qComplex*> deviceStateVec;
     std::vector<std::vector<qComplex*>> deviceMats;

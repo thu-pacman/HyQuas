@@ -12,16 +12,16 @@ Executor::Executor(std::vector<qComplex*> deviceStateVec, int numQubits, Schedul
     deviceStateVec(deviceStateVec),
     numQubits(numQubits),
     schedule(schedule) {
-    threadBias.resize(MyGlobalVars::numGPUs);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    threadBias.resize(MyGlobalVars::localGPUs);
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaMalloc(&threadBias[g], sizeof(qindex) << THREAD_DEP));
     }
     std::vector<qreal> ret;
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     qindex numElements = qindex(1) << numLocalQubits;
-    deviceBuffer.resize(MyGlobalVars::numGPUs);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    deviceBuffer.resize(MyGlobalVars::localGPUs);
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         deviceBuffer[g] = deviceStateVec[g] + numElements;        
     }
     numSlice = MyGlobalVars::numGPUs;
@@ -57,7 +57,7 @@ void Executor::run() {
 }
 
 void Executor::transpose(std::vector<cuttHandle> plans) {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         cudaSetDevice(g);
         checkCuttErrors(cuttExecute(plans[g], deviceStateVec[g], deviceBuffer[g]));
     }
@@ -68,11 +68,11 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     qindex numElements = 1ll << numLocalQubit;
     int numPart = numSlice / commSize;
     qindex partSize = numElements / numSlice;
-    commEvents.resize(numSlice * MyGlobalVars::numGPUs);
-    partID.resize(numSlice * MyGlobalVars::numGPUs);
+    commEvents.resize(numSlice * MyGlobalVars::localGPUs);
+    partID.resize(numSlice * MyGlobalVars::localGPUs);
     int sliceID = 0;
-    cudaEvent_t lastGroupEvent[MyGlobalVars::numGPUs];
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    cudaEvent_t lastGroupEvent[MyGlobalVars::localGPUs];
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaEventCreate(&lastGroupEvent[g]));
         checkCudaErrors(cudaEventRecord(lastGroupEvent[g], MyGlobalVars::streams[g]));

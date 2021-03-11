@@ -145,63 +145,121 @@ void Schedule::dump(int numQubits) {
 
 std::vector<unsigned char> GateGroup::serialize() const {
     auto num_gates = gates.size();
+    auto num_perm = cuttPerm.size();
+
     std::vector<unsigned char> result;
-    result.resize(sizeof(relatedQubits) + sizeof(num_gates));
+    result.resize(sizeof(num_gates) + sizeof(relatedQubits) + sizeof(state) + sizeof(num_perm) + sizeof(matQubit) + sizeof(Backend));
     auto arr = result.data();
     int cur = 0;
-    SERIALIZE_STEP(relatedQubits);
     SERIALIZE_STEP(num_gates);
+    SERIALIZE_STEP(relatedQubits);
+    SERIALIZE_STEP(state);
+    SERIALIZE_STEP(num_perm);
+    SERIALIZE_STEP(matQubit);
+    SERIALIZE_STEP(backend);
+
     for (auto& gate: gates) {
         auto g = gate.serialize();
         result.insert(result.end(), g.begin(), g.end());
     }
+
+    SERIALIZE_VECTOR(cuttPerm, result);
+
     return result;
 }
 
 GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
     GateGroup gg;
-    DESERIALIZE_STEP(gg.relatedQubits);
     decltype(gg.gates.size()) num_gates;
+    decltype(gg.cuttPerm.size()) num_perm;
+
     DESERIALIZE_STEP(num_gates);
+    DESERIALIZE_STEP(gg.relatedQubits);
+    DESERIALIZE_STEP(gg.state);
+    DESERIALIZE_STEP(num_perm);
+    DESERIALIZE_STEP(gg.matQubit);
+    DESERIALIZE_STEP(gg.backend);
+
+
     for (decltype(num_gates) i = 0; i < num_gates; i++) {
         gg.gates.push_back(Gate::deserialize(arr, cur));
     }
+
+    DESERIALIZE_VECTOR(gg.cuttPerm, num_perm);
+
     return gg;
 }
 
 std::vector<unsigned char> LocalGroup::serialize() const {
-    auto num_gg = fullGroups.size();
+    auto num_a2a = a2aComm.size();
+    auto num_perm = cuttPerm.size();
+    auto num_og = overlapGroups.size();
+    auto num_fg = fullGroups.size();
+
     std::vector<unsigned char> result;
-    result.resize(sizeof(relatedQubits) + sizeof(num_gg));
+    result.resize(sizeof(state) + sizeof(a2aCommSize) + sizeof(num_a2a) + sizeof(num_perm) + sizeof(num_og) + sizeof(num_fg) + sizeof(relatedQubits));
     auto arr = result.data();
     int cur = 0;
+    SERIALIZE_STEP(state);
+    SERIALIZE_STEP(a2aCommSize);
+    SERIALIZE_STEP(num_a2a);
+    SERIALIZE_STEP(num_perm);
+    SERIALIZE_STEP(num_og);
+    SERIALIZE_STEP(num_fg);
     SERIALIZE_STEP(relatedQubits);
-    SERIALIZE_STEP(num_gg);
+    
+    SERIALIZE_VECTOR(a2aComm, result);
+    SERIALIZE_VECTOR(cuttPerm, result);
+
+    for (auto& gateGroup: overlapGroups) {
+        auto gg = gateGroup.serialize();
+        result.insert(result.end(), gg.begin(), gg.end());
+    }
+
     for (auto& gateGroup: fullGroups) {
         auto gg = gateGroup.serialize();
         result.insert(result.end(), gg.begin(), gg.end());
     }
+
     return result;
 }
 
 
 LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     LocalGroup s;
-    decltype(s.fullGroups.size()) num_gg;
+    decltype(s.a2aComm.size()) num_a2a;
+    decltype(s.cuttPerm.size()) num_perm;
+    decltype(s.overlapGroups.size()) num_og;
+    decltype(s.fullGroups.size()) num_fg;
+
+    DESERIALIZE_STEP(s.state);
+    DESERIALIZE_STEP(s.a2aCommSize);
+    DESERIALIZE_STEP(num_a2a);
+    DESERIALIZE_STEP(num_perm);
+    DESERIALIZE_STEP(num_og);
+    DESERIALIZE_STEP(num_fg);
     DESERIALIZE_STEP(s.relatedQubits);
-    DESERIALIZE_STEP(num_gg);
-    for (decltype(num_gg) i = 0; i < num_gg; i++) {
+
+    DESERIALIZE_VECTOR(s.a2aComm, num_a2a);
+    DESERIALIZE_VECTOR(s.cuttPerm, num_perm);
+
+    for (decltype(num_og) i = 0; i < num_og; i++) {
+        s.overlapGroups.push_back(GateGroup::deserialize(arr, cur));
+    }
+    for (decltype(num_fg) i = 0; i < num_fg; i++) {
         s.fullGroups.push_back(GateGroup::deserialize(arr, cur));
     }
+
     return s;
 }
 
 std::vector<unsigned char> Schedule::serialize() const {
     auto num_lg = localGroups.size();
     std::vector<unsigned char> result;
-    result.resize(sizeof(num_lg));
+    result.resize(sizeof(finalState) + sizeof(num_lg));
     auto arr = result.data();
     int cur = 0;
+    SERIALIZE_STEP(finalState);
     SERIALIZE_STEP(num_lg);
     for (auto& localGroup: localGroups) {
         auto lg = localGroup.serialize();
@@ -213,12 +271,13 @@ std::vector<unsigned char> Schedule::serialize() const {
 
 Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
     Schedule s;
+    DESERIALIZE_STEP(s.finalState);
     decltype(s.localGroups.size()) num_lg;
     DESERIALIZE_STEP(num_lg);
     for (decltype(num_lg) i = 0; i < num_lg; i++) {
         s.localGroups.push_back(LocalGroup::deserialize(arr, cur));
     }
-    return s;
+    return std::move(s);
 }
 
 std::vector<int> gen_perm_vector(int len) {
@@ -230,14 +289,12 @@ std::vector<int> gen_perm_vector(int len) {
 
 State GateGroup::initPerGateState(const State& oldState) {
     state = oldState;
-    cuttPlans.clear();
     return state;
 }
 
 State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
     std::vector<int> pos = oldState.pos;
     std::vector<int> layout = oldState.layout;
-    std::vector<int> dim(numLocalQubits, 2);
 
     std::vector<int> toGlobal; // qubit id
     std::vector<int> toLocal; // qubit id
@@ -253,38 +310,44 @@ State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
             toLocal.push_back(q);
     }
     assert(toGlobal.size() == toLocal.size());
-    std::vector<int> perm = gen_perm_vector(numLocalQubits);
+    cuttPerm = gen_perm_vector(numLocalQubits);
     for (size_t i = 0; i < toGlobal.size(); i++) {
         int x = toGlobal[i], y = toLocal[i];
-        std::swap(perm[pos[x]], perm[pos[y]]);
+        std::swap(cuttPerm[pos[x]], cuttPerm[pos[y]]);
         std::swap(pos[x], pos[y]);
         layout[pos[x]] = x; layout[pos[y]] = y;
     }
 
     
 #ifdef SHOW_SCHEDULE
-    printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+    printf("perm: "); for (auto x: cuttPerm) printf("%d ", x); printf("\n");
     printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
     printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
 #endif
     // complex have two floats -> use double2
-    // perm.push_back(0);
-    // for (int i = perm.size() - 1; i; i--) {
-    //     perm[i] = perm[i-1] + 1;
+    // cuttPerm.push_back(0);
+    // for (int i = cuttPerm.size() - 1; i; i--) {
+    //     cuttPerm[i] = cuttPerm[i-1] + 1;
     // }
-    // perm[0] = 0;
+    // cuttPerm[0] = 0;
     
-    cuttPlans.clear();
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        cuttHandle plan;
-        checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
-        cuttPlans.push_back(plan);
-    }
     this->matQubit = std::max(numMatQubits, MIN_MAT_SIZE);
     State newState = State(pos, layout);
     this->state = newState;
     return newState;
+}
+
+void GateGroup::initCuttPlans(int numLocalQubits) {
+    cuttPlans.clear();
+    if (backend != Backend::BLAS)
+        return;
+    std::vector<int> dim(numLocalQubits, 2);
+    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+        cuttHandle plan;
+        checkCudaErrors(cudaSetDevice(g));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
+        cuttPlans.push_back(plan);
+    }
 }
 
 
@@ -302,7 +365,7 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     auto pos = oldState.pos, layout = oldState.layout;
     int overlapCnt = bitCount(overlapGlobals);
-    std::vector<int> perm = gen_perm_vector(numLocalQubits);
+    cuttPerm = gen_perm_vector(numLocalQubits);
     std::vector<int> newBuffer;
     if (overlapCnt > 0) {
         int need = overlapCnt;
@@ -323,7 +386,7 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     for (int i = 0, c = numLocalQubits - MyGlobalVars::bit; i < MyGlobalVars::bit; i++, c++) {
         if (layout[c] == newBuffer[i])
             continue;
-        std::swap(perm[pos[newBuffer[i]]], perm[c]);
+        std::swap(cuttPerm[pos[newBuffer[i]]], cuttPerm[c]);
         int swappedQid = layout[c];
         pos[swappedQid] = pos[newBuffer[i]];
         pos[newBuffer[i]] = c;
@@ -332,16 +395,16 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
 #ifdef SHOW_SCHEDULE
     printf("buffer: "); for (auto x: newBuffer) printf("%d ", x); printf("\n");
-    printf("perm: "); for (auto x: perm) printf("%d ", x); printf("\n");
+    printf("perm: "); for (auto x: cuttPerm) printf("%d ", x); printf("\n");
     printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
     printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n\n");
 #endif
     // complex have two floats -> use double2
-    // perm.push_back(0);
-    // for (int i = perm.size() - 1; i; i--) {
-    //     perm[i] = perm[i-1] + 1;
+    // cuttPerm.push_back(0);
+    // for (int i = cuttPerm.size() - 1; i; i--) {
+    //     cuttPerm[i] = cuttPerm[i-1] + 1;
     // }
-    // perm[0] = 0;
+    // cuttPerm[0] = 0;
 
     int c = numLocalQubits - MyGlobalVars::bit + overlapCnt;
     for (int i = 0; i < MyGlobalVars::bit; i++) {
@@ -368,14 +431,6 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     }
     a2aComm = newComm;
     a2aCommSize = MyGlobalVars::numGPUs >> overlapCnt;
-    cuttPlans.clear();
-    std::vector<int> dim(numLocalQubits, 2);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        cuttHandle plan;
-        checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), perm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
-        cuttPlans.push_back(plan);
-    }
     auto newState = State(pos, layout);
     this->state = newState;
     return newState;
@@ -399,10 +454,6 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
         
     }
     state = State(pos, layout);
-    cuttPlans.clear();
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        cuttPlans.push_back(cuttHandle());
-    }
     a2aCommSize = -1;
     a2aComm.clear();
 #ifdef SHOW_SCHEDULE
@@ -413,6 +464,30 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     auto newState = State(pos, layout);
     this->state = newState;
     return newState;
+}
+
+void LocalGroup::initCuttPlans(int numLocalQubits, bool isFirstGroup) {
+    if (isFirstGroup) {
+        cuttPlans.clear();
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            cuttPlans.push_back(cuttHandle());
+            return;
+        }
+    }
+    cuttPlans.clear();
+    std::vector<int> dim(numLocalQubits, 2);
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        cuttHandle plan;
+        checkCudaErrors(cudaSetDevice(g));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
+        cuttPlans.push_back(plan);
+    }
+    for (auto& gg: overlapGroups) {
+        gg.initCuttPlans(numLocalQubits - MyGlobalVars::bit);
+    }
+    for (auto& gg: fullGroups) {
+        gg.initCuttPlans(numLocalQubits);
+    }
 }
 
 #define APPLY_IDENTITY_GATE(val) \
@@ -623,6 +698,13 @@ void Schedule::initMatrix(int numQubits) {
     UNREACHABLE()
 }
 #endif
+
+
+void Schedule::initCuttPlans(int numLocalQubits) {
+    for (int i = 0; i < localGroups.size(); i++) {
+        localGroups[i].initCuttPlans(numLocalQubits, i == 0);
+    }
+}
 
 void removeGates(std::vector<Gate>& remain, const std::vector<Gate>& remove) {
     std::vector<int> usedID;

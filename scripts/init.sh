@@ -8,6 +8,8 @@ case $(hostname -s) in
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /v5oqq5n
     spack load openmpi@4.0.4 /24my3rr
+    spack load nccl@2.7.8-1 /l3466wl
+    export NCCL_ROOT=/home/spack/opt/spack/linux-debian10-skylake_avx512/gcc-8.3.0/nccl-2.7.8-1-l3466wlxanfsfdna367pra5og2m7d3ut
     ;;
   gorgon*)
     echo "gorgon cluster"
