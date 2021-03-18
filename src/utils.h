@@ -20,6 +20,7 @@ typedef cuDoubleComplex qComplex;
 #define make_qComplex make_cuDoubleComplex
 #define MPI_Complex MPI_C_DOUBLE_COMPLEX
 #define cublasGEMM cublasZgemm
+#define NCCL_FLOAT_TYPE ncclDouble
 #else
 typedef float qreal;
 typedef long long qindex;
@@ -27,6 +28,7 @@ typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX
 #define cublasGEMM cublasCgemm
+#define NCCL_FLOAT_TYPE ncclFloat
 #endif
 
 #define SERIALIZE_STEP(x) { *reinterpret_cast<decltype(x)*>(arr + cur) = x; cur += sizeof(x); }
@@ -148,6 +150,9 @@ namespace MyGlobalVars {
     extern std::unique_ptr<cudaStream_t[]> streams;
     extern std::unique_ptr<cudaStream_t[]> streams_comm;
     extern std::unique_ptr<cublasHandle_t[]> blasHandles;
+#ifdef USE_MPI
+    extern std::unique_ptr<ncclComm_t[]> ncclComms;
+#endif
     void init();
 };
 

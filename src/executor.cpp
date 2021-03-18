@@ -79,7 +79,10 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     }
     for (int xr = 0; xr < commSize; xr++) {
         for (int p = 0; p < numPart; p++) {
-            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+#ifdef USE_MPI
+            checkNCCLErrors(ncclGroupStart());
+#endif
+            for (int a = 0; a < MyGlobalVars::localGPUs; a++) {
                 int b = a ^ xr;
                 int srcPart = a % commSize * numPart + p;
                 int dstPart = b % commSize * numPart + p;
@@ -89,6 +92,43 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                         lastGroupEvent[comm[b]], 0)
                     );
                 }
+#ifdef USE_MPI
+                if (a < b) {
+                    checkNCCLErrors(ncclSend(
+                        deviceBuffer[comm[b]] + srcPart * partSize,
+                        partSize * sizeof(qComplex) * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        b,
+                        MyGlobalVars::ncclComms[a],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                    checkNCCLErrors(ncclRecv(
+                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        partSize * sizeof(qComplex) * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        b,
+                        MyGlobalVars::ncclComms[a],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                } else {
+                    checkNCCLErrors(ncclRecv(
+                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        partSize * sizeof(qComplex) * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        b,
+                        MyGlobalVars::ncclComms[a],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                    checkNCCLErrors(ncclSend(
+                        deviceBuffer[comm[b]] + srcPart * partSize,
+                        partSize * sizeof(qComplex) * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        b,
+                        MyGlobalVars::ncclComms[a],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                }
+#else
                 checkCudaErrors(cudaMemcpyAsync(
                     deviceStateVec[comm[a]] + dstPart * partSize,
                     deviceBuffer[comm[b]] + srcPart * partSize,
@@ -96,6 +136,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                     cudaMemcpyDeviceToDevice,
                     MyGlobalVars::streams_comm[comm[a]]
                 ));
+#endif
                 cudaEvent_t event;
                 checkCudaErrors(cudaSetDevice(comm[a]));
                 checkCudaErrors(cudaEventCreate(&event));
@@ -103,6 +144,9 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 commEvents[sliceID * MyGlobalVars::numGPUs + comm[a]] = event;
                 partID[sliceID * MyGlobalVars::numGPUs + comm[a]] = dstPart;
             }
+#ifdef USE_MPI
+            checkNCCLErrors(ncclGroupStart());
+#endif
             sliceID++;
         }
     }
