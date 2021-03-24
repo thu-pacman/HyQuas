@@ -7,7 +7,7 @@ case $(hostname -s) in
     echo "nico cluster"
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /v5oqq5n
-    spack load openmpi@4.0.4 /24my3rr
+    spack load openmpi@4.0.5 /h5eun6a
     spack load nccl@2.7.8-1 /l3466wl
     export NCCL_ROOT=/home/spack/opt/spack/linux-debian10-skylake_avx512/gcc-8.3.0/nccl-2.7.8-1-l3466wlxanfsfdna367pra5og2m7d3ut
     ;;
@@ -41,9 +41,9 @@ case $(hostname -s) in
 esac
 
 cd $HOME/QCSimulator/build
-rm CMakeCache.txt || true
-cmake $* ..
-make clean
+# rm CMakeCache.txt || true
+# cmake $* ..
+# make clean
 make -j
 
 if [ -z "${tests-}" ]
@@ -52,5 +52,5 @@ then
   export tests_28="basis_change_28 bv_28 hidden_shift_28 qaoa_28 qft_28 quantum_volume_28 supremacy_28"
   export tests_30="basis_change_30 bv_30 hidden_shift_30 qaoa_30 qft_30 quantum_volume_30 supremacy_30"
 
-  export tests=($tests_25 $tests_28 $tests_30)
+  export tests=($tests_25 $tests_28)
 fi

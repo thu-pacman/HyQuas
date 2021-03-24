@@ -104,7 +104,7 @@ qComplex Circuit::ampAt(qindex idx) {
     return make_qComplex(result[id].x, result[id].y);
 }
 
-void Circuit::compileRun() {
+void Circuit::masterCompile() {
     auto start = chrono::system_clock::now();
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
@@ -134,16 +134,17 @@ void Circuit::compileRun() {
 }
 
 void Circuit::compile() {
-    compileRun();
 #if USE_MPI
     if (MyMPI::rank == 0) {
-        compileRun();
+        masterCompile();
         auto s = schedule.serialize();
         int bufferSize = (int) s.size();
         MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
         MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        // int cur = 0;
+        // schedule = Schedule::deserialize(s.data(), cur);
     } else {
-         int bufferSize;
+        int bufferSize;
         MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
         unsigned char* buffer = new unsigned char [bufferSize];
         MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
@@ -152,6 +153,8 @@ void Circuit::compile() {
         delete[] buffer;
         fflush(stdout);
     }
+#else
+    masterCompile();
 #endif
     schedule.initCuttPlans(numQubits - MyGlobalVars::bit);
 }

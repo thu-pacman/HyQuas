@@ -11,8 +11,8 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     if (MyGlobalVars::numGPUs > 1 || BACKEND == 3 || BACKEND == 4) {
         size <<= 1;
     }
-    deviceStateVec.resize(MyGlobalVars::numGPUs);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    deviceStateVec.resize(MyGlobalVars::localGPUs);
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         cudaSetDevice(g);
         checkCudaErrors(cudaMalloc(&deviceStateVec[g], size));
         checkCudaErrors(cudaMemsetAsync(deviceStateVec[g], 0, size, MyGlobalVars::streams[g]));
@@ -22,7 +22,7 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
 #if BACKEND==1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     initControlIdx();
 #endif
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
     }
 }

@@ -342,7 +342,7 @@ void GateGroup::initCuttPlans(int numLocalQubits) {
     if (backend != Backend::BLAS)
         return;
     std::vector<int> dim(numLocalQubits, 2);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         cuttHandle plan;
         checkCudaErrors(cudaSetDevice(g));
         checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
@@ -467,20 +467,19 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
 }
 
 void LocalGroup::initCuttPlans(int numLocalQubits, bool isFirstGroup) {
+    cuttPlans.clear();
     if (isFirstGroup) {
-        cuttPlans.clear();
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             cuttPlans.push_back(cuttHandle());
-            return;
         }
-    }
-    cuttPlans.clear();
-    std::vector<int> dim(numLocalQubits, 2);
-    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-        cuttHandle plan;
-        checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
-        cuttPlans.push_back(plan);
+    } else {
+        std::vector<int> dim(numLocalQubits, 2);
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            cuttHandle plan;
+            checkCudaErrors(cudaSetDevice(g));
+            checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
+            cuttPlans.push_back(plan);
+        }
     }
     for (auto& gg: overlapGroups) {
         gg.initCuttPlans(numLocalQubits - MyGlobalVars::bit);
@@ -543,8 +542,8 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
     assert(numMatQubits <= std::max(BLAS_MAT_LIMIT, MIN_MAT_SIZE));
     int n = 1 << numMatQubits;
     matrix.clear();
-    matrix.resize(MyGlobalVars::numGPUs);
-    for (int gpuID = 0; gpuID < MyGlobalVars::numGPUs; gpuID++) {
+    matrix.resize(MyGlobalVars::localGPUs);
+    for (int gpuID = 0; gpuID < MyGlobalVars::localGPUs; gpuID++) {
         auto isHiGPU = [gpuID, numLocalQubit](int q) {
             assert(q >= numLocalQubit);
             return (bool)(gpuID >> (q - numLocalQubit) & 1);
@@ -658,7 +657,7 @@ void GateGroup::initGPUMatrix() {
     assert(deviceMats.size() == 0);
     deviceMats.clear();
     int n = 1 << this->matQubit;
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         qComplex realMat[n][n];
         #pragma omp parallel for
@@ -677,6 +676,8 @@ void GateGroup::initMatrix(int numLocalQubit) {
     if (backend == Backend::BLAS) {
         initCPUMatrix(numLocalQubit);
         initGPUMatrix();
+    } else {
+        UNREACHABLE();
     }
 }
 

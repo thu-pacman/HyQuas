@@ -410,8 +410,8 @@ __global__ void run(qComplex* a, qindex* threadBias, int* loArr, int* shiftAt, i
 
 #if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
 void initControlIdx() {
-    loIdx_device.resize(MyGlobalVars::numGPUs);
-    shiftAt_device.resize(MyGlobalVars::numGPUs);
+    loIdx_device.resize(MyGlobalVars::localGPUs);
+    shiftAt_device.resize(MyGlobalVars::localGPUs);
 }
 #endif
 

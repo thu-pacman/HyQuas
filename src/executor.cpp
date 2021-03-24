@@ -79,56 +79,71 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     }
     for (int xr = 0; xr < commSize; xr++) {
         for (int p = 0; p < numPart; p++) {
-#ifdef USE_MPI
+#if USE_MPI
             checkNCCLErrors(ncclGroupStart());
 #endif
             for (int a = 0; a < MyGlobalVars::localGPUs; a++) {
                 int b = a ^ xr;
                 int srcPart = a % commSize * numPart + p;
                 int dstPart = b % commSize * numPart + p;
+#if USE_MPI
+                if (p == 0) {
+                    checkCudaErrors(cudaStreamWaitEvent(
+                        MyGlobalVars::streams_comm[comm[a]],
+                        lastGroupEvent[comm[a]], 0)
+                    );
+                }
+                checkCudaErrors(cudaSetDevice(comm[a]));
+                if (a == b) {
+                    checkCudaErrors(cudaMemcpyAsync(
+                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        deviceBuffer[comm[b]] + srcPart * partSize,
+                        partSize * sizeof(qComplex),
+                        cudaMemcpyDeviceToDevice,
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                } else if (a < b) {
+                    checkNCCLErrors(ncclSend(
+                        deviceBuffer[comm[a]] + dstPart * partSize,
+                        partSize * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        comm[b],
+                        MyGlobalVars::ncclComms[comm[a]],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                    checkNCCLErrors(ncclRecv(
+                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        partSize * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        comm[b],
+                        MyGlobalVars::ncclComms[comm[a]],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                } else {
+                    checkNCCLErrors(ncclRecv(
+                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        partSize * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        comm[b],
+                        MyGlobalVars::ncclComms[comm[a]],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                    checkNCCLErrors(ncclSend(
+                        deviceBuffer[comm[a]] + dstPart * partSize,
+                        partSize * 2, // use double rather than complex
+                        NCCL_FLOAT_TYPE,
+                        comm[b],
+                        MyGlobalVars::ncclComms[comm[a]],
+                        MyGlobalVars::streams_comm[comm[a]]
+                    ));
+                }
+#else
                 if (p == 0) {
                     checkCudaErrors(cudaStreamWaitEvent(
                         MyGlobalVars::streams_comm[comm[a]],
                         lastGroupEvent[comm[b]], 0)
                     );
                 }
-#ifdef USE_MPI
-                if (a < b) {
-                    checkNCCLErrors(ncclSend(
-                        deviceBuffer[comm[b]] + srcPart * partSize,
-                        partSize * sizeof(qComplex) * 2, // use double rather than complex
-                        NCCL_FLOAT_TYPE,
-                        b,
-                        MyGlobalVars::ncclComms[a],
-                        MyGlobalVars::streams_comm[comm[a]]
-                    ));
-                    checkNCCLErrors(ncclRecv(
-                        deviceStateVec[comm[a]] + dstPart * partSize,
-                        partSize * sizeof(qComplex) * 2, // use double rather than complex
-                        NCCL_FLOAT_TYPE,
-                        b,
-                        MyGlobalVars::ncclComms[a],
-                        MyGlobalVars::streams_comm[comm[a]]
-                    ));
-                } else {
-                    checkNCCLErrors(ncclRecv(
-                        deviceStateVec[comm[a]] + dstPart * partSize,
-                        partSize * sizeof(qComplex) * 2, // use double rather than complex
-                        NCCL_FLOAT_TYPE,
-                        b,
-                        MyGlobalVars::ncclComms[a],
-                        MyGlobalVars::streams_comm[comm[a]]
-                    ));
-                    checkNCCLErrors(ncclSend(
-                        deviceBuffer[comm[b]] + srcPart * partSize,
-                        partSize * sizeof(qComplex) * 2, // use double rather than complex
-                        NCCL_FLOAT_TYPE,
-                        b,
-                        MyGlobalVars::ncclComms[a],
-                        MyGlobalVars::streams_comm[comm[a]]
-                    ));
-                }
-#else
                 checkCudaErrors(cudaMemcpyAsync(
                     deviceStateVec[comm[a]] + dstPart * partSize,
                     deviceBuffer[comm[b]] + srcPart * partSize,
@@ -141,11 +156,11 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 checkCudaErrors(cudaSetDevice(comm[a]));
                 checkCudaErrors(cudaEventCreate(&event));
                 checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
-                commEvents[sliceID * MyGlobalVars::numGPUs + comm[a]] = event;
-                partID[sliceID * MyGlobalVars::numGPUs + comm[a]] = dstPart;
+                commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
+                partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
             }
-#ifdef USE_MPI
-            checkNCCLErrors(ncclGroupStart());
+#if USE_MPI
+            checkNCCLErrors(ncclGroupEnd());
 #endif
             sliceID++;
         }
@@ -375,13 +390,13 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
 
 void Executor::applyGateGroup(GateGroup& gg, int sliceID) {
 #ifdef MEASURE_STAGE
-    cudaEvent_t start[MyGlobalVars::numGPUs], stop[MyGlobalVars::numGPUs];
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    cudaEvent_t start[MyGlobalVars::localGPUs], stop[MyGlobalVars::localGPUs];
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaEventCreate(&start[i]));
         checkCudaErrors(cudaEventCreate(&stop[i]));    
     }
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaEventRecord(start[i], MyGlobalVars::streams[i]));
     }
 #endif
@@ -408,11 +423,11 @@ void Executor::applyGateGroup(GateGroup& gg, int sliceID) {
     setState(gg.state);
 #ifdef MEASURE_STAGE
     // TODO multistream support
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaEventRecord(stop[i], MyGlobalVars::streams[i]));
     }
     float min_time = 1e100, max_time = 0, sum_time = 0;
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         float time;
         cudaEventSynchronize(stop[i]);
         cudaEventElapsedTime(&time, start[i], stop[i]);
@@ -425,7 +440,7 @@ void Executor::applyGateGroup(GateGroup& gg, int sliceID) {
 
     printf("[ApplyGateGroup] time for %x %d %s %s: [min=%f, max=%f, avg=%f]\n",
             gg.relatedQubits, (int)gg.gates.size(), to_string(gg.backend).c_str(), sliceID == -1 ? "full" : "slice", 
-            min_time, max_time, sum_time / MyGlobalVars::numGPUs);
+            min_time, max_time, sum_time / MyGlobalVars::localGPUs);
 #endif
     // printf("Group End\n");
 }
@@ -446,16 +461,16 @@ void Executor::applyPerGateGroup(GateGroup& gg) {
     // initialize gates
     std::map<int, int> toID = getLogicShareMap(relatedQubits, numLocalQubits);
     
-    KernelGate hostGates[MyGlobalVars::numGPUs * gates.size()];
+    KernelGate hostGates[MyGlobalVars::localGPUs * gates.size()];
     assert(gates.size() < MAX_GATE);
-    #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    #pragma omp parallel for num_threads(MyGlobalVars::localGPUs)
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         for (size_t i = 0; i < gates.size(); i++) {
            hostGates[g * gates.size() + i] = getGate(gates[i], g, numLocalQubits, relatedLogicQb, toID);
         }
     }
     qindex gridDim = (qindex(1) << numLocalQubits) >> LOCAL_QUBIT_SIZE;
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         copyGatesToSymbol(hostGates, gates.size(), MyGlobalVars::streams[g], g);
         launchExecutor(gridDim, deviceStateVec[g], threadBias[g], numLocalQubits, gates.size(), blockHot, enumerate, MyGlobalVars::streams[g], g);
@@ -478,23 +493,23 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     // initialize gates
     std::map<int, int> toID = getLogicShareMap(relatedQubits, numLocalQubits);
     
-    KernelGate hostGates[MyGlobalVars::numGPUs * gates.size()];
+    KernelGate hostGates[MyGlobalVars::localGPUs * gates.size()];
     assert(gates.size() < MAX_GATE);
     
     qindex partSize = qindex(1) << numLocalQubits;
     int numSlice = MyGlobalVars::numGPUs;
-    #pragma omp parallel for num_threads(MyGlobalVars::numGPUs)
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
-        int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
+    #pragma omp parallel for num_threads(MyGlobalVars::localGPUs)
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        int pID = partID[sliceID * MyGlobalVars::localGPUs + g];
         for (size_t i = 0; i < gates.size(); i++) {
             hostGates[g * gates.size() + i] = getGate(gates[i], g * numSlice + pID, numLocalQubits, relatedLogicQb, toID);
         }
     }
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         copyGatesToSymbol(hostGates, gates.size(), MyGlobalVars::streams[g], g);
         qindex gridDim = (qindex(1) << numLocalQubits) >> LOCAL_QUBIT_SIZE;
-        int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
+        int pID = partID[sliceID * MyGlobalVars::localGPUs + g];
         launchExecutor(gridDim, deviceStateVec[g] + pID * partSize, threadBias[g], numLocalQubits, gates.size(), blockHot, enumerate, MyGlobalVars::streams[g], g);
     }
 }
@@ -504,7 +519,7 @@ void Executor::applyBlasGroup(GateGroup& gg) {
     gg.initMatrix(numLocalQubits);
     qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g], deviceBuffer[g]));
         int K = 1 << gg.matQubit;
@@ -525,9 +540,9 @@ void Executor::applyBlasGroupSliced(GateGroup& gg, int sliceID) {
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     qindex partSize = qindex(1) << numLocalQubits;
     int K = 1 << gg.matQubit;
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        int pID = partID[sliceID * MyGlobalVars::numGPUs + g];
+        int pID = partID[sliceID * MyGlobalVars::localGPUs + g];
         checkCuttErrors(cuttExecute(gg.cuttPlans[g], deviceStateVec[g] + partSize * pID, deviceBuffer[g] + partSize * pID));
         checkBlasErrors(cublasGEMM(MyGlobalVars::blasHandles[g], CUBLAS_OP_N, CUBLAS_OP_N,
             K, numElements / K, K, // M, N, K
@@ -573,7 +588,7 @@ void Executor::prepareBitMap(qindex relatedQubits, unsigned int& blockHot, unsig
     for (qindex i = (1 << THREAD_DEP) - 1, j = threadHot; i >= 0; i--, j = threadHot & (j - 1)) {
         hostThreadBias[i] = j;
     }
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaMemcpyAsync(threadBias[g], hostThreadBias, sizeof(hostThreadBias), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
     }
 }
@@ -596,7 +611,7 @@ std::map<int, int> Executor::getLogicShareMap(qindex relatedQubits, int numLocal
 }
 
 void Executor::finalize() {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
         checkCudaErrors(cudaFree(threadBias[g]));
     }
@@ -611,14 +626,15 @@ void Executor::loadState() {
 }
 
 void Executor::sliceBarrier(int sliceID) {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::numGPUs + g], 0));
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + g], 0));
     }
 }
 
 void Executor::allBarrier() {
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
+        checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams_comm[g]));
     }
 }

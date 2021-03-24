@@ -16,11 +16,11 @@ std::unique_ptr<ncclComm_t[]> ncclComms;
 
 void init() {
     checkCudaErrors(cudaGetDeviceCount(&localGPUs));
-    if (USE_MPI) {
+    #if USE_MPI
         numGPUs = MyMPI::commSize * localGPUs;
-    } else {
-        localGPUs = numGPUs;
-    }
+    #else
+        numGPUs = localGPUs;
+    #endif
     Logger::add("Local GPU: %d", localGPUs);
     bit = get_bit(numGPUs);
 
@@ -41,7 +41,7 @@ void init() {
         checkBlasErrors(cublasSetStream(blasHandles[i], streams[i]));
         checkCudaErrors(cudaStreamCreate(&streams_comm[i]));
     }
-    if (USE_MPI) {
+    #if USE_MPI
         ncclUniqueId id;
         if (MyMPI::rank == 0)
             checkNCCLErrors(ncclGetUniqueId(&id));
@@ -53,7 +53,7 @@ void init() {
             checkNCCLErrors(ncclCommInitRank(&ncclComms[i], numGPUs, id, MyMPI::rank * localGPUs + i));
         }
         checkNCCLErrors(ncclGroupEnd());
-    }
+    #endif
 }
 };
 

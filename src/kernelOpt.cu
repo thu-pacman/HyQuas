@@ -433,9 +433,9 @@ __global__ void run(qComplex* a, unsigned int* threadBias, int* loArr, int* shif
 void initControlIdx() {
     int loIdx_host[10][10][128];
     int shiftAt_host[10][10];
-    loIdx_device.resize(MyGlobalVars::numGPUs);
-    shiftAt_device.resize(MyGlobalVars::numGPUs);
-    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+    loIdx_device.resize(MyGlobalVars::localGPUs);
+    shiftAt_device.resize(MyGlobalVars::localGPUs);
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         cudaSetDevice(i);
         cudaMalloc(&loIdx_device[i], sizeof(loIdx_host));
         cudaMalloc(&shiftAt_device[i], sizeof(shiftAt_host));
@@ -484,9 +484,9 @@ void initControlIdx() {
         }
     }
 
-    loIdx_device.resize(MyGlobalVars::numGPUs);
-    shiftAt_device.resize(MyGlobalVars::numGPUs);
-    for (int g = 0; g < MyGlobalVars::numGPUs; g++) {
+    loIdx_device.resize(MyGlobalVars::localGPUs);
+    shiftAt_device.resize(MyGlobalVars::localGPUs);
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaMemcpyAsync(loIdx_device[g], loIdx_host[0][0], sizeof(loIdx_host), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
         checkCudaErrors(cudaMemcpyAsync(shiftAt_device[g], shiftAt_host[0], sizeof(shiftAt_host), cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
     }

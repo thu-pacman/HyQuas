@@ -25,13 +25,13 @@ public:
 #ifdef SHOW_SUMMARY
         Logger::init();
         char proc_info[100];
-        if (USE_MPI) {
+        #if USE_MPI
             sprintf(proc_info, "[%d]", MyMPI::rank);
-        } else {
+        #else
             sprintf(proc_info, "%s", ""); // printf("") will cause compilee warning "-Wformat-zero-length"
-        }
+        #endif
         for (auto& s: instance -> infos) {
-            std::cout << proc_info << "Logger: " << s << std::endl;
+            std::cout << "Logger" << proc_info << ": " << s << std::endl;
         }
         instance -> infos.clear();
 #endif
