@@ -70,6 +70,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     qindex partSize = numElements / numSlice;
     commEvents.resize(numSlice * MyGlobalVars::localGPUs);
     partID.resize(numSlice * MyGlobalVars::localGPUs);
+    peerToSync.resize(numSlice * MyGlobalVars::localGPUs);
     int sliceID = 0;
     cudaEvent_t lastGroupEvent[MyGlobalVars::localGPUs];
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
@@ -158,6 +159,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
                 commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
                 partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
+                peerToSync[sliceID * MyGlobalVars::localGPUs + comm[b]] = event;
             }
 #if USE_MPI
             checkNCCLErrors(ncclGroupEnd());
@@ -629,6 +631,7 @@ void Executor::sliceBarrier(int sliceID) {
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + g], 0));
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], peerToSync[sliceID * MyGlobalVars::localGPUs + g], 0));
     }
 }
 

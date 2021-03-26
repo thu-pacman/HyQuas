@@ -40,6 +40,7 @@ private:
     State oldState;
     std::vector<cudaEvent_t> commEvents; // commEvents[slice][gpuID]
     std::vector<int> partID; // partID[slice][gpuID]
+    std::vector<cudaEvent_t> peerToSync;
 
     // constants
     std::vector<unsigned int*> threadBias;
