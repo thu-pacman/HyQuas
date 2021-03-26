@@ -41,9 +41,9 @@ case $(hostname -s) in
 esac
 
 cd $HOME/QCSimulator/build
-# rm CMakeCache.txt || true
-# cmake $* ..
-# make clean
+rm CMakeCache.txt || true
+cmake $* ..
+make clean
 make -j
 
 if [ -z "${tests-}" ]
