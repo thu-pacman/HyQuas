@@ -295,6 +295,9 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                             }
                             break;
                         }
+                        default: {
+                            assert(false);
+                        }
                     }
                 }
             }

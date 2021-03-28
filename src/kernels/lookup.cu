@@ -266,7 +266,7 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     }
                 }
             } else {
-                assert(deviceGates[i].type == GateType::CZ || deviceGates[i].type == GateType::CRZ);
+                assert(deviceGates[i].type == GateType::CZ || deviceGates[i].type == GateType::CU1 || deviceGates[i].type == GateType::CRZ);
                 bool isHighBlock = (blockIdx.x >> targetQubit) & 1;
                 int m = 1 << (LOCAL_QUBIT_SIZE - 1);
                 int maskControl = (1 << controlQubit) - 1;
@@ -299,6 +299,9 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                                 RZHi(x, deviceGates[i].r00, -deviceGates[i].i00);
                             }
                             break;
+                        }
+                        default: {
+                            assert(false);
                         }
                     }
                 }
