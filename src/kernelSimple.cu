@@ -11,15 +11,22 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     if (MyGlobalVars::numGPUs > 1 || BACKEND == 3 || BACKEND == 4) {
         size <<= 1;
     }
+#if BACKEND == 2
+    deviceStateVec.resize(1);
+    cudaSetDevice(0);
+    checkCudaErrors(cudaMalloc(&deviceStateVec[0], sizeof(qComplex) << numQubits));
+    checkCudaErrors(cudaMemsetAsync(deviceStateVec[0], 0, sizeof(qComplex) << numQubits, MyGlobalVars::streams[0]));
+#else
     deviceStateVec.resize(MyGlobalVars::localGPUs);
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         cudaSetDevice(g);
         checkCudaErrors(cudaMalloc(&deviceStateVec[g], size));
         checkCudaErrors(cudaMemsetAsync(deviceStateVec[g], 0, size, MyGlobalVars::streams[g]));
     }
+#endif
     qComplex one = make_qComplex(1.0, 0.0);
     checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
-#if BACKEND==1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
+#if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     initControlIdx();
 #endif
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
@@ -324,6 +331,7 @@ __global__ void RZKernel(qComplex* a, int numQubit_, int targetQubit, qreal alph
 
 
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
+    checkCudaErrors(cudaSetDevice(0));
     int numQubit_ = numQubits - 1;
     int nVec = 1 << numQubit_;
     for (auto& gate: gates) {

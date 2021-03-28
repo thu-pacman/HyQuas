@@ -49,6 +49,7 @@ void Executor::run() {
             this->setState(localGroup.state);
             assert(localGroup.overlapGroups.size() == 0);
         }
+        int cnt = 0;
         for (auto& gg: schedule.localGroups[lgID].fullGroups) {
             this->applyGateGroup(gg, -1);
         }
@@ -70,7 +71,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     qindex partSize = numElements / numSlice;
     commEvents.resize(numSlice * MyGlobalVars::localGPUs);
     partID.resize(numSlice * MyGlobalVars::localGPUs);
-    peerToSync.resize(numSlice * MyGlobalVars::localGPUs);
+    peer.resize(numSlice * MyGlobalVars::localGPUs);
     int sliceID = 0;
     cudaEvent_t lastGroupEvent[MyGlobalVars::localGPUs];
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
@@ -159,8 +160,15 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
                 commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
                 partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
-                peerToSync[sliceID * MyGlobalVars::localGPUs + comm[b]] = event;
+                peer[sliceID * MyGlobalVars::localGPUs + comm[a]] = comm[b];
             }
+#ifdef DEBUG
+            // check peer's peer is self
+            for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+                int peerID = peer[sliceID * MyGlobalVars::localGPUs + g];
+                assert(peer[sliceID * MyGlobalVars::localGPUs + peerID] == g);
+            }
+#endif
 #if USE_MPI
             checkNCCLErrors(ncclGroupEnd());
 #endif
@@ -380,6 +388,9 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
                     qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
                     return KernelGate(GateType::GCC, 0, 0, mat);
                 }
+                case GateType::ID: {
+                    return KernelGate::ID();
+                }
                 default: {
                     UNREACHABLE()
                 }
@@ -536,8 +547,9 @@ void Executor::applyBlasGroup(GateGroup& gg) {
 
 void Executor::applyBlasGroupSliced(GateGroup& gg, int sliceID) {
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
+    // qubits at position [n - 2 bit, n - bit) should be excluded by the compiler
     if(sliceID == 0)
-        gg.initMatrix(numLocalQubits);
+        gg.initMatrix(numQubits - MyGlobalVars::bit);
     qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     qindex partSize = qindex(1) << numLocalQubits;
@@ -617,6 +629,7 @@ void Executor::finalize() {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
         checkCudaErrors(cudaFree(threadBias[g]));
     }
+    schedule.finalState = state;
 }
 
 void Executor::storeState() {
@@ -631,7 +644,8 @@ void Executor::sliceBarrier(int sliceID) {
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + g], 0));
-        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], peerToSync[sliceID * MyGlobalVars::localGPUs + g], 0));
+        int peerID = peer[sliceID * MyGlobalVars::localGPUs + g];
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + peerID], 0));
     }
 }
 

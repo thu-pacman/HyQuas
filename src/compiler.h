@@ -44,10 +44,11 @@ private:
 
 class AdvanceCompiler: public OneLayerCompiler {
 public:
-    AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates);
+    AdvanceCompiler(int numQubits, qindex localQubits, qindex blasForbid, std::vector<Gate> inputGates);
     LocalGroup run(State &state, bool usePerGate, bool useBLAS, int preGateSize, int blasSize, int cuttSize);
 private:
     qindex localQubits;
+    qindex blasForbid;
 };
 
 class ChunkCompiler: public OneLayerCompiler {

@@ -28,6 +28,12 @@ int Circuit::run(bool copy_back) {
     gates.clear();
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
         auto& lg = schedule.localGroups[lgID];
+        for (size_t ggID = 0; ggID < lg.overlapGroups.size(); ggID++) {
+            auto& gg = lg.overlapGroups[ggID];
+            for (auto& g: gg.gates)
+                gates.push_back(g);
+        }
+        if (lgID == 2) break;
         for (size_t ggID = 0; ggID < lg.fullGroups.size(); ggID++) {
             auto& gg = lg.fullGroups[ggID];
             for (auto& g: gg.gates)
@@ -46,10 +52,14 @@ int Circuit::run(bool copy_back) {
     Logger::add("Time Cost: %d us", int(duration.count()));
     result.resize(1ll << numQubits);
     if (copy_back) {
+#if BACKEND == 0 || BACKEND == 2
+        kernelDeviceToHost((qComplex*)result.data(), deviceStateVec[0], numQubits);
+#else
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
         }
+#endif
     }
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         kernelDestroy(deviceStateVec[g]);
@@ -165,6 +175,14 @@ void Circuit::printState() {
         qComplex x = ampAt(i);
         printf("%d %.12f: %.12f %.12f\n", i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
     }
+#ifdef SHOW_SCHEDULE
+    for (int i = 0; i < numQubits; i++) {
+        qComplex x = ampAt(1ll << i);
+        printf("%lld %.12f: %.12f %.12f\n", 1ll << i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
+    }
+    qComplex y = ampAt((1ll << numQubits) - 1);
+    printf("%lld %.12f: %.12f %.12f\n", (1ll << numQubits) - 1, y.x * y.x + y.y * y.y, zero_wrapper(y.x), zero_wrapper(y.y));
+#endif
     std::vector<std::pair<qindex, qComplex>> largeAmps;
     for (qindex i = 0; i < (1ll << numQubits); i++) {
         if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {

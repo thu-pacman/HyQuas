@@ -67,6 +67,11 @@ void Schedule::dump(int numQubits) {
     int L = 3;
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
+            switch (gg.backend) {
+                case Backend::BLAS: printf("<BLAS>\n"); break;
+                case Backend::PerGate: printf("<PerGate>\n"); break;
+                case Backend::None: printf("<None\n>"); break;
+            }
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
                     if (i == gate.controlQubit) {
@@ -92,6 +97,11 @@ void Schedule::dump(int numQubits) {
         }
         printf("\n");
         for (auto& gg: lg.fullGroups) {
+            switch (gg.backend) {
+                case Backend::BLAS: printf("<BLAS>\n"); break;
+                case Backend::PerGate: printf("<PerGate>\n"); break;
+                case Backend::None: printf("<None\n>"); break;
+            }
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
                     if (i == gate.controlQubit) {
@@ -546,6 +556,7 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
     for (int gpuID = 0; gpuID < MyGlobalVars::localGPUs; gpuID++) {
         auto isHiGPU = [gpuID, numLocalQubit](int q) {
             assert(q >= numLocalQubit);
+            assert((q - numLocalQubit) < MyGlobalVars::bit);
             return (bool)(gpuID >> (q - numLocalQubit) & 1);
         };
         std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);

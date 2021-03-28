@@ -44,8 +44,13 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
         std::vector<Gate> gates = lg.fullGroups[i-1].gates;
         std::reverse(gates.begin(), gates.end());
         assert(lg.fullGroups[i-1].relatedQubits != 0);
+#if BACKEND == 3
+        SimpleCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit, numQubits - 2 * MyGlobalVars::bit, gates,
+                                        false, lg.fullGroups[i-1].relatedQubits, lg.fullGroups[i].relatedQubits);
+#else
         SimpleCompiler backCompiler(numQubits, numQubits - 2 * MyGlobalVars::bit, numQubits - 2 * MyGlobalVars::bit, gates,
                                         true, lg.fullGroups[i-1].relatedQubits, lg.fullGroups[i].relatedQubits);
+#endif
         LocalGroup toRemove = backCompiler.run();
         if (toRemove.fullGroups.size() == 0) {
             result.push_back(make_pair(std::vector<Gate>(), 0));
@@ -75,7 +80,6 @@ Schedule Compiler::run() {
         auto& gg = localGroup.fullGroups[id];
 
         std::vector<int> newGlobals;
-        std::vector<int> newLocals;
         for (int i = 0; i < numQubits; i++) {
             if (! (gg.relatedQubits >> i & 1)) {
                 newGlobals.push_back(i);
@@ -123,11 +127,13 @@ Schedule Compiler::run() {
         }
 
         qindex overlapLocals = gg.relatedQubits;
-        if (id > 0)
+        qindex overlapBlasForbid = 0;
+        if (id > 0) {
             overlapLocals &= localGroup.fullGroups[id - 1].relatedQubits;
-
-        AdvanceCompiler overlapCompiler(numQubits, overlapLocals, moveBack[id].first);
-        AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, gg.gates);
+            overlapBlasForbid = (~localGroup.fullGroups[id - 1].relatedQubits) & gg.relatedQubits;
+        }
+        AdvanceCompiler overlapCompiler(numQubits, overlapLocals, overlapBlasForbid, moveBack[id].first);
+        AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, 0, gg.gates);
         switch (BACKEND) {
             case 1: {
                 lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
@@ -140,6 +146,7 @@ Schedule Compiler::run() {
                 lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
+            case 2: // no break;
             case 4: {
                 lg.overlapGroups = overlapCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
@@ -162,8 +169,8 @@ OneLayerCompiler::OneLayerCompiler(int numQubits, const std::vector<Gate> &input
 SimpleCompiler::SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList, qindex required):
     OneLayerCompiler(numQubits, inputGates), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required) {}
 
-AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates):
-    OneLayerCompiler(numQubits, inputGates), localQubits(localQubits) {}
+AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, qindex blasForbid, std::vector<Gate> inputGates):
+    OneLayerCompiler(numQubits, inputGates), localQubits(localQubits), blasForbid(blasForbid) {}
 
 LocalGroup SimpleCompiler::run() {
     LocalGroup lg;
@@ -226,6 +233,12 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
                     related[i] |= ((qindex) 1) << layout[j];
             }
         };
+        auto fillFull = [this](bool full[], qindex forbid) {
+            memset(full, 0, sizeof(bool) * numQubits);
+            for (int i = 0; i < numQubits; i++)
+                if (forbid >> i & 1)
+                    full[i] = true;
+        };
         GateGroup gg;
         std::vector<int> ggIdx;
         Backend ggBackend;
@@ -244,14 +257,14 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
                 std::vector<GateType> tys;
                 for (auto& x: ggIdx) tys.push_back(remainGates[x].type);
                 bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys) / ggIdx.size();
-                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int)bestIDX.size(), bestEff);
+                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int)ggIdx.size(), bestEff);
             }
 
             for (int matSize = 4; matSize < 8; matSize ++) {
-                memset(full, 0, sizeof(full));
+                fillFull(full, blasForbid);
                 memset(related, 0, sizeof(related));
-                std::vector<int> idx = getGroupOpt(full, related, false, matSize, localQubits);
-                if (idx.size() ==0)
+                std::vector<int> idx = getGroupOpt(full, related, false, matSize, localQubits | blasForbid);
+                if (idx.size() == 0)
                     continue;
                 double eff = Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize) / idx.size();
                 // printf("eff-blas(%d) %f %d %f\n", matSize, Evaluator::getInstance() -> perfBLAS(numQubits - MyGlobalVars::bit, matSize), (int) idx.size(), eff);
@@ -271,8 +284,8 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             // Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
-            memset(full, 0, sizeof(full));
-            ggIdx = getGroupOpt(full, related, false, blasSize, localQubits);
+            fillFull(full, blasForbid);
+            ggIdx = getGroupOpt(full, related, false, blasSize, localQubits | blasForbid);
             GateGroup gg;
             ggBackend = Backend::BLAS;
             // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
