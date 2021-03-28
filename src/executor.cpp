@@ -99,7 +99,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 if (a == b) {
                     checkCudaErrors(cudaMemcpyAsync(
                         deviceStateVec[comm[a]] + dstPart * partSize,
-                        deviceBuffer[comm[b]] + srcPart * partSize,
+                        deviceBuffer[comm[a]] + srcPart * partSize,
                         partSize * sizeof(qComplex),
                         cudaMemcpyDeviceToDevice,
                         MyGlobalVars::streams_comm[comm[a]]
@@ -154,11 +154,6 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                     MyGlobalVars::streams_comm[comm[a]]
                 ));
 #endif
-                cudaEvent_t event;
-                checkCudaErrors(cudaSetDevice(comm[a]));
-                checkCudaErrors(cudaEventCreate(&event));
-                checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
-                commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
                 partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
                 peer[sliceID * MyGlobalVars::localGPUs + comm[a]] = comm[b];
             }
@@ -172,6 +167,14 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
 #if USE_MPI
             checkNCCLErrors(ncclGroupEnd());
 #endif
+            // events should be recorded after ncclGroupEnd
+            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                cudaEvent_t event;
+                checkCudaErrors(cudaSetDevice(comm[a]));
+                checkCudaErrors(cudaEventCreate(&event));
+                checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
+                commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
+            }
             sliceID++;
         }
     }
@@ -644,8 +647,10 @@ void Executor::sliceBarrier(int sliceID) {
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + g], 0));
+#if !USE_MPI
         int peerID = peer[sliceID * MyGlobalVars::localGPUs + g];
         checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], commEvents[sliceID * MyGlobalVars::localGPUs + peerID], 0));
+#endif
     }
 }
 
