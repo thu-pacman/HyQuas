@@ -25,7 +25,9 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     }
 #endif
     qComplex one = make_qComplex(1.0, 0.0);
-    checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
+    if  (!USE_MPI || MyMPI::rank == 0) {
+        checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
+    }
 #if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     initControlIdx();
 #endif
