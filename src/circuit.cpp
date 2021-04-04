@@ -109,9 +109,21 @@ qindex Circuit::toLogicID(qindex idx) {
     return id;
 }
 
-qComplex Circuit::ampAt(qindex idx) {
+ResultItem Circuit::ampAt(qindex idx) {
     qindex id = toPhysicalID(idx);
-    return make_qComplex(result[id].x, result[id].y);
+    return ResultItem(idx, make_qComplex(result[id].x, result[id].y));
+}
+
+bool Circuit::localAmpAt(qindex idx, ResultItem& item) {
+    qindex localAmps = (1 << numQubits) / MyMPI::commSize;
+    qindex id = toPhysicalID(idx);
+    if (id / localAmps == MyMPI::rank) {
+        // printf("%d belongs to rank %d\n", idx, MyMPI::rank);
+        qindex localID = id % localAmps;
+        item = ResultItem(idx, make_qComplex(result[localID].x, result[localID].y));
+        return true;
+    }
+    return false;
 }
 
 void Circuit::masterCompile() {
@@ -169,32 +181,102 @@ void Circuit::compile() {
     schedule.initCuttPlans(numQubits - MyGlobalVars::bit);
 }
 
+#if USE_MPI
+void Circuit::gatherAndPrint(const std::vector<ResultItem>& results) {
+    if (MyMPI::rank == 0) {
+        int size = results.size();
+        int sizes[MyMPI::commSize];
+        MPI_Gather(&size, 1, MPI_INT, sizes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        int disp[MyMPI::commSize + 1];
+        disp[0] = 0;
+        for (int i = 0; i < MyMPI::commSize; i++)
+            disp[i + 1] = disp[i] + sizes[i];
+        int totalItem = disp[MyMPI::commSize];
+        ResultItem* collected = new ResultItem[totalItem];
+        for (int i = 0; i < MyMPI::commSize; i++)
+            sizes[i] *= sizeof(ResultItem);
+        for (int i = 0; i < MyMPI::commSize; i++)
+            disp[i] *= sizeof(ResultItem);
+        MPI_Gatherv(
+            results.data(), results.size() * sizeof(ResultItem), MPI_UNSIGNED_CHAR,
+            collected, sizes, disp,
+            MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD
+        );
+        sort(collected, collected + totalItem);
+        for (int i = 0; i < totalItem; i++)
+            collected[i].print();
+        delete[] collected;
+    } else {
+        int size = results.size();
+        MPI_Gather(&size, 1, MPI_INT, nullptr, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(
+            results.data(), results.size() * sizeof(ResultItem), MPI_UNSIGNED_CHAR,
+            nullptr, nullptr, nullptr,
+            MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD
+        );
+    }
+}
+#endif
+
 
 void Circuit::printState() {
+#if USE_MPI
+    std::vector<ResultItem> results;
+    ResultItem item;
     for (int i = 0; i < 128; i++) {
-        qComplex x = ampAt(i);
-        printf("%d %.12f: %.12f %.12f\n", i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
+        if (localAmpAt(i, item)) {
+            results.push_back(item);
+        }
+    }
+    gatherAndPrint(results);
+#ifdef SHOW_SCHEDULE
+    results.clear();
+    for (int i = 0; i < numQubits; i++) {
+        if (localAmpAt(1ll << i, item)) {
+            results.push_back(item);
+        }
+    }
+    if (localAmpAt((1ll << numQubits) - 1, item)) {
+        results.push_back(item);
+    }
+    gatherAndPrint(results);
+#endif
+    results.clear();
+    int numLocalAmps = (1ll << numQubits) / MyMPI::commSize;
+    for (qindex i = 0; i < numLocalAmps; i++) {
+        if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
+            qindex logicID = toLogicID(i + numLocalAmps * MyMPI::rank);
+            if (logicID >= 128) {
+                // printf("large amp %d belongs to %d\n", logicID, MyMPI::rank);
+                results.push_back(ResultItem(logicID, result[i]));
+            }
+        }
+    }
+    gatherAndPrint(results);
+#else
+    std::vector<ResultItem> results;
+    for (int i = 0; i < 128; i++) {
+        results.push_back(ampAt(i));
     }
 #ifdef SHOW_SCHEDULE
     for (int i = 0; i < numQubits; i++) {
-        qComplex x = ampAt(1ll << i);
-        printf("%lld %.12f: %.12f %.12f\n", 1ll << i, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
+        results.push_back(ampAt(1ll << i));
     }
-    qComplex y = ampAt((1ll << numQubits) - 1);
-    printf("%lld %.12f: %.12f %.12f\n", (1ll << numQubits) - 1, y.x * y.x + y.y * y.y, zero_wrapper(y.x), zero_wrapper(y.y));
+    results.push_back(ampAt((1ll << numQubits) - 1))
 #endif
-    std::vector<std::pair<qindex, qComplex>> largeAmps;
+    for (auto& item: results)
+        item.print();
+    results.clear();
     for (qindex i = 0; i < (1ll << numQubits); i++) {
         if (result[i].x * result[i].x + result[i].y * result[i].y > 0.001) {
             qindex logicID = toLogicID(i);
             if (logicID >= 128) {
-                largeAmps.push_back(make_pair(toLogicID(i), result[i]));
+                results.push_back(ResultItem(toLogicID(i), result[i]));
             }
         }
     }
-    sort(largeAmps.begin(), largeAmps.end());
-    for (auto& amp: largeAmps) {
-        auto& x = amp.second;
-        printf("%d %.12f: %.12f %.12f\n", amp.first, x.x * x.x + x.y * x.y, zero_wrapper(x.x), zero_wrapper(x.y));
-    }
+    sort(results.begin(), results.end());
+    for (auto& item: results)
+        item.print();
+#endif
 }

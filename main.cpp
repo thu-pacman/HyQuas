@@ -243,9 +243,7 @@ int main(int argc, char* argv[]) {
     c = parse_circuit(std::string(argv[1]));
     c->compile();
     c->run();
-    if (!USE_MPI || MyMPI::rank == 0) {
-        c->printState();
-    }
+    c->printState();
     Logger::print();
     #if USE_MPI 
         checkMPIErrors(MPI_Finalize());
