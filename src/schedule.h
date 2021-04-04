@@ -28,6 +28,9 @@ struct State {
             layout.push_back(i);
         }
     }
+
+    std::vector<unsigned char> serialize() const;
+    static State deserialize(const unsigned char* arr, int& cur);
 };
 
 struct GateGroup {

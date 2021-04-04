@@ -49,7 +49,6 @@ void Executor::run() {
             this->setState(localGroup.state);
             assert(localGroup.overlapGroups.size() == 0);
         }
-        int cnt = 0;
         for (auto& gg: schedule.localGroups[lgID].fullGroups) {
             this->applyGateGroup(gg, -1);
         }
@@ -84,59 +83,62 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
 #if USE_MPI
             checkNCCLErrors(ncclGroupStart());
 #endif
-            for (int a = 0; a < MyGlobalVars::localGPUs; a++) {
+            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                 int b = a ^ xr;
+                if (comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
+                    continue;
+                int comm_a = comm[a] % MyGlobalVars::localGPUs;
                 int srcPart = a % commSize * numPart + p;
                 int dstPart = b % commSize * numPart + p;
 #if USE_MPI
                 if (p == 0) {
                     checkCudaErrors(cudaStreamWaitEvent(
-                        MyGlobalVars::streams_comm[comm[a]],
-                        lastGroupEvent[comm[a]], 0)
+                        MyGlobalVars::streams_comm[comm_a],
+                        lastGroupEvent[comm_a], 0)
                     );
                 }
-                checkCudaErrors(cudaSetDevice(comm[a]));
+                checkCudaErrors(cudaSetDevice(comm_a));
                 if (a == b) {
                     checkCudaErrors(cudaMemcpyAsync(
-                        deviceStateVec[comm[a]] + dstPart * partSize,
-                        deviceBuffer[comm[a]] + srcPart * partSize,
+                        deviceStateVec[comm_a] + dstPart * partSize,
+                        deviceBuffer[comm_a] + srcPart * partSize,
                         partSize * sizeof(qComplex),
                         cudaMemcpyDeviceToDevice,
-                        MyGlobalVars::streams_comm[comm[a]]
+                        MyGlobalVars::streams_comm[comm_a]
                     ));
                 } else if (a < b) {
                     checkNCCLErrors(ncclSend(
-                        deviceBuffer[comm[a]] + dstPart * partSize,
+                        deviceBuffer[comm_a] + dstPart * partSize,
                         partSize * 2, // use double rather than complex
                         NCCL_FLOAT_TYPE,
                         comm[b],
-                        MyGlobalVars::ncclComms[comm[a]],
-                        MyGlobalVars::streams_comm[comm[a]]
+                        MyGlobalVars::ncclComms[comm_a],
+                        MyGlobalVars::streams_comm[comm_a]
                     ));
                     checkNCCLErrors(ncclRecv(
-                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        deviceStateVec[comm_a] + dstPart * partSize,
                         partSize * 2, // use double rather than complex
                         NCCL_FLOAT_TYPE,
                         comm[b],
-                        MyGlobalVars::ncclComms[comm[a]],
-                        MyGlobalVars::streams_comm[comm[a]]
+                        MyGlobalVars::ncclComms[comm_a],
+                        MyGlobalVars::streams_comm[comm_a]
                     ));
                 } else {
                     checkNCCLErrors(ncclRecv(
-                        deviceStateVec[comm[a]] + dstPart * partSize,
+                        deviceStateVec[comm_a] + dstPart * partSize,
                         partSize * 2, // use double rather than complex
                         NCCL_FLOAT_TYPE,
                         comm[b],
-                        MyGlobalVars::ncclComms[comm[a]],
-                        MyGlobalVars::streams_comm[comm[a]]
+                        MyGlobalVars::ncclComms[comm_a],
+                        MyGlobalVars::streams_comm[comm_a]
                     ));
                     checkNCCLErrors(ncclSend(
-                        deviceBuffer[comm[a]] + dstPart * partSize,
+                        deviceBuffer[comm_a] + dstPart * partSize,
                         partSize * 2, // use double rather than complex
                         NCCL_FLOAT_TYPE,
                         comm[b],
-                        MyGlobalVars::ncclComms[comm[a]],
-                        MyGlobalVars::streams_comm[comm[a]]
+                        MyGlobalVars::ncclComms[comm_a],
+                        MyGlobalVars::streams_comm[comm_a]
                     ));
                 }
 #else
@@ -157,23 +159,19 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
                 peer[sliceID * MyGlobalVars::localGPUs + comm[a]] = comm[b];
             }
-#ifdef DEBUG
-            // check peer's peer is self
-            for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-                int peerID = peer[sliceID * MyGlobalVars::localGPUs + g];
-                assert(peer[sliceID * MyGlobalVars::localGPUs + peerID] == g);
-            }
-#endif
 #if USE_MPI
             checkNCCLErrors(ncclGroupEnd());
 #endif
             // events should be recorded after ncclGroupEnd
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                if (comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
+                    continue;
+                int comm_a = comm[a] % MyGlobalVars::localGPUs;
                 cudaEvent_t event;
-                checkCudaErrors(cudaSetDevice(comm[a]));
+                checkCudaErrors(cudaSetDevice(comm_a));
                 checkCudaErrors(cudaEventCreate(&event));
-                checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm[a]]));
-                commEvents[sliceID * MyGlobalVars::localGPUs + comm[a]] = event;
+                checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm_a]));
+                commEvents[sliceID * MyGlobalVars::localGPUs + comm_a] = event;
             }
             sliceID++;
         }

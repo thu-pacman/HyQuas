@@ -42,6 +42,7 @@ void init() {
         checkCudaErrors(cudaStreamCreate(&streams_comm[i]));
     }
     #if USE_MPI
+        checkMPIErrors(MPI_Barrier(MPI_COMM_WORLD));
         ncclUniqueId id;
         if (MyMPI::rank == 0)
             checkNCCLErrors(ncclGetUniqueId(&id));

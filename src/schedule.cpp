@@ -153,20 +153,47 @@ void Schedule::dump(int numQubits) {
     fflush(stdout);
 }
 
+std::vector<unsigned char> State::serialize() const {
+    assert(pos.size() == layout.size());
+    auto num_ele = pos.size();
+
+    std::vector<unsigned char> result;
+    result.resize(sizeof(num_ele));
+    auto arr = result.data();
+    int cur = 0;
+    SERIALIZE_STEP(num_ele);
+    SERIALIZE_VECTOR(pos, result);
+    SERIALIZE_VECTOR(layout, result);
+    return result;
+}
+
+State State::deserialize(const unsigned char* arr, int& cur) {
+    State s;
+    decltype(s.pos.size()) num_ele;
+
+    DESERIALIZE_STEP(num_ele);
+    DESERIALIZE_VECTOR(s.pos, num_ele);
+    DESERIALIZE_VECTOR(s.layout, num_ele);
+
+    return s;
+}
+
 std::vector<unsigned char> GateGroup::serialize() const {
     auto num_gates = gates.size();
     auto num_perm = cuttPerm.size();
 
     std::vector<unsigned char> result;
-    result.resize(sizeof(num_gates) + sizeof(relatedQubits) + sizeof(state) + sizeof(num_perm) + sizeof(matQubit) + sizeof(Backend));
+    result.resize(sizeof(num_gates) + sizeof(relatedQubits) + sizeof(num_perm) + sizeof(matQubit) + sizeof(Backend));
     auto arr = result.data();
     int cur = 0;
     SERIALIZE_STEP(num_gates);
     SERIALIZE_STEP(relatedQubits);
-    SERIALIZE_STEP(state);
     SERIALIZE_STEP(num_perm);
     SERIALIZE_STEP(matQubit);
     SERIALIZE_STEP(backend);
+
+    auto s = state.serialize();
+    result.insert(result.end(), s.begin(), s.end());
 
     for (auto& gate: gates) {
         auto g = gate.serialize();
@@ -185,11 +212,11 @@ GateGroup GateGroup::deserialize(const unsigned char* arr, int& cur) {
 
     DESERIALIZE_STEP(num_gates);
     DESERIALIZE_STEP(gg.relatedQubits);
-    DESERIALIZE_STEP(gg.state);
     DESERIALIZE_STEP(num_perm);
     DESERIALIZE_STEP(gg.matQubit);
     DESERIALIZE_STEP(gg.backend);
 
+    gg.state = State::deserialize(arr, cur);
 
     for (decltype(num_gates) i = 0; i < num_gates; i++) {
         gg.gates.push_back(Gate::deserialize(arr, cur));
@@ -207,10 +234,9 @@ std::vector<unsigned char> LocalGroup::serialize() const {
     auto num_fg = fullGroups.size();
 
     std::vector<unsigned char> result;
-    result.resize(sizeof(state) + sizeof(a2aCommSize) + sizeof(num_a2a) + sizeof(num_perm) + sizeof(num_og) + sizeof(num_fg) + sizeof(relatedQubits));
+    result.resize(sizeof(a2aCommSize) + sizeof(num_a2a) + sizeof(num_perm) + sizeof(num_og) + sizeof(num_fg) + sizeof(relatedQubits));
     auto arr = result.data();
     int cur = 0;
-    SERIALIZE_STEP(state);
     SERIALIZE_STEP(a2aCommSize);
     SERIALIZE_STEP(num_a2a);
     SERIALIZE_STEP(num_perm);
@@ -220,6 +246,9 @@ std::vector<unsigned char> LocalGroup::serialize() const {
     
     SERIALIZE_VECTOR(a2aComm, result);
     SERIALIZE_VECTOR(cuttPerm, result);
+
+    auto s = state.serialize();
+    result.insert(result.end(), s.begin(), s.end());
 
     for (auto& gateGroup: overlapGroups) {
         auto gg = gateGroup.serialize();
@@ -242,7 +271,6 @@ LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     decltype(s.overlapGroups.size()) num_og;
     decltype(s.fullGroups.size()) num_fg;
 
-    DESERIALIZE_STEP(s.state);
     DESERIALIZE_STEP(s.a2aCommSize);
     DESERIALIZE_STEP(num_a2a);
     DESERIALIZE_STEP(num_perm);
@@ -253,9 +281,12 @@ LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
     DESERIALIZE_VECTOR(s.a2aComm, num_a2a);
     DESERIALIZE_VECTOR(s.cuttPerm, num_perm);
 
+    s.state = State::deserialize(arr, cur);
+
     for (decltype(num_og) i = 0; i < num_og; i++) {
         s.overlapGroups.push_back(GateGroup::deserialize(arr, cur));
     }
+
     for (decltype(num_fg) i = 0; i < num_fg; i++) {
         s.fullGroups.push_back(GateGroup::deserialize(arr, cur));
     }
@@ -266,11 +297,14 @@ LocalGroup LocalGroup::deserialize(const unsigned char* arr, int& cur) {
 std::vector<unsigned char> Schedule::serialize() const {
     auto num_lg = localGroups.size();
     std::vector<unsigned char> result;
-    result.resize(sizeof(finalState) + sizeof(num_lg));
+    result.resize(sizeof(num_lg));
     auto arr = result.data();
     int cur = 0;
-    SERIALIZE_STEP(finalState);
     SERIALIZE_STEP(num_lg);
+
+    auto s = finalState.serialize();
+    result.insert(result.end(), s.begin(), s.end());
+
     for (auto& localGroup: localGroups) {
         auto lg = localGroup.serialize();
         result.insert(result.end(), lg.begin(), lg.end());
@@ -281,9 +315,9 @@ std::vector<unsigned char> Schedule::serialize() const {
 
 Schedule Schedule::deserialize(const unsigned char* arr, int& cur) {
     Schedule s;
-    DESERIALIZE_STEP(s.finalState);
     decltype(s.localGroups.size()) num_lg;
     DESERIALIZE_STEP(num_lg);
+    s.finalState = State::deserialize(arr, cur);
     for (decltype(num_lg) i = 0; i < num_lg; i++) {
         s.localGroups.push_back(LocalGroup::deserialize(arr, cur));
     }

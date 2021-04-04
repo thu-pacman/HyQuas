@@ -149,15 +149,15 @@ void Circuit::compile() {
         masterCompile();
         auto s = schedule.serialize();
         int bufferSize = (int) s.size();
-        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-        // int cur = 0;
+        checkMPIErrors(MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD));
+        checkMPIErrors(MPI_Bcast(s.data(), bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD));
+        int cur = 0;
         // schedule = Schedule::deserialize(s.data(), cur);
     } else {
         int bufferSize;
-        MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        checkMPIErrors(MPI_Bcast(&bufferSize, 1, MPI_INT, 0, MPI_COMM_WORLD));
         unsigned char* buffer = new unsigned char [bufferSize];
-        MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        checkMPIErrors(MPI_Bcast(buffer, bufferSize, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD));
         int cur = 0;
         schedule = Schedule::deserialize(buffer, cur);
         delete[] buffer;
