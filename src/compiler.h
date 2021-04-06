@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <set>
+#include <bitset>
 #include "schedule.h"
 #include "utils.h"
 #include "gate.h"
