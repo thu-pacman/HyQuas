@@ -156,8 +156,8 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                     MyGlobalVars::streams_comm[comm[a]]
                 ));
 #endif
-                partID[sliceID * MyGlobalVars::localGPUs + comm[a]] = dstPart;
-                peer[sliceID * MyGlobalVars::localGPUs + comm[a]] = comm[b];
+                partID[sliceID * MyGlobalVars::localGPUs + comm_a] = dstPart;
+                peer[sliceID * MyGlobalVars::localGPUs + comm_a] = comm[b];
             }
 #if USE_MPI
             checkNCCLErrors(ncclGroupEnd());
