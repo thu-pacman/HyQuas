@@ -262,7 +262,7 @@ void Circuit::printState() {
     for (int i = 0; i < numQubits; i++) {
         results.push_back(ampAt(1ll << i));
     }
-    results.push_back(ampAt((1ll << numQubits) - 1))
+    results.push_back(ampAt((1ll << numQubits) - 1));
 #endif
     for (auto& item: results)
         item.print();
