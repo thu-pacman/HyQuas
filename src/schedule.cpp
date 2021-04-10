@@ -588,10 +588,11 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
     matrix.clear();
     matrix.resize(MyGlobalVars::localGPUs);
     for (int gpuID = 0; gpuID < MyGlobalVars::localGPUs; gpuID++) {
-        auto isHiGPU = [gpuID, numLocalQubit](int q) {
+        int globalGPUID = MyMPI::rank * MyGlobalVars::localGPUs + gpuID;
+        auto isHiGPU = [globalGPUID, numLocalQubit](int q) {
             assert(q >= numLocalQubit);
             assert((q - numLocalQubit) < MyGlobalVars::bit);
-            return (bool)(gpuID >> (q - numLocalQubit) & 1);
+            return (bool)(globalGPUID >> (q - numLocalQubit) & 1);
         };
         std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
         for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);

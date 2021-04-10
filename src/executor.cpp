@@ -479,8 +479,9 @@ void Executor::applyPerGateGroup(GateGroup& gg) {
     assert(gates.size() < MAX_GATE);
     #pragma omp parallel for num_threads(MyGlobalVars::localGPUs)
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        int globalGPUID = MyMPI::rank * MyGlobalVars::localGPUs + g;
         for (size_t i = 0; i < gates.size(); i++) {
-           hostGates[g * gates.size() + i] = getGate(gates[i], g, numLocalQubits, relatedLogicQb, toID);
+           hostGates[g * gates.size() + i] = getGate(gates[i], globalGPUID, numLocalQubits, relatedLogicQb, toID);
         }
     }
     qindex gridDim = (qindex(1) << numLocalQubits) >> LOCAL_QUBIT_SIZE;
@@ -515,8 +516,9 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
     #pragma omp parallel for num_threads(MyGlobalVars::localGPUs)
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         int pID = partID[sliceID * MyGlobalVars::localGPUs + g];
+        int globalGPUID = MyMPI::rank * MyGlobalVars::localGPUs + g;
         for (size_t i = 0; i < gates.size(); i++) {
-            hostGates[g * gates.size() + i] = getGate(gates[i], g * numSlice + pID, numLocalQubits, relatedLogicQb, toID);
+            hostGates[g * gates.size() + i] = getGate(gates[i], globalGPUID * numSlice + pID, numLocalQubits, relatedLogicQb, toID);
         }
     }
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {

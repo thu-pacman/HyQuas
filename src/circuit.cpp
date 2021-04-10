@@ -33,7 +33,7 @@ int Circuit::run(bool copy_back) {
             for (auto& g: gg.gates)
                 gates.push_back(g);
         }
-        if (lgID == 2) break;
+        // if (lgID == 2) break;
         for (size_t ggID = 0; ggID < lg.fullGroups.size(); ggID++) {
             auto& gg = lg.fullGroups[ggID];
             for (auto& g: gg.gates)

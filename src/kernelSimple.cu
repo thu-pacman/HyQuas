@@ -13,13 +13,13 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     }
 #if BACKEND == 2
     deviceStateVec.resize(1);
-    cudaSetDevice(0);
+    checkCudaErrors(cudaSetDevice(0));
     checkCudaErrors(cudaMalloc(&deviceStateVec[0], sizeof(qComplex) << numQubits));
     checkCudaErrors(cudaMemsetAsync(deviceStateVec[0], 0, sizeof(qComplex) << numQubits, MyGlobalVars::streams[0]));
 #else
     deviceStateVec.resize(MyGlobalVars::localGPUs);
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-        cudaSetDevice(g);
+        checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaMalloc(&deviceStateVec[g], size));
         checkCudaErrors(cudaMemsetAsync(deviceStateVec[g], 0, size, MyGlobalVars::streams[g]));
     }
