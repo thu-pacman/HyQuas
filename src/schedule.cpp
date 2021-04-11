@@ -386,12 +386,17 @@ void GateGroup::initCuttPlans(int numLocalQubits) {
     if (backend != Backend::BLAS)
         return;
     std::vector<int> dim(numLocalQubits, 2);
+    cuttHandle plan, handles[MyGlobalVars::localGPUs];
+    checkCudaErrors(cudaSetDevice(0));
+    checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[0], false));
+
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-        cuttHandle plan;
         checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
-        cuttPlans.push_back(plan);
+        checkCuttErrors(cuttActivatePlan(&handles[g], plan, MyGlobalVars::streams[g], g));
     }
+    
+    std::copy(handles, handles + MyGlobalVars::localGPUs, std::back_inserter(cuttPlans));
+    cuttDestroy(plan);
 }
 
 
@@ -518,12 +523,16 @@ void LocalGroup::initCuttPlans(int numLocalQubits, bool isFirstGroup) {
         }
     } else {
         std::vector<int> dim(numLocalQubits, 2);
+        cuttHandle plan, handles[MyGlobalVars::localGPUs];
+        checkCudaErrors(cudaSetDevice(0));
+        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[0], false));
+
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-            cuttHandle plan;
             checkCudaErrors(cudaSetDevice(g));
-            checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[g]));
-            cuttPlans.push_back(plan);
+            checkCuttErrors(cuttActivatePlan(&handles[g], plan, MyGlobalVars::streams[g], g));
         }
+        std::copy(handles, handles + MyGlobalVars::localGPUs, std::back_inserter(cuttPlans));
+        cuttDestroy(plan);
     }
     for (auto& gg: overlapGroups) {
         gg.initCuttPlans(numLocalQubits - MyGlobalVars::bit);
