@@ -131,6 +131,7 @@ Schedule Compiler::run() {
         if (id > 0) {
             overlapLocals &= localGroup.fullGroups[id - 1].relatedQubits;
             overlapBlasForbid = (~localGroup.fullGroups[id - 1].relatedQubits) & gg.relatedQubits;
+            // printf("overlapBlasForbid %llx\n", overlapBlasForbid);
         }
         AdvanceCompiler overlapCompiler(numQubits, overlapLocals, overlapBlasForbid, moveBack[id].first);
         AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, 0, gg.gates);
@@ -171,7 +172,7 @@ SimpleCompiler::SimpleCompiler(int numQubits, int localSize, qindex localQubits,
     OneLayerCompiler<2048>(numQubits, inputGates), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required) {}
 
 AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, qindex blasForbid, std::vector<Gate> inputGates):
-    OneLayerCompiler<512>(numQubits, inputGates), localQubits(localQubits) {}
+    OneLayerCompiler<512>(numQubits, inputGates), localQubits(localQubits), blasForbid(blasForbid) {}
 
 LocalGroup SimpleCompiler::run() {
     LocalGroup lg;
@@ -258,7 +259,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
                 std::vector<GateType> tys;
                 for (auto& x: ggIdx) tys.push_back(remainGates[x].type);
                 bestEff = Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys) / ggIdx.size();
-                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int)ggIdx.size(), bestEff);
+                // printf("eff-pergate %f %d %f\n", Evaluator::getInstance() -> perfPerGate(numQubits - MyGlobalVars::bit, tys), (int) ggIdx.size(), bestEff);
             }
 
             for (int matSize = 4; matSize < 8; matSize ++) {

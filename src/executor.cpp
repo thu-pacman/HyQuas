@@ -164,7 +164,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
 #endif
             // events should be recorded after ncclGroupEnd
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
-                if (comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
+                if (USE_MPI && comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
                     continue;
                 int comm_a = comm[a] % MyGlobalVars::localGPUs;
                 cudaEvent_t event;
