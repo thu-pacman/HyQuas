@@ -1,6 +1,6 @@
 build/
 tests/
-evaluator-preprocess/parameter-files
+evaluator-preprocess/parameter-files*
 .vscode/
 *.sqlite
 *.qdrep

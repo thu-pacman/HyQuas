@@ -18,17 +18,21 @@ case $(hostname -s) in
   i*)
     echo "[CLUSTER] scc"
     source /opt/spack/share/spack/setup-env.sh
-    spack load cuda@10.2.89 /odirgft
-    spack load openmpi@3.1.4 /cmuktug
+    spack load cuda@10.2.89 /tlfcinz
+    spack load openmpi@3.1.6 /5aaect6
+    spack load nccl@2.7.8-1 /bapygpe
+    export NCCL_ROOT=/opt/spack/opt/spack/linux-debian10-broadwell/gcc-8.3.0/nccl-2.7.8-1-bapygpevofy26tc7bl73enw73ntwvhmk
     ;;
   hanzo)
     echo "[CLUSTER] hanzo"
     source /opt/spack/share/spack/setup-env.sh
     export PATH=$HOME/package/cmake-3.19.2-Linux-x86_64/bin:$PATH
-    spack load cuda@10.2.89 /odirgft
-    spack load openmpi@3.1.6
-    # rsync -avz nico4:~/QCSimulator/src $HOME/QCSimulator
-    # rsync -avz nico4:~/QCSimulator/micro-benchmark $HOME/QCSimulator 
+    # use system mpi
+    export CPATH=/usr/include/mpi:${CPATH-}
+    spack load gcc@8.3.0 /liymwyb
+    spack load cuda@10.2.89 /tlfcinz
+    spack load nccl@2.7.8-1 /bapygpe
+    export NCCL_ROOT=/opt/spack/opt/spack/linux-debian10-broadwell/gcc-8.3.0/nccl-2.7.8-1-bapygpevofy26tc7bl73enw73ntwvhmk
     ;;
   nova)
     echo "[CLUSTER] nova"
