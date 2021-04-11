@@ -156,14 +156,15 @@ Schedule Compiler::run() {
     return schedule;
 }
 
-OneLayerCompiler::OneLayerCompiler(int numQubits, const std::vector<Gate> &inputGates):
+template<int MAX_GATES>
+OneLayerCompiler<MAX_GATES>::OneLayerCompiler(int numQubits, const std::vector<Gate> &inputGates):
     numQubits(numQubits), remainGates(inputGates) {}
 
 SimpleCompiler::SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList, qindex required):
-    OneLayerCompiler(numQubits, inputGates), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required) {}
+    OneLayerCompiler<2048>(numQubits, inputGates), localSize(localSize), localQubits(localQubits), enableGlobal(enableGlobal), whiteList(whiteList), required(required) {}
 
 AdvanceCompiler::AdvanceCompiler(int numQubits, qindex localQubits, std::vector<Gate> inputGates):
-    OneLayerCompiler(numQubits, inputGates), localQubits(localQubits) {}
+    OneLayerCompiler<512>(numQubits, inputGates), localQubits(localQubits) {}
 
 LocalGroup SimpleCompiler::run() {
     LocalGroup lg;
@@ -177,7 +178,7 @@ LocalGroup SimpleCompiler::run() {
     }
     lg.relatedQubits = 0;
     remain.clear();
-    for (int i = 0; i < remainGates.size(); i++)
+    for (size_t i = 0; i < remainGates.size(); i++)
         remain.insert(i);
     int cnt = 0;
     while (remainGates.size() > 0) {
@@ -214,7 +215,7 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     lg.relatedQubits = 0;
     int cnt = 0;
     remain.clear();
-    for (int i = 0; i < remainGates.size(); i++)
+    for (size_t i = 0; i < remainGates.size(); i++)
         remain.insert(i);
     while (remainGates.size() > 0) {
         qindex related[numQubits];
@@ -299,22 +300,24 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
     return std::move(lg);
 }
 
-std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
-    static const int MAX_GATES = 500;
+template<int MAX_GATES>
+std::vector<int> OneLayerCompiler<MAX_GATES>::getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
     std::bitset<MAX_GATES> cur[numQubits], new_cur, selected;
-    int gate_id[MAX_GATES], id, gate_num;
+    int gateIDs[MAX_GATES], gate_num;
     
-    std::set<int>::iterator iter;
-    for(iter = remain.begin(), id = 0; iter != remain.end() && id < MAX_GATES; ++iter, ++id) {
-        gate_id[id] = *iter;
+    {
+        int id = 0;
+        for (auto gateID: remain) {
+            gateIDs[id++] = gateID;
+            if (id == MAX_GATES) break;
+        }
+        gate_num = id;
     }
-    gate_num = id;
-
+    for (int i = 0; i < gate_num;i ++) printf("%d ", gateIDs[i]); printf("\n");
     int cnt = 0, x;
-    for(id = 0; id < gate_num; id++) {
-        x = gate_id[id];
-        cnt++;
-        if(cnt % 100 == 0) {
+    for(int id = 0; id < gate_num; id++) {
+        x = gateIDs[id];
+        if(id % 100 == 0) {
             bool live = false;
             for(int i = 0; i < numQubits; i++)
                 if(!full[i])
@@ -322,6 +325,7 @@ std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bo
             if(!live)
                 break;
         }
+        // printf("gate_num %d x=%d\n", gate_num, x);
         auto& gate = remainGates[x];
         if (gate.isControlGate()) {
             if (!full[gate.controlQubit] && !full[gate.targetQubit]) { 
@@ -380,17 +384,17 @@ std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bo
 
     if (!enableGlobal) {
         std::vector<int> ret;
-        for(id = 0; id < gate_num; id++) {
+        for(int id = 0; id < gate_num; id++) {
             if(selected.test(id))
-                ret.push_back(gate_id[id]);
+                ret.push_back(gateIDs[id]);
         }
         return ret;
     }
 
     memset(blocked, 0, sizeof(blocked));
     cnt = 0;
-    for(id = 0; id < gate_num; id++) {
-        x = gate_id[id];
+    for(int id = 0; id < gate_num; id++) {
+        x = gateIDs[id];
         cnt ++;
         if (cnt % 100 == 0) {
             bool live = false;
@@ -422,151 +426,12 @@ std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bo
         }
     }
     std::vector<int> ret;
-    for(id = 0; id < gate_num; id++) {
+    for(int id = 0; id < gate_num; id++) {
         if(selected.test(id))
-            ret.push_back(gate_id[id]);
+            ret.push_back(gateIDs[id]);
     }
     return ret;
 }
-
-/*
-std::vector<int> OneLayerCompiler::getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits) {
-    std::vector<int> cur[numQubits];
-    int cnt = 0;
-    for (auto& x: remain) {
-        cnt ++;
-        if (cnt % 100 == 0) {
-            bool live = false;
-            for (int i = 0; i < numQubits; i++)
-                if (!full[i])
-                    live = true;
-            if (!live)
-                break;
-        }
-        auto& gate = remainGates[x];
-        if (gate.isControlGate()) {
-            if (!full[gate.controlQubit] && !full[gate.targetQubit]) { 
-                int c = gate.controlQubit, t = gate.targetQubit;
-                qindex newRelated = related[c] | related[t];
-                newRelated = GateGroup::newRelated(newRelated, gate, localQubits, enableGlobal);
-                if (bitCount(newRelated) <= localSize) {
-                    std::vector<int> new_cur;
-                    auto ic = cur[c].begin();
-                    auto it = cur[t].begin();
-                    while (ic != cur[c].end() || it != cur[t].end()) {
-                        if (ic == cur[c].end()) {
-                            new_cur.push_back(*it);
-                            it ++;
-                        } else if (it == cur[t].end()) {
-                            new_cur.push_back(*ic);
-                            ic ++;
-                        } else {
-                            if (*ic < *it) {
-                                new_cur.push_back(*ic);
-                                ic ++;
-                            } else if (*ic > *it) {
-                                new_cur.push_back(*it);
-                                it ++;
-                            } else { // *ic == *it
-                                new_cur.push_back(*ic);
-                                ic ++; it ++;
-                            }
-                        }
-                    }
-                    new_cur.push_back(x);
-                    cur[c] = new_cur;
-                    cur[t]= new_cur;
-                    related[c] = related[t] = newRelated;
-                    continue;
-                }
-            }
-            full[gate.controlQubit] = full[gate.targetQubit] = 1;
-        } else {
-            if (!full[gate.targetQubit]) {
-                cur[gate.targetQubit].push_back(x);
-                related[gate.targetQubit] = GateGroup::newRelated(related[gate.targetQubit], gate, localQubits, enableGlobal);
-            }
-        }
-    }
-
-    std::set<int> selected;
-    std::set<int> curset[numQubits];
-    for (int i = 0; i < numQubits; i++)
-        curset[i].insert(cur[i].begin(), cur[i].end());
-    bool blocked[numQubits];
-    memset(blocked, 0, sizeof(blocked));
-    qindex selectedRelated = 0;
-    while (true) {
-        int mx = 0, id = -1;
-        for (int i = 0; i < numQubits; i++)
-            if (!blocked[i] && curset[i].size() > mx) {
-                if (bitCount(selectedRelated | related[i]) <= localSize) {
-                    mx = curset[i].size();
-                    id = i;
-                } else {
-                    blocked[i] = true;
-                }
-            }
-        if (mx == 0)
-            break;
-        for (auto& x: curset[id]) {
-            selected.insert(x);
-        }
-        selectedRelated |= related[id];
-        blocked[id] = true;
-        for (int i = 0; i < numQubits; i++)
-            if (!blocked[i] && !curset[i].empty()) {
-                if ((related[i] | selectedRelated) == selectedRelated) {
-                    for (auto& x: curset[i])
-                        selected.insert(x);
-                    blocked[i] = true;
-                } else {
-                    for (auto& x: curset[id])
-                        curset[i].erase(x);
-                }
-            }
-    }
-    
-    if (!enableGlobal) {
-        return std::vector<int>(selected.begin(), selected.end());
-    }
-
-    memset(blocked, 0, sizeof(blocked));
-    cnt = 0;
-    for (auto& x: remain) {
-        cnt ++;
-        if (cnt % 100 == 0) {
-            bool live = false;
-            for (int i = 0; i < numQubits; i++)
-                if (!full[i])
-                    live = true;
-            if (!live)
-                break;
-        }
-        if (selected.find(x) != selected.end()) continue;
-        auto& g = remainGates[x];
-        if (g.isDiagonal() && enableGlobal) {
-            if (g.isControlGate()) {
-                if (!blocked[g.controlQubit] && !blocked[g.targetQubit]) {
-                    selected.insert(x);
-                } else {
-                    blocked[g.controlQubit] = blocked[g.targetQubit] = 1;
-                }
-            } else {
-                if (!blocked[g.targetQubit]) {
-                    selected.insert(x);
-                }
-            }
-        } else {
-            if (g.isControlGate()) {
-                blocked[g.controlQubit] = 1;
-            }
-            blocked[g.targetQubit] = 1;
-        }
-    }
-    return std::vector<int>(selected.begin(), selected.end());;
-}
-*/
 
 ChunkCompiler::ChunkCompiler(int numQubits, int localSize, int chunkSize, const std::vector<Gate> &inputGates):
     OneLayerCompiler(numQubits, inputGates), localSize(localSize), chunkSize(chunkSize) {}
@@ -578,7 +443,7 @@ LocalGroup ChunkCompiler::run() {
     LocalGroup lg;
     GateGroup cur;
     cur.relatedQubits = 0;
-    for (int i = 0; i < remainGates.size(); i++) {
+    for (size_t i = 0; i < remainGates.size(); i++) {
         if (remainGates[i].isDiagonal() || locals.find(remainGates[i].targetQubit) != locals.end()) {
             cur.addGate(remainGates[i], -1ll, 1);
             continue;
@@ -595,7 +460,7 @@ LocalGroup ChunkCompiler::run() {
         for (int j = chunkSize + 1; j < numQubits; j++)
             if (locals.find(j) != locals.end())
                 cur_locals.insert(j);
-        for (int j = i + 1; j < remainGates.size() && cur_locals.size() > 1; j++) {
+        for (size_t j = i + 1; j < remainGates.size() && cur_locals.size() > 1; j++) {
             if (!remainGates[i].isDiagonal())
                 cur_locals.erase(remainGates[i].targetQubit);
         }
@@ -612,8 +477,8 @@ LocalGroup ChunkCompiler::run() {
     return std::move(lg);
 }
 
-
-void OneLayerCompiler::removeGatesOpt(const std::vector<int>& remove) {
+template<int MAX_GATES>
+void OneLayerCompiler<MAX_GATES>::removeGatesOpt(const std::vector<int>& remove) {
     for (auto& x: remove)
         remain.erase(x);
     if (remain.empty())
