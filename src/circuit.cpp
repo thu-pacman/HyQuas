@@ -127,7 +127,6 @@ bool Circuit::localAmpAt(qindex idx, ResultItem& item) {
 }
 
 void Circuit::masterCompile() {
-    auto start = chrono::system_clock::now();
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     Compiler compiler(numQubits, gates);
@@ -146,16 +145,12 @@ void Circuit::masterCompile() {
     schedule.dump(numQubits);
 #endif
 #else
-    auto mid = chrono::system_clock::now();
     schedule.finalState = State(numQubits);
 #endif
-    auto end = chrono::system_clock::now();
-    auto duration1 = chrono::duration_cast<chrono::microseconds>(mid - start);
-    auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);
-    Logger::add("Compile Time: %d us %d us", int(duration1.count()), int(duration2.count()));
 }
 
 void Circuit::compile() {
+    auto start = chrono::system_clock::now();
 #if USE_MPI
     if (MyMPI::rank == 0) {
         masterCompile();
@@ -178,7 +173,12 @@ void Circuit::compile() {
 #else
     masterCompile();
 #endif
+    auto mid = chrono::system_clock::now();
     schedule.initCuttPlans(numQubits - MyGlobalVars::bit);
+    auto end = chrono::system_clock::now();
+    auto duration1 = chrono::duration_cast<chrono::microseconds>(mid - start);
+    auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);
+    Logger::add("Compile Time: %d us %d us", int(duration1.count()), int(duration2.count()));
 }
 
 #if USE_MPI

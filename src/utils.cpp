@@ -40,6 +40,7 @@ void init() {
         checkBlasErrors(cublasCreate(&blasHandles[i]));
         checkBlasErrors(cublasSetStream(blasHandles[i], streams[i]));
         checkCudaErrors(cudaStreamCreate(&streams_comm[i]));
+        checkCudaErrors(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
     }
     #if USE_MPI
         checkMPIErrors(MPI_Barrier(MPI_COMM_WORLD));
