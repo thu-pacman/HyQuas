@@ -583,17 +583,25 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
     matrix.clear();
     matrix.resize(MyGlobalVars::localGPUs);
     for (int gpuID = 0; gpuID < MyGlobalVars::localGPUs; gpuID++) {
+        matrix[gpuID] = std::make_unique<qComplex[]>(n * n);
+    }
+    #pragma omp parallel
+    for (int gpuID = 0; gpuID < MyGlobalVars::localGPUs; gpuID++) {
+        qComplex* mat = matrix[gpuID].get();
         int globalGPUID = MyMPI::rank * MyGlobalVars::localGPUs + gpuID;
         auto isHiGPU = [globalGPUID, numLocalQubit](int q) {
             assert(q >= numLocalQubit);
             assert((q - numLocalQubit) < MyGlobalVars::bit);
             return (bool)(globalGPUID >> (q - numLocalQubit) & 1);
         };
-        std::unique_ptr<qComplex[]> mat(new qComplex[n * n]);
+        #pragma omp for
         for (int i = 0; i < n * n; i++) mat[i] = make_qComplex(0.0, 0.0);
+
+        #pragma omp for
         for (int i = 0; i < n; i++) {
             mat[i * n + i] = make_qComplex(1.0, 0.0);
         }
+        
         auto insertBit = [](int x, int pos) {
             return (x >> pos << (pos + 1)) | (x & ((qindex(1) << pos) - 1));
         };
@@ -615,16 +623,16 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
                 if (c1 >= numLocalQubit) {
                     if (!isHiGPU(c2)) continue;
                     if (!isHiGPU(c1)) continue;
-                    #pragma omp parallel for
+                    #pragma omp for
                     APPLY_SINGLE_GATE()
                 } else if (c2 >= numLocalQubit) {
                     if (!isHiGPU(c2)) continue;
                     int a = std::max(c1, t);
                     int b = std::min(c1, t);
-                    #pragma omp parallel for
+                    #pragma omp for
                     APPLY_CONTROL_GATE()
                 }
-                #pragma omp parallel for
+                #pragma omp for
                 for (int i = 0; i < n; i++) {
                     for (int j = 0; j < (n >> 3); j++) {
                         int lo = j;
@@ -654,20 +662,20 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
                     if (t >= numLocalQubit) {
                         bool isHi = isHiGPU(t);
                         auto val = gate.mat[isHi][isHi];
-                        #pragma omp parallel for
+                        #pragma omp for
                         APPLY_IDENTITY_GATE(val);
                     } else {
-                        #pragma omp parallel for
+                        #pragma omp for
                         APPLY_SINGLE_GATE()
                     }
                 } else {
                     if (t >= numLocalQubit) {
                         bool isHi = isHiGPU(t);
                         auto val = gate.mat[isHi][isHi];
-                        #pragma omp parallel for
+                        #pragma omp for
                         APPLY_CI_GATE(val);
                     } else {
-                        #pragma omp parallel for
+                        #pragma omp for
                         APPLY_CONTROL_GATE()
                     }
                 }
@@ -676,10 +684,10 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
                 assert(t < numMatQubits || (t >= numLocalQubit && gate.isDiagonal()));
                 if (t >= numLocalQubit) {
                     bool hi = isHiGPU(t);
-                    #pragma omp parallel for
+                    #pragma omp for
                     APPLY_IDENTITY_GATE(gate.mat[hi][hi]);
                 } else {
-                    #pragma omp parallel for
+                    #pragma omp for
                     APPLY_SINGLE_GATE()
                 }
             }
@@ -690,7 +698,6 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
         //         printf("(%.2f %.2f) ", mat[i * n + j].x, mat[i * n + j].y);
         //     printf("\n");
         // }
-        matrix[gpuID] = std::move(mat);
     }
 }
 
