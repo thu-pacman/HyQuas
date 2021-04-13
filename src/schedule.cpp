@@ -381,24 +381,16 @@ State GateGroup::initBlasState(const State& oldState, int numLocalQubits) {
     return newState;
 }
 
-void GateGroup::initCuttPlans(int numLocalQubits) {
+void GateGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals) {
     cuttPlans.clear();
     if (backend != Backend::BLAS)
         return;
-    std::vector<int> dim(numLocalQubits, 2);
-    cuttHandle plan, handles[MyGlobalVars::localGPUs];
-    checkCudaErrors(cudaSetDevice(0));
-    checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[0], false));
-
-    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-        checkCudaErrors(cudaSetDevice(g));
-        checkCuttErrors(cuttActivatePlan(&handles[g], plan, MyGlobalVars::streams[g], g));
-    }
-    
-    std::copy(handles, handles + MyGlobalVars::localGPUs, std::back_inserter(cuttPlans));
-    cuttDestroy(plan);
+    int startSize = cuttPlans.size();
+    cuttPlans.resize(startSize + MyGlobalVars::localGPUs);
+    cuttPlanPointers.push_back(cuttPlans.data() + startSize);
+    cuttPermPointers.push_back(cuttPerm.data());
+    locals.push_back(numLocalQubits);
 }
-
 
 State GateGroup::initState(const State& oldState, int numLocalQubits) {
     if (backend == Backend::PerGate) {
@@ -515,30 +507,24 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     return newState;
 }
 
-void LocalGroup::initCuttPlans(int numLocalQubits, bool isFirstGroup) {
+void LocalGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup) {
     cuttPlans.clear();
     if (isFirstGroup) {
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             cuttPlans.push_back(cuttHandle());
         }
     } else {
-        std::vector<int> dim(numLocalQubits, 2);
-        cuttHandle plan, handles[MyGlobalVars::localGPUs];
-        checkCudaErrors(cudaSetDevice(0));
-        checkCuttErrors(cuttPlan(&plan, numLocalQubits, dim.data(), cuttPerm.data(), sizeof(qComplex), MyGlobalVars::streams[0], false));
-
-        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-            checkCudaErrors(cudaSetDevice(g));
-            checkCuttErrors(cuttActivatePlan(&handles[g], plan, MyGlobalVars::streams[g], g));
-        }
-        std::copy(handles, handles + MyGlobalVars::localGPUs, std::back_inserter(cuttPlans));
-        cuttDestroy(plan);
+        int startSize = cuttPlans.size();
+        cuttPlans.resize(startSize + MyGlobalVars::localGPUs);
+        cuttPlanPointers.push_back(cuttPlans.data() + startSize);
+        cuttPermPointers.push_back(cuttPerm.data());
+        locals.push_back(numLocalQubits);
     }
     for (auto& gg: overlapGroups) {
-        gg.initCuttPlans(numLocalQubits - MyGlobalVars::bit);
+        gg.getCuttPlanPointers(numLocalQubits - MyGlobalVars::bit, cuttPlanPointers, cuttPermPointers, locals);
     }
     for (auto& gg: fullGroups) {
-        gg.initCuttPlans(numLocalQubits);
+        gg.getCuttPlanPointers(numLocalQubits, cuttPlanPointers, cuttPermPointers, locals);
     }
 }
 
@@ -757,8 +743,33 @@ void Schedule::initMatrix(int numQubits) {
 
 
 void Schedule::initCuttPlans(int numLocalQubits) {
-    for (int i = 0; i < localGroups.size(); i++) {
-        localGroups[i].initCuttPlans(numLocalQubits, i == 0);
+    std::vector<cuttHandle*> cuttPlanPointers;
+    std::vector<int*> cuttPermPointers;
+    std::vector<int> locals;
+    for (size_t i = 0; i < localGroups.size(); i++) {
+        localGroups[i].getCuttPlanPointers(numLocalQubits, cuttPlanPointers, cuttPermPointers, locals, i == 0);
+    }
+
+    assert(cuttPlanPointers.size() == cuttPermPointers.size());
+    assert(cuttPermPointers.size() == locals.size());
+
+    int total = cuttPlanPointers.size();
+    cuttHandle plans[total];
+    std::vector<int> dim(numLocalQubits, 2);
+    if (total == 0) return;
+
+    checkCudaErrors(cudaSetDevice(0));
+
+    #pragma omp parallel for
+    for (int i = 0; i < total; i++) {
+        checkCuttErrors(cuttPlan(&plans[i], locals[i], dim.data(), cuttPermPointers[i], sizeof(qComplex), MyGlobalVars::streams[0], false));
+    }
+
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        for (int i = 0; i < total; i++) {
+            checkCuttErrors(cuttActivatePlan(cuttPlanPointers[i] + g, plans[i], MyGlobalVars::streams[g], g));
+        }
     }
 }
 

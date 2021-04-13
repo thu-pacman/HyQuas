@@ -66,7 +66,7 @@ struct GateGroup {
     void initCPUMatrix(int numLocalQubit);
     void initGPUMatrix();
     void initMatrix(int numLocalQubit);
-    void initCuttPlans(int numLocalQubits);
+    void getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals);
 };
 
 struct LocalGroup {
@@ -86,7 +86,7 @@ struct LocalGroup {
 
     bool contains(int i) { return (relatedQubits >> i) & 1; }
     State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
-    void initCuttPlans(int numLocalQubits, bool isFirstGroup = false);
+    void getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup = false);
     State initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals);
     std::vector<unsigned char> serialize() const;
     static LocalGroup deserialize(const unsigned char* arr, int& cur);

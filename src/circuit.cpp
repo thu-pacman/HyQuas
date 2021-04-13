@@ -131,7 +131,6 @@ void Circuit::masterCompile() {
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     Compiler compiler(numQubits, gates);
     schedule = compiler.run();
-    auto mid = chrono::system_clock::now();
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     int fullGates = 0, overlapGates = 0;
@@ -178,7 +177,7 @@ void Circuit::compile() {
     auto end = chrono::system_clock::now();
     auto duration1 = chrono::duration_cast<chrono::microseconds>(mid - start);
     auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);
-    Logger::add("Compile Time: %d us %d us", int(duration1.count()), int(duration2.count()));
+    Logger::add("Compile Time: %d us + %d us = %d us", int(duration1.count()), int(duration2.count()), int(duration1.count()) + int(duration2.count()));
 }
 
 #if USE_MPI
