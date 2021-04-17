@@ -13,7 +13,7 @@
 #include "executor.h"
 using namespace std;
 
-int Circuit::run(bool copy_back) {
+int Circuit::run(bool copy_back, bool destroy) {
     kernelInit(deviceStateVec, numQubits);
     for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
@@ -50,8 +50,9 @@ int Circuit::run(bool copy_back) {
     }
     auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
     Logger::add("Time Cost: %d us", int(duration.count()));
-    result.resize(1ll << numQubits);
+
     if (copy_back) {
+        result.resize(1ll << numQubits); // very slow ...
 #if BACKEND == 0 || BACKEND == 2
         kernelDeviceToHost((qComplex*)result.data(), deviceStateVec[0], numQubits);
 #else
@@ -61,8 +62,10 @@ int Circuit::run(bool copy_back) {
         }
 #endif
     }
-    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
-        kernelDestroy(deviceStateVec[g]);
+    if (destroy) {
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            kernelDestroy(deviceStateVec[g]);
+        }
     }
     return duration.count();
 }
@@ -112,6 +115,30 @@ qindex Circuit::toLogicID(qindex idx) {
 ResultItem Circuit::ampAt(qindex idx) {
     qindex id = toPhysicalID(idx);
     return ResultItem(idx, make_qComplex(result[id].x, result[id].y));
+}
+
+qComplex Circuit::ampAtGPU(qindex idx) {
+    qindex id = toPhysicalID(idx);
+    qComplex ret;
+#if USE_MPI
+    qindex localAmps = (1 << numQubits) / MyMPI::commSize;
+    qindex rankID = id / localAmps;
+
+    if (!USE_MPI || MyMPI::rank == rankID) {
+        int localID = id % localAmps;
+#else
+        int localID = id;
+#endif
+        qindex localGPUAmp = (1 << numQubits) / MyGlobalVars::numGPUs;
+        int gpuID = localID / localGPUAmp;
+        qindex localGPUID = localID % localGPUAmp;
+        checkCudaErrors(cudaSetDevice(gpuID));
+        ret = kernelGetAmp(deviceStateVec[gpuID], localGPUID);
+#if USE_MPI
+    }
+    MPI_Bcast(&ret, 1, MPI_Complex, rankID, MPI_COMM_WORLD);
+#endif
+    return ret;
 }
 
 bool Circuit::localAmpAt(qindex idx, ResultItem& item) {

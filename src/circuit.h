@@ -21,13 +21,14 @@ class Circuit {
 public:
     Circuit(int numQubits): numQubits(numQubits) {}
     void compile();
-    int run(bool copy_back = true);
+    int run(bool copy_back = true, bool destroy = true);
     void addGate(const Gate& gate) {
         gates.push_back(gate);
     }
     void dumpGates();
     void printState();
     ResultItem ampAt(qindex idx);
+    qComplex ampAtGPU(qindex idx);
     bool localAmpAt(qindex idx, ResultItem& item);
     const int numQubits;
 
