@@ -124,7 +124,7 @@ private:
     double BLAS_perf[MAX_QBITS + 1][MAX_QBITS + 1];
     double cutt_cost[MAX_QBITS + 1];
     bool num_qbits_loaded_param[MAX_QBITS + 1];
-    const double pergate_group_overhead = 2.0;
+    const double pergate_group_overhead = 1.0 / (1 << 27);
 
     int param_type;
 

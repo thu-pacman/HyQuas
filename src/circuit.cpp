@@ -166,7 +166,6 @@ void Circuit::masterCompile() {
         for (auto& gg: lg.overlapGroups) overlapGates += gg.gates.size();
     }
     Logger::add("Total Groups: %d %d %d %d", int(schedule.localGroups.size()), totalGroups, fullGates, overlapGates);
-    //schedule.initMatrix(numQubits);
 #ifdef SHOW_SCHEDULE
     schedule.dump(numQubits);
 #endif
@@ -201,6 +200,9 @@ void Circuit::compile() {
 #endif
     auto mid = chrono::system_clock::now();
     schedule.initCuttPlans(numQubits - MyGlobalVars::bit);
+#ifndef OVERLAP_MAT
+    schedule.initMatrix(numQubits);
+#endif
     auto end = chrono::system_clock::now();
     auto duration1 = chrono::duration_cast<chrono::microseconds>(mid - start);
     auto duration2 = chrono::duration_cast<chrono::microseconds>(end - mid);

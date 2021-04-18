@@ -734,10 +734,12 @@ void GateGroup::initMatrix(int numLocalQubit) {
 void Schedule::initMatrix(int numQubits) {
     for (auto& lg: localGroups) {
         for (auto& gg: lg.overlapGroups) {
-            gg.initMatrix(numQubits - 2 * MyGlobalVars::bit);
+            if (gg.backend == Backend::BLAS)
+                gg.initMatrix(numQubits - 2 * MyGlobalVars::bit);
         }
         for (auto& gg: lg.fullGroups) {
-            gg.initMatrix(numQubits - MyGlobalVars::bit);
+            if (gg.backend == Backend::BLAS)
+                gg.initMatrix(numQubits - MyGlobalVars::bit);
         }
     }
 }

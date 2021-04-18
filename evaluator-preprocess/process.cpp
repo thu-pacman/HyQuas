@@ -3,6 +3,7 @@
 #include <cstring>
 #include <regex>
 #include <cmath>
+#include <chrono>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -142,7 +143,7 @@ void procCutt(int numQubits) {
                 std::swap(perm[rand() % numQubits], perm[rand() % numQubits]);
             }
             cuttHandle plan;
-            checkCuttErrors(cuttPlan(&plan, numQubits, dim, perm, sizeof(double), 0));
+            checkCuttErrors(cuttPlan(&plan, numQubits, dim, perm, sizeof(double2), 0));
             cudaEvent_t start, stop;
             float time;
             checkCudaErrors(cudaEventCreate(&start));
@@ -178,8 +179,12 @@ void process(int numQubits) {
 
 int main()
 {
+    auto start = chrono::system_clock::now();
     MyGlobalVars::init();
     for(int i = 0; i < DIFF_QUBIT_NUMS; i++) {
         process(qubit_nums[i]);
     }
+    auto end = chrono::system_clock::now();
+    printf("process time %d ms\n", chrono::duration_cast<chrono::milliseconds>(end - start).count());
+    return 0;
 }

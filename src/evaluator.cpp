@@ -109,7 +109,7 @@ void Evaluator::loadParam(int numQubits) {
 }
 
 double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
-    double tim_pred = pergate_group_overhead;
+    double tim_pred = 0;
     loadParam(numQubits);
     for(auto gate : (gg -> gates)) {
         switch(gate.type) {
@@ -162,11 +162,11 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 UNREACHABLE()
         }
     }
-    return tim_pred / 1000 / 512 + pergate_group_overhead;
+    return tim_pred / 1000 / 512 + pergate_group_overhead * (1 << numQubits);
 }
 
 double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types) {
-    double tim_pred = pergate_group_overhead;
+    double tim_pred = 0;
     loadParam(numQubits);
     for(auto ty : types) {
         switch(ty) {
@@ -219,7 +219,7 @@ double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types)
                 UNREACHABLE()
         }
     }
-    return tim_pred / 1000 / 512 + pergate_group_overhead;   
+    return tim_pred / 1000 / 512 + pergate_group_overhead * (1 << numQubits);
 }
 
 double Evaluator::perfBLAS(int numQubits, int blasSize) {

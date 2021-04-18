@@ -532,7 +532,9 @@ void Executor::applyPerGateGroupSliced(GateGroup& gg, int sliceID) {
 
 void Executor::applyBlasGroup(GateGroup& gg) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
+#ifdef OVERLAP_MAT
     gg.initMatrix(numLocalQubits);
+#endif
     qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
@@ -551,8 +553,10 @@ void Executor::applyBlasGroup(GateGroup& gg) {
 void Executor::applyBlasGroupSliced(GateGroup& gg, int sliceID) {
     int numLocalQubits = numQubits - 2 * MyGlobalVars::bit;
     // qubits at position [n - 2 bit, n - bit) should be excluded by the compiler
+#ifdef OVERLAP_MAT
     if(sliceID == 0)
         gg.initMatrix(numQubits - MyGlobalVars::bit);
+#endif
     qindex numElements = qindex(1) << numLocalQubits;
     qComplex alpha = make_qComplex(1.0, 0.0), beta = make_qComplex(0.0, 0.0);
     qindex partSize = qindex(1) << numLocalQubits;
