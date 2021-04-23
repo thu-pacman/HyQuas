@@ -214,6 +214,9 @@ def plot_weak():
             g = re.search("Total Gates (\d+)", st)
             if g is not None:
                 n_gates.add(int(g.group(1)))
+
+    n_gates = list(n_gates)
+    n_gates.sort()
     
     gpu_1 = [times[0], times[3], times[6], times[9], times[12]]
     gpu_2 = [times[1], times[4], times[7], times[10], times[13], times[15]]
@@ -266,6 +269,13 @@ def plot_weak():
     ax.yaxis.get_major_formatter().set_useOffset(False)
 
     fig.savefig(dirbase + 'v100-weak.pdf', bbox_inches='tight')
+
+    g2_speedup = []
+    g4_speedup = []
+    for i in [0, 1, 2, 3, 4]:
+        g2_speedup.append((gpu_1[i] / n_gates[i]) / (gpu_2[i + 1] / n_gates[i + 1]))
+        g4_speedup.append((gpu_1[i] / n_gates[i]) /  (gpu_4[i + 2] / n_gates[i + 2]))
+    print("[Report] weak 2v100 {} {} 4v100 {} {}".format(min(g2_speedup), max(g2_speedup), min(g4_speedup), max(g4_speedup)))
 
 
 def plot_transmm_v100():
@@ -559,7 +569,21 @@ def plot_scale_v100():
             if exp == '1gpu-o':
                 names.append(name)
             time_28[exp].append(us / 1000000)
-            
+    print("[Report] overlap speedup 2v100 {} 4v100 {}".format(
+        geoMean(time_28['2gpu-s']) / geoMean(time_28['2gpu-o']),
+        geoMean(time_28['4gpu-s']) / geoMean(time_28['4gpu-o']),
+    ))
+    print("[Report] hs speedup 4v100", time_28['4gpu-s'][2] / time_28['4gpu-o'][2])
+    with open(logbase + 'hs.log') as f:
+        for s in f.readlines():
+            x = re.search('Total Gates (\d+)', s)
+            if x is not None: tgates = int(x.group(1))
+            x = re.search('Total Groups: \d+ \d+ \d+ (\d+)', s)
+            if x is not None: ogates = int(x.group(1))
+            x = re.search('([\d\.]+)ms .*?ms .*?ms .*?ms .*?CUDA memcpy PtoP', s)
+            if x is not None: comm = float(x.group(1))
+    print("[Report] overlap gates", ogates, ogates / tgates, comm / 4 / time_28['4gpu-o'][2] / 1000)
+
     dat = []
     dat.append([1 for _ in time_28['1gpu-s']])
     dat.append([y / x for x, y in zip(time_28['2gpu-s'], time_28['1gpu-s'])])
@@ -608,12 +632,17 @@ def plot_pergate_v100():
     bank_c = []
     bank_n = []
     name = []
+    gerr = 0
+    def get_gerr(x):
+        return max(x) - min(x)
     with open(logbase + "pergate.log") as f:
         f.readline()
         for iii in range(14):
             st = f.readline().strip().split()
             t0 = [int(x) for x in st[1:4]]
             t1 = [int(x) for x in st[4:10]]
+            gerr = max(gerr, get_gerr(t0)/512)
+            gerr = max(gerr, get_gerr(t1)/512)
             name.append(st[0][:-1])
             baseline_c.append(sum(t0)/len(t0)/512)
             baseline_n.append(sum(t1)/len(t1)/512)
@@ -622,6 +651,8 @@ def plot_pergate_v100():
             st = f.readline().strip().split()
             t0 = [int(x) for x in st[1:4]]
             t1 = [int(x) for x in st[4:10]]
+            gerr = max(gerr, get_gerr(t0)/512)
+            gerr = max(gerr, get_gerr(t1)/512)
             multitask_c.append(sum(t0)/len(t0)/512)
             multitask_n.append(sum(t1)/len(t1)/512)
         f.readline()
@@ -629,6 +660,8 @@ def plot_pergate_v100():
             st = f.readline().strip().split()
             t0 = [int(x) for x in st[1:4]]
             t1 = [int(x) for x in st[4:10]]
+            gerr = max(gerr, get_gerr(t0)/512)
+            gerr = max(gerr, get_gerr(t1)/512)
             lookup_c.append(sum(t0)/len(t0)/512)
             lookup_n.append(sum(t1)/len(t1)/512)
         f.readline()
@@ -636,6 +669,8 @@ def plot_pergate_v100():
             st = f.readline().strip().split()
             t0 = [int(x) for x in st[1:4]]
             t1 = [int(x) for x in st[4:10]]
+            gerr = max(gerr, get_gerr(t0)/512)
+            gerr = max(gerr, get_gerr(t1)/512)
             bank_c.append(sum(t0)/len(t0)/512)
             bank_n.append(sum(t1)/len(t1)/512)
     old_dat = [baseline_c, baseline_n, multitask_c, multitask_n, lookup_c, lookup_n, bank_c, bank_n]
@@ -649,8 +684,14 @@ def plot_pergate_v100():
         err = max([err, dt[7] - dt[8]], key = abs)
         err = max([err, dt[9] - dt[10]], key = abs)
         err = max([err, dt[11] - dt[12], dt[11] - dt[13], dt[12] - dt[13]], key = abs)
-
     
+    print("[Report] pergate type error", err, "group error", gerr)
+    def avg(x, y): return pow(x ** 3 * y ** 7, 0.1)
+    print("[Report] pergate speedup multitask {} lookup {}".format(
+        avg(geoMean(baseline_c), geoMean(baseline_n)) / avg(geoMean(multitask_c), geoMean(multitask_n)),
+        avg(geoMean(baseline_c), geoMean(baseline_n)) / avg(geoMean(lookup_c), geoMean(lookup_n)),
+    ))
+    print("[Report] pergate speedup bank", "avg(lookup)", geoMean(lookup_c) / geoMean(bank_c), "max(baseline)", max([x/y for x,y in zip(baseline_c, bank_c)]))
     apps = ['U1/Z', 'U2/U3', 'H/Y', name[4], 'S/SDG', 'T/TDG', 'RX/RY/RZ']
     frameworks = []
     for x in ['baseline', 'multitask', 'lookup', 'bank']:
@@ -825,7 +866,7 @@ def plot_numgate():
             tm = [int(x) / 1000 for x in tm.split()]
             tm = sum(tm) * 1.0 / len(tm)
             transmm_perf.append(tm)
-    print("[Report]: TransMM/BatchMV", sum(blas_perf) / sum(transmm_perf))
+    print("[Report] TransMM/BatchMV", sum(blas_perf) / sum(transmm_perf))
     dat = [group_perf, blas_perf]
     labels = ['ShareMem', 'BatchMV']
     num_type = len(dat)
@@ -1178,16 +1219,27 @@ def calc_compile():
     print("[Report] compile overhead geo:", t_compile[-1], t_exec[-1], t_compile[-1]/t_exec[-1])
     print("[Report] compile overhead (28 max): ", max([x/y for x,y in zip(t_compile, t_exec)]))
     
+def calc_diff():
+    qulacs_v100 = [4.653303750324994, 0.26372975390404463, 0.1442320728674531, 1.0468542012386024, 1.7434257962740958, 1.1854395898990333, 2.6002652649767697]
+    shm_v100 = []
+    with open(logbase + 'sharemem.log') as f:
+        for s in f.readlines():
+            t = re.search('Time Cost: (\d+) us', s)
+            if t is not None:
+                shm_v100.append(float(t.group(1)) / 1e6)
 
+    speedup = [y/x for x, y in zip(shm_v100, qulacs_v100)]
+    print("[Report] e2e mv/shm max {} min {}".format(max(speedup), min(speedup)))
 
-plot_numgate()
-plot_cublas()
-plot_single_gpu()
-plot_multi_gpu()
-plot_backend()
-calc_compile()
-plot_groupsz()
-plot_transmm()
+# calc_diff()
+# plot_numgate()
+# plot_cublas()
+# plot_single_gpu()
+# plot_multi_gpu()
+# plot_backend()
+# calc_compile()
+# plot_groupsz()
+# plot_transmm()
 plot_pergate_v100()
-plot_scale_v100()
-plot_weak()
+# plot_scale_v100()
+# plot_weak()

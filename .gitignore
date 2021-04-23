@@ -7,3 +7,4 @@ evaluator-preprocess/parameter-files*
 *.log
 *.profile
 blas
+*.pdf

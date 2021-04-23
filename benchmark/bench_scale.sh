@@ -43,3 +43,7 @@ name3=$name
 
 
 grep -r "Time Cost" $head-*/*.log | tee ../benchmark/logs/scale.log
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+source ../scripts/init.sh -DBACKEND=mix -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off -DUSE_DOUBLE=on -DEVALUATOR_PREPROCESS=on -DENABLE_OVERLAP=on
+nvprof ./main ../tests/input/hidden_shift_28.qasm 2>&1 | tee ../benchmark/logs/hs.log
