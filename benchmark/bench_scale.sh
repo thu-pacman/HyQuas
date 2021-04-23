@@ -1,7 +1,11 @@
 #!/bin/bash
 head=../build/logs/`date +%Y%m%d-%H%M%S`
 
+
+cd ../scripts
 export CUDA_VISIBLE_DEVICES=0
+export MPIRUN_CONFIG=""
+
 name=$head-1gpu-o
 mkdir -p $name
 ./check_wrapper.sh $name -DBACKEND=mix -DSHOW_SUMMARY=on -DSHOW_SCHEDULE=off -DUSE_DOUBLE=on -DEVALUATOR_PREPROCESS=on -DENABLE_OVERLAP=on 2>&1 | tee $name/std.out
@@ -38,4 +42,4 @@ mkdir -p $name
 name3=$name
 
 
-grep -r "Time Cost" $head-*/*.log
+grep -r "Time Cost" $head-*/*.log | tee ../benchmark/logs/scale.log

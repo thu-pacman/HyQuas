@@ -17,5 +17,5 @@ then
   export tests_30="basis_change_30 bv_30 hidden_shift_30 qaoa_30 qft_30 quantum_volume_30 supremacy_30"
   export tests_scale="basis_change_24 basis_change_25 basis_change_26 basis_change_27 basis_change_28"
 
-  export tests=($tests_25 $tests_28)
+  export tests=($tests_28)
 fi

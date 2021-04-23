@@ -6,3 +6,4 @@ evaluator-preprocess/parameter-files*
 *.qdrep
 *.log
 *.profile
+blas

@@ -26,9 +26,9 @@ case $(hostname -s) in
   hanzo)
     echo "[CLUSTER] hanzo"
     source /opt/spack/share/spack/setup-env.sh
-    export PATH=$HOME/package/cmake-3.19.2-Linux-x86_64/bin:$PATH
+    export PATH=$HOME/package/cmake-3.19.2-Linux-x86_64/bin:/usr/mpi/gcc/openmpi-4.1.0rc5/bin:$PATH
     # use system mpi
-    export CPATH=/usr/include/mpi:${CPATH-}
+    export CPATH=/usr/mpi/gcc/openmpi-4.1.0rc5/include:${CPATH-}
     spack load gcc@8.3.0 /liymwyb
     spack load cuda@10.2.89 /tlfcinz
     spack load nccl@2.7.8-1 /bapygpe
