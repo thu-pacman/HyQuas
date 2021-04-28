@@ -1626,10 +1626,259 @@ def plot_evaluator_v100():
     print(f"tot max error : {np.max(pg_errs + tm_errs)}")
     print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
 
+def plot_evaluator_a100():
+    import matplotlib.pyplot as plt 
+    import numpy as np
+    plt.rcParams['figure.figsize'] = (10.0, 8.0)
 
-#plot_comm()
-plot_evaluator_v100()
-'''
+    fig = plt.figure(figsize=(6.6,4.4))
+    plt.axes().set_ylim(0, 120)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+
+    plt.xlabel("group size", fontsize = 18)
+    plt.ylabel("time (ms)", fontsize = 18)
+
+    pg_actual = PlotEval.get_pg_actual("../logs/evaluator_a100/OShareMem.log")
+    pg_pred = PlotEval.get_pg_pred("../logs/evaluator_a100/OShareMem.log")
+    group_size = PlotEval.get_pg_group_size("../logs/evaluator_a100/OShareMem.log")
+
+    pg_pred = list(np.array(pg_pred) + 2.0)
+
+    pg_data = list(zip(group_size, pg_pred, pg_actual))
+    pg_data.sort()
+
+    tm_actual_5 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_5.log")
+    tm_pred_5 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_5.log")
+    #tm_pred_5 = [x + 4.0 for x in tm_pred_5]
+    group_size_5 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_5.log")
+    #tm_actual_5 = []
+    #tm_pred_5 = []
+    #group_size_5 = []
+
+    tm_actual_6 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_6.log")
+    tm_pred_6 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_6.log")
+    #tm_pred_6 = [x + 4.0 for x in tm_pred_6]
+    group_size_6 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_6.log")
+    #tm_actual_6 = []
+    #tm_pred_6 = []
+    #group_size_6 = []
+
+    tm_actual_7 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_7.log")
+    tm_pred_7 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_7.log")
+    #tm_pred_7 = [x + 4.0 for x in tm_pred_7]
+    group_size_7 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_7.log")
+    #tm_actual_7 = []
+    #tm_pred_7 = []
+    #group_size_7 = []
+
+    tm_pred = tm_pred_5 + tm_pred_6 + tm_pred_7
+    tm_actual = tm_actual_5 + tm_actual_6 + tm_actual_7
+    group_size = group_size_5 + group_size_6 + group_size_7
+
+    #print(tm_pred)
+    #import numpy as np
+    #print(np.sort(tm_actual))
+
+    tm_data = list(zip(group_size, tm_pred, tm_actual))
+    tm_data.sort()
+    #print(tm_data)
+
+    plt.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=25, linewidth=.8, color = 'w', edgecolors = 'g')    
+    plt.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=25, linewidth=1, color = 'b')    
+
+    plt.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = 'o', s=25, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    plt.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = 'x', s=25, linewidth=1, color = 'r')    
+
+    plt.legend(["OShareMem predicted", "OShareMem actual", "TransMM predicted", "TransMM actual"], fontsize = 14, loc='upper left')
+
+    for i in range(1, len(pg_pred)):
+        plt.plot([pg_data[i][0], pg_data[i][0]], [pg_data[i][1], pg_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        plt.scatter([pg_data[i][0], ], [pg_data[i][1], ],  marker = 'o', s=25, linewidth=.8, color = 'w', edgecolors = 'g')    
+        plt.scatter([pg_data[i][0], ], [pg_data[i][2], ],  marker = 'x', s=25, linewidth=1, color = 'b')    
+
+    for i in range(1, len(tm_pred)):
+        plt.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        plt.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = 'o', s=25, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        plt.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = 'x', s=25, linewidth=1, color = 'r')    
+        
+    plt.show()
+    fig.savefig(dirbase + 'a100-evaluator.pdf', bbox_inches='tight')
+
+    pg_errs = []
+    for i in range(len(pg_pred)):
+        pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
+        
+    print(f"pg max error : {np.max(pg_errs)}")
+    print(f"pg avg error : {np.average(pg_errs)}")
+
+    tm_errs = []
+    for i in range(len(tm_pred)):
+        tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
+        
+    print(f"tm max error : {np.max(tm_errs)}")
+    print(f"tm avg error : {np.average(tm_errs)}")
+
+    print(f"tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
+
+def plot_evaluator_v100_a100():
+    sz = (15, 5)
+    figsz = {'figure.figsize': sz}
+    plt.rcParams.update(figsz)
+    fig, axes = plt.subplots(ncols=2)
+    # axes = [ax for vec in axes_ori for ax in vec]
+    ax1, ax2 = axes[0], axes[1]
+    ax1.set_ylim(0, 110)
+    plt.setp(ax1.get_xticklabels(), fontsize=20)
+    plt.setp(ax1.get_yticklabels(), fontsize=20)
+    plt.setp(ax2.get_xticklabels(), fontsize=20)
+    plt.setp(ax2.get_yticklabels(), fontsize=20)
+    
+    ax1.set_xlabel("Group size", fontsize=25)
+    ax1.set_ylabel("Exec. time (ms)", fontsize=25)
+    
+    pg_actual = PlotEval.get_pg_actual("../logs/evaluator_v100/OShareMem.log")
+    pg_pred = PlotEval.get_pg_pred("../logs/evaluator_v100/OShareMem.log")
+    group_size = PlotEval.get_pg_group_size("../logs/evaluator_v100/OShareMem.log")
+
+    pg_pred = list(np.array(pg_pred) + 2.0)
+
+    pg_data = list(zip(group_size, pg_pred, pg_actual))
+    pg_data.sort()
+
+    tm_actual_5 = PlotEval.get_tm_actual("../logs/evaluator_v100/TransMM_5.log")
+    tm_pred_5 = PlotEval.get_tm_pred("../logs/evaluator_v100/TransMM_5.log")
+    group_size_5 = PlotEval.get_tm_group_size("../logs/evaluator_v100/TransMM_5.log")
+    #tm_actual_5 = []
+    #tm_pred_5 = []
+    #group_size_5 = []
+
+    tm_actual_6 = PlotEval.get_tm_actual("../logs/evaluator_v100/TransMM_6.log")
+    tm_pred_6 = PlotEval.get_tm_pred("../logs/evaluator_v100/TransMM_6.log")
+    group_size_6 = PlotEval.get_tm_group_size("../logs/evaluator_v100/TransMM_6.log")
+    #tm_actual_6 = []
+    #tm_pred_6 = []
+    #group_size_6 = []
+
+    tm_actual_7 = PlotEval.get_tm_actual("../logs/evaluator_v100/TransMM_7.log")
+    tm_pred_7 = PlotEval.get_tm_pred("../logs/evaluator_v100/TransMM_7.log")
+    group_size_7 = PlotEval.get_tm_group_size("../logs/evaluator_v100/TransMM_7.log")
+    #tm_actual_7 = []
+    #tm_pred_7 = []
+    #group_size_7 = []
+
+    tm_pred = tm_pred_5 + tm_pred_6 + tm_pred_7
+    tm_actual = tm_actual_5 + tm_actual_6 + tm_actual_7
+    group_size = group_size_5 + group_size_6 + group_size_7
+
+    #print(tm_pred)
+    #import numpy as np
+    #print(np.sort(tm_actual))
+
+    tm_data = list(zip(group_size, tm_pred, tm_actual))
+    tm_data.sort()
+    #print(tm_data)
+
+    ax1.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
+    ax1.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
+
+    ax1.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax1.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+
+    for i in range(1, len(pg_pred)):
+        ax1.plot([pg_data[i][0], pg_data[i][0]], [pg_data[i][1], pg_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        ax1.scatter([pg_data[i][0], ], [pg_data[i][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
+        ax1.scatter([pg_data[i][0], ], [pg_data[i][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
+
+    for i in range(1, len(tm_pred)):
+        ax1.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        ax1.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax1.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+        
+    ax2.set_ylim(0, 130)
+    # plt.xticks(fontsize=18)
+    # plt.yticks(fontsize=18)
+
+    ax2.set_xlabel("Group size", fontsize = 25)
+
+    pg_actual = PlotEval.get_pg_actual("../logs/evaluator_a100/OShareMem.log")
+    pg_pred = PlotEval.get_pg_pred("../logs/evaluator_a100/OShareMem.log")
+    group_size = PlotEval.get_pg_group_size("../logs/evaluator_a100/OShareMem.log")
+
+    pg_pred = list(np.array(pg_pred) + 2.0)
+
+    pg_data = list(zip(group_size, pg_pred, pg_actual))
+    pg_data.sort()
+
+    tm_actual_5 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_5.log")
+    tm_pred_5 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_5.log")
+    #tm_pred_5 = [x + 4.0 for x in tm_pred_5]
+    group_size_5 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_5.log")
+    #tm_actual_5 = []
+    #tm_pred_5 = []
+    #group_size_5 = []
+
+    tm_actual_6 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_6.log")
+    tm_pred_6 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_6.log")
+    #tm_pred_6 = [x + 4.0 for x in tm_pred_6]
+    group_size_6 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_6.log")
+    #tm_actual_6 = []
+    #tm_pred_6 = []
+    #group_size_6 = []
+
+    tm_actual_7 = PlotEval.get_tm_actual("../logs/evaluator_a100/TransMM_7.log")
+    tm_pred_7 = PlotEval.get_tm_pred("../logs/evaluator_a100/TransMM_7.log")
+    #tm_pred_7 = [x + 4.0 for x in tm_pred_7]
+    group_size_7 = PlotEval.get_tm_group_size("../logs/evaluator_a100/TransMM_7.log")
+    #tm_actual_7 = []
+    #tm_pred_7 = []
+    #group_size_7 = []
+
+    tm_pred = tm_pred_5 + tm_pred_6 + tm_pred_7
+    tm_actual = tm_actual_5 + tm_actual_6 + tm_actual_7
+    group_size = group_size_5 + group_size_6 + group_size_7
+
+    tm_data = list(zip(group_size, tm_pred, tm_actual))
+    tm_data.sort()
+    #print(tm_data)
+
+    ax2.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
+    ax2.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
+
+    ax2.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax2.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+
+    plt.legend(["OShareMem predicted", "OShareMem actual", "TransMM predicted", "TransMM actual"],
+            ncol=2, fontsize = 25, bbox_to_anchor=(-0.1,1.4), loc='upper center')
+
+    for i in range(1, len(pg_pred)):
+        ax2.plot([pg_data[i][0], pg_data[i][0]], [pg_data[i][1], pg_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        ax2.scatter([pg_data[i][0], ], [pg_data[i][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
+        ax2.scatter([pg_data[i][0], ], [pg_data[i][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
+
+    for i in range(1, len(tm_pred)):
+        ax2.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
+        ax2.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax2.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+
+    ax1.set_title('(a) V100',y=-0.35, fontsize=25)
+    ax2.set_title('(b) A100',y=-0.35, fontsize=25)
+
+    color_vec = ['g','r','y','b']
+    hatch_vec = ['o','x','*','>']
+    legend_handles = [mpatches.Patch(
+            facecolor=color_vec[i], hatch=hatch_vec[i]) for i in range(4)]
+    # plt.legend(legend_handles, ["OShareMem predicted", "OShareMem actual", "TransMM predicted", "TransMM actual"],
+    #         ncol=4, fontsize = 15, bbox_to_anchor=(-0.1,1.15), loc='upper center')
+
+    fig.subplots_adjust(wspace=0.12)
+    fig.savefig(dirbase + 'a100-v100-evaluator.pdf', bbox_inches='tight')
+    plt.show()
+
+
+plot_comm()
+plot_evaluator_v100_a100()
 plot_numgate()
 plot_cublas()
 plot_single_gpu()
@@ -1641,4 +1890,3 @@ plot_transmm()
 plot_pergate_v100()
 plot_scale_v100()
 plot_weak()
-'''
