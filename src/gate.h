@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, S, SDG, T, TDG, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
+    CCX, CNOT, CY, CZ, CP, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, P, S, SDG, T, TDG, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
 };
 
 struct Gate {
@@ -25,30 +25,56 @@ struct Gate {
         return controlQubit2 != -1;
     }
     bool isDiagonal() const {
-        return type == GateType::CZ || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ;
+        return type == GateType::CZ || type == GateType::CP || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::P || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ;
     }
+    // qiskit: quest:
+
+    // quest:unitary
+    // quest:compactUnitary
+    // quest:twoQubitUnitary
+    // quest:multiQubitUnitary
+    // quest:controlledUnitary
+    // quest:controlledCompactUnitary
+    // quest:controlledTwoQubitUnitary
+    // quest:controlledMultiQubitUnitary
+    // quest:multiControlledUnitary
+    // quest:multiControlledTwoQubitUnitary
+    // quest:multiControlledMultiQubitUnitary
+    // quest:multiStateControlledUnitary
+
+    // quest:swapGate
+    // quest:sqrtSwapGate
+    
     static Gate CCX(int c1, int c2, int targetQubit);
-    static Gate CNOT(int controlQubit, int targetQubit);
-    static Gate CY(int controlQubit, int targetQubit);
-    static Gate CZ(int controlQubit, int targetQubit);
-    static Gate CRX(int controlQubit, int targetQubit, qreal angle);
-    static Gate CRY(int controlQubit, int targetQubit, qreal angle);
-    static Gate CU1(int controlQubit, int targetQubit, qreal lambda);
-    static Gate CRZ(int controlQubit, int targetQubit, qreal angle);
+    // quest:multiRotatePauli
+    static Gate CNOT(int controlQubit, int targetQubit); // qiskit:CXGate quest:controlledNot
+    static Gate CY(int controlQubit, int targetQubit); // qiskit:CYGate quest:controlledPauliY
+    // quest:multiControlledPhaseFlip
+    static Gate CZ(int controlQubit, int targetQubit); // qiskit:CZGate quest:controlledPhaseFlip
+    // quest:multiControlledPhaseShift
+    static Gate CP(int controlQubit, int targetQubit, qreal angle); // qiskit:CPhaseGate quest:controlledPhaseShift
+    // quest:controlledRotateAroundAxis
+    static Gate CRX(int controlQubit, int targetQubit, qreal angle); // qiskit:CRXGate quest:controlledRotateX
+    static Gate CRY(int controlQubit, int targetQubit, qreal angle); // qiskit:CRYGate quest:controlledRotateY
+    static Gate CU1(int controlQubit, int targetQubit, qreal lambda); // qiskit: quest:
+    static Gate CRZ(int controlQubit, int targetQubit, qreal angle); // qiskit:CRZGate quest:controlledRotateZ
     static Gate U1(int targetQubit, qreal lambda);
     static Gate U2(int targetQubit, qreal phi, qreal lambda);
     static Gate U3(int targetQubit, qreal theta, qreal phi, qreal lambda);
-    static Gate H(int targetQubit);
-    static Gate X(int targetQubit);
-    static Gate Y(int targetQubit);
-    static Gate Z(int targetQubit);
-    static Gate S(int targetQubit);
+    static Gate H(int targetQubit); // qiskit:HGate quest:hadamard
+    // quest:rotateAroundAxis
+    static Gate X(int targetQubit); // qiskit:XGate quest:pauliX
+    static Gate Y(int targetQubit); // qiskit:YGate quest:pauliY
+    // quest:multiRotateZ
+    static Gate Z(int targetQubit); // qiskit:ZGate quest:pauliZ
+    static Gate P(int targetQubit, qreal angle); // qiskit:PhaseGate quest:phaseShift
+    static Gate S(int targetQubit); // qiskit:SGate quest:sGate
     static Gate SDG(int targetQubit); 
-    static Gate T(int targetQubit);
+    static Gate T(int targetQubit); // qiskit:TGate quest:tGate
     static Gate TDG(int targetQubit);
-    static Gate RX(int targetQubit, qreal angle);
-    static Gate RY(int targetQubit, qreal angle);
-    static Gate RZ(int targetQubit, qreal angle);
+    static Gate RX(int targetQubit, qreal angle); // qiskit:RXGate quest:rotateX
+    static Gate RY(int targetQubit, qreal angle); // qiskit:RYGate quest:rotateY
+    static Gate RZ(int targetQubit, qreal angle); // qiskit:RZGate quest:rotateZ
     static Gate ID(int targetQubit);
     static Gate GII(int targetQubit);
     static Gate GTT(int targetQubit);
