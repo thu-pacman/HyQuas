@@ -283,24 +283,28 @@ LocalGroup AdvanceCompiler::run(State& state, bool usePerGate, bool useBLAS, int
             cacheRelated = related[0];
             ggIdx = getGroupOpt(full, related, true, perGateSize, -1ll);
             ggBackend = Backend::PerGate;
-            // Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
         } else if (!usePerGate && useBLAS) {
             memset(related, 0, sizeof(related));
             fillFull(full, blasForbid);
             ggIdx = getGroupOpt(full, related, false, blasSize, localQubits | blasForbid);
             GateGroup gg;
             ggBackend = Backend::BLAS;
-            // Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
         } else {
             UNREACHABLE();
         }
         if (ggBackend == Backend::PerGate) {
             for (auto& x: ggIdx)
                 gg.addGate(remainGates[x], -1ll, true);
+#ifdef LOG_EVALUATOR
+            Logger::add("perf pergate : %f,", Evaluator::getInstance() -> perfPerGate(numQubits, &gg));
+#endif
             gg.relatedQubits |= cacheRelated;
         } else {
             for (auto& x: ggIdx)
                 gg.addGate(remainGates[x], localQubits, false);
+#ifdef LOG_EVALUATOR
+            Logger::add("perf BLAS : %f,", Evaluator::getInstance() -> perfBLAS(numQubits, blasSize));
+#endif
         }
         gg.backend = ggBackend;
         state = gg.initState(state, cuttSize);
