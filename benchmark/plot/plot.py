@@ -1283,7 +1283,7 @@ class PlotComm:
         dict["avg"] = getavg(dict)
         return dict
 
-def plot_comm():
+def plot_comm_origin():
     raw_qibo_2v100_comm = '''
         basis_change_28 :
         H2D: 9.912680875001051s, 28.000438672008286GB
@@ -1455,6 +1455,196 @@ def plot_comm():
     bax.legend()
     plt.xticks([i * 5 + 1.5 for i in range(size)] + [i * 5 + 3.5 for i in range(size)] + [-1,36,], [abbrs[i] + "-2GPU" for i in range(size)] + [abbrs[i] + "-4GPU" for i in range(size)] + ["",""])
     bax.axs[1].set_xticks([])
+
+    plt.show()
+    fig.savefig(dirbase + 'v100-comm.pdf', bbox_inches='tight')
+
+    comm_cmp_2v100 = []
+    comm_cmp_4v100 = []
+    for i in range(size):
+        t = benchs[i]
+        comm_cmp_2v100.append(qibo_2v100[t]["sum"][1] / my_2v100[t]["sum"][1])
+        comm_cmp_4v100.append(qibo_4v100[t]["sum"][1] / my_4v100[t]["sum"][1])
+
+    print(f"[Report] avg comm traffic compare 2v100 : {np.average(comm_cmp_2v100)}X")
+    print(f"[Report] avg comm traffic compare 4v100 : {np.average(comm_cmp_4v100)}X")
+
+
+def plot_comm():
+    raw_qibo_2v100_comm = '''
+        basis_change_28 :
+        H2D: 9.912680875001051s, 28.000438672008286GB
+        D2H: 21.37262s, 28.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        bv_28 :
+        H2D: 2.1218479339999994s, 8.00000792800002GB
+        D2H: 5.98929s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        hidden_shift_28 :
+        H2D: 3.6947948919999942s, 8.000012136000045GB
+        D2H: 6.12092s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qaoa_28 :
+        H2D: 2.8111846110009178s, 12.000184348001158GB
+        D2H: 9.44548s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qft_28 :
+        H2D: 1.582685306999977s, 8.000010716000492GB
+        D2H: 6.136889999999999s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        quantum_volume_28 :
+        H2D: 3.281754835000573s, 12.000159036000973GB
+        D2H: 9.290560000000001s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        supremacy_28 :
+        H2D: 4.540162467000385s, 16.0000864840008GB
+        D2H: 12.265190000000002s, 16.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        '''
+    raw_qibo_4v100_comm = '''
+        basis_change_28 :
+        H2D: 32.68457255199693s, 72.00087719199769GB
+        D2H: 63.162679999999995s, 72.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        bv_28 :
+        H2D: 8.88634303600005s, 12.000015848000043GB
+        D2H: 10.111540000000002s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        hidden_shift_28 :
+        H2D: 5.439231352000002s, 12.000024264000114GB
+        D2H: 10.03555s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qaoa_28 :
+        H2D: 11.621983130000258s, 28.00036864000806GB
+        D2H: 24.035110000000003s, 28.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qft_28 :
+        H2D: 4.6731373090002055s, 12.000021376000973GB
+        D2H: 9.823450000000001s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        quantum_volume_28 :
+        H2D: 10.575412402000227s, 20.000318064003885GB
+        D2H: 17.32105s, 20.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        supremacy_28 :
+        H2D: 18.5375312779992s, 32.00017293600376GB
+        D2H: 26.980380000000004s, 32.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        '''
+    from brokenaxes import brokenaxes
+    plt.rcParams['figure.figsize'] = (16.0, 9.0)
+
+    fig = plt.figure(figsize=(16.0, 9.0))
+    
+    bax = brokenaxes(ylims=((0, 76), (140, 150)), xlims=((-1,36),), hspace= .1, despine=False)
+
+    benchs = ["basis_change_28", "bv_28", "hidden_shift_28", "qaoa_28", "qft_28", "quantum_volume_28", "supremacy_28",]
+    abbrs = ["bc", "bv", "hs", "qaoa", "qft", "qv", "sp"]
+    size = len(benchs)
+
+    height = {}
+    qibo_2v100 = PlotComm.getcommbenchs(raw_qibo_2v100_comm, benchs, "qibo 2 V100 comm")
+    qibo_4v100 = PlotComm.getcommbenchs(raw_qibo_4v100_comm, benchs, "qibo 4 V100 comm")
+    my_2v100 = {}
+    my_4v100 = {}
+
+    for bench in benchs:
+        #print(f"{bench} : ")
+        my_2v100[bench] = {}
+        H2D_tim, H2D_size, D2H_tim, D2H_size, D2D_tim, D2D_size, P2P_tim, P2P_size = PlotComm.proc(f"../logs/bench_comm/2V100/{bench}.out")
+        my_2v100[bench]["H2D"] = (H2D_tim, H2D_size)
+        my_2v100[bench]["D2H"] = (D2H_tim, D2H_size)
+        my_2v100[bench]["P2P"] = (P2P_tim, P2P_size)
+        my_2v100[bench]["sum"] = [my_2v100[bench]["H2D"][0] + my_2v100[bench]["D2H"][0] + my_2v100[bench]["P2P"][0], 
+            my_2v100[bench]["H2D"][1] + my_2v100[bench]["D2H"][1] + my_2v100[bench]["P2P"][1]]
+
+    for bench in benchs:
+        #print(f"{bench} : ")
+        my_4v100[bench] = {}
+        H2D_tim, H2D_size, D2H_tim, D2H_size, D2D_tim, D2D_size, P2P_tim, P2P_size = PlotComm.proc(f"../logs/bench_comm/4V100/{bench}.out")
+        my_4v100[bench]["H2D"] = (H2D_tim, H2D_size)
+        my_4v100[bench]["D2H"] = (D2H_tim, D2H_size)
+        my_4v100[bench]["P2P"] = (P2P_tim, P2P_size)
+        my_4v100[bench]["sum"] = [my_4v100[bench]["H2D"][0] + my_4v100[bench]["D2H"][0] + my_4v100[bench]["P2P"][0], 
+            my_4v100[bench]["H2D"][1] + my_4v100[bench]["D2H"][1] + my_4v100[bench]["P2P"][1]]
+
+    def getbot(inds):
+        ret = []
+        for ind in inds:
+            if ind in height:
+                ret.append(height[ind])
+            else:
+                height[ind] = 0
+                ret.append(0)
+        return ret        
+        
+    def updbot(inds, vals):
+        for i in range(len(inds)):
+            height[inds[i]] += vals[i]
+    
+    bax.bar([i * 5 + 1 for i in range(size)] + [i * 5 + 3 for i in range(size)], 
+            [qibo_2v100[benchs[i]]["sum"][1]  for i in range(size)] + [qibo_4v100[benchs[i]]["sum"][1]  for i in range(size)], label = "Qibo", color='#ffd966')
+
+    bax.bar([i * 5 + 2 for i in range(size)] + [i * 5 + 4 for i in range(size)], 
+            [my_2v100[benchs[i]]["sum"][1]  for i in range(size)] + [my_4v100[benchs[i]]["sum"][1]  for i in range(size)], label = "HyQuas", color='#66c2a4')
+
+    inds = []
+    bottoms = []
+    vals = []
+    size = len(benchs)
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["H2D"][1], qibo_4v100[t]["H2D"][1], my_2v100[t]["H2D"][1], my_4v100[t]["H2D"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='//', fill=False, label = "H2D")
+
+    inds = []
+    bottoms = []
+    vals = []
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["D2H"][1], qibo_4v100[t]["D2H"][1], my_2v100[t]["D2H"][1], my_4v100[t]["D2H"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='\\\\', fill=False, label = "D2H")
+
+
+    inds = []
+    bottoms = []
+    vals = []
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["P2P"][1], qibo_4v100[t]["P2P"][1], my_2v100[t]["P2P"][1], my_4v100[t]["P2P"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='//\\\\', fill=False, label = "P2P")
+
+    bax.set_ylabel("comm traffic (GB)", fontsize=28, labelpad=50)
+
+    bax.legend(fontsize=28, ncol = 3)
+    plt.xticks([i * 5 + 1.5 for i in range(size)] + [i * 5 + 3.5 for i in range(size)] + [-1,36,], [abbrs[i] + "-2GPU" for i in range(size)] + [abbrs[i] + "-4GPU" for i in range(size)] + ["",""], fontsize=28, rotation=30)
+    bax.axs[1].set_xticks([])
+    plt.setp(bax.axs[0].get_yticklabels(), fontsize=28)
+    plt.setp(bax.axs[1].get_yticklabels(), fontsize=28)
+    plt.gcf().subplots_adjust(bottom=0.2)
 
     plt.show()
     fig.savefig(dirbase + 'v100-comm.pdf', bbox_inches='tight')
@@ -1923,9 +2113,8 @@ def plot_evaluator_v100_a100():
     plt.show()
 
 
-plot_evaluator_v100_a100()
-'''
 plot_comm()
+plot_evaluator_v100_a100()
 plot_numgate()
 plot_cublas()
 plot_single_gpu()
@@ -1937,4 +2126,3 @@ plot_transmm()
 plot_pergate_v100()
 plot_scale_v100()
 plot_weak()
-'''
