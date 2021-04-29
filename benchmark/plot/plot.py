@@ -1459,6 +1459,16 @@ def plot_comm():
     plt.show()
     fig.savefig(dirbase + 'v100-comm.pdf', bbox_inches='tight')
 
+    comm_cmp_2v100 = []
+    comm_cmp_4v100 = []
+    for i in range(size):
+        t = benchs[i]
+        comm_cmp_2v100.append(qibo_2v100[t]["sum"][1] / my_2v100[t]["sum"][1])
+        comm_cmp_4v100.append(qibo_4v100[t]["sum"][1] / my_4v100[t]["sum"][1])
+
+    print(f"[Report] avg comm traffic compare 2v100 : {np.average(comm_cmp_2v100)}X")
+    print(f"[Report] avg comm traffic compare 4v100 : {np.average(comm_cmp_4v100)}X")
+
 
 class PlotEval:
     def get_pg_actual(file):
@@ -1613,18 +1623,18 @@ def plot_evaluator_v100():
     for i in range(len(pg_pred)):
         pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
         
-    print(f"pg max error : {np.max(pg_errs)}")
-    print(f"pg avg error : {np.average(pg_errs)}")
+    print(f"[Report] pg max error : {np.max(pg_errs)}")
+    print(f"[Report] pg avg error : {np.average(pg_errs)}")
 
     tm_errs = []
     for i in range(len(tm_pred)):
         tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
         
-    print(f"tm max error : {np.max(tm_errs)}")
-    print(f"tm avg error : {np.average(tm_errs)}")
+    print(f"[Report] tm max error : {np.max(tm_errs)}")
+    print(f"[Report] tm avg error : {np.average(tm_errs)}")
 
-    print(f"tot max error : {np.max(pg_errs + tm_errs)}")
-    print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
+    print(f"[Report] tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] tot avg error : {np.average(pg_errs + tm_errs)}")
 
 def plot_evaluator_a100():
     import matplotlib.pyplot as plt 
@@ -1709,18 +1719,18 @@ def plot_evaluator_a100():
     for i in range(len(pg_pred)):
         pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
         
-    print(f"pg max error : {np.max(pg_errs)}")
-    print(f"pg avg error : {np.average(pg_errs)}")
+    print(f"[Report] pg max error : {np.max(pg_errs)}")
+    print(f"[Report] pg avg error : {np.average(pg_errs)}")
 
     tm_errs = []
     for i in range(len(tm_pred)):
         tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
         
-    print(f"tm max error : {np.max(tm_errs)}")
-    print(f"tm avg error : {np.average(tm_errs)}")
+    print(f"[Report] tm max error : {np.max(tm_errs)}")
+    print(f"[Report] tm avg error : {np.average(tm_errs)}")
 
-    print(f"tot max error : {np.max(pg_errs + tm_errs)}")
-    print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
+    print(f"[Report] tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] tot avg error : {np.average(pg_errs + tm_errs)}")
 
 def plot_evaluator_v100_a100():
     sz = (15, 5)
@@ -1729,7 +1739,7 @@ def plot_evaluator_v100_a100():
     fig, axes = plt.subplots(ncols=2)
     # axes = [ax for vec in axes_ori for ax in vec]
     ax1, ax2 = axes[0], axes[1]
-    ax1.set_ylim(0, 110)
+    ax1.set_ylim(0, 130)
     plt.setp(ax1.get_xticklabels(), fontsize=20)
     plt.setp(ax1.get_yticklabels(), fontsize=20)
     plt.setp(ax2.get_xticklabels(), fontsize=20)
@@ -1783,7 +1793,7 @@ def plot_evaluator_v100_a100():
     ax1.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
     ax1.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
 
-    ax1.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax1.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
     ax1.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
 
     for i in range(1, len(pg_pred)):
@@ -1793,12 +1803,30 @@ def plot_evaluator_v100_a100():
 
     for i in range(1, len(tm_pred)):
         ax1.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
-        ax1.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax1.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
         ax1.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
         
-    ax2.set_ylim(0, 130)
+    ax2.set_ylim(0, 110)
     # plt.xticks(fontsize=18)
     # plt.yticks(fontsize=18)
+
+    pg_errs = []
+    for i in range(len(pg_pred)):
+        pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
+        
+    print(f"[Report] v100 pg max error : {np.max(pg_errs)}")
+    print(f"[Report] v100 pg avg error : {np.average(pg_errs)}")
+
+    tm_errs = []
+    for i in range(len(tm_pred)):
+        tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
+        
+    print(f"[Report] v100 tm max error : {np.max(tm_errs)}")
+    print(f"[Report] v100 tm avg error : {np.average(tm_errs)}")
+
+    print(f"[Report] v100 tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] v100 tot avg error : {np.average(pg_errs + tm_errs)}")
+
 
     ax2.set_xlabel("Group size", fontsize = 25)
 
@@ -1846,7 +1874,7 @@ def plot_evaluator_v100_a100():
     ax2.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
     ax2.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
 
-    ax2.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax2.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
     ax2.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
 
     plt.legend(["OShareMem predicted", "OShareMem actual", "TransMM predicted", "TransMM actual"],
@@ -1859,8 +1887,26 @@ def plot_evaluator_v100_a100():
 
     for i in range(1, len(tm_pred)):
         ax2.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
-        ax2.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax2.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
         ax2.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+
+    pg_errs = []
+    for i in range(len(pg_pred)):
+        pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
+        
+    print(f"[Report] a100 pg max error : {np.max(pg_errs)}")
+    print(f"[Report] a100 pg avg error : {np.average(pg_errs)}")
+
+    tm_errs = []
+    for i in range(len(tm_pred)):
+        tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
+        
+    print(f"[Report] a100 tm max error : {np.max(tm_errs)}")
+    print(f"[Report] a100 tm avg error : {np.average(tm_errs)}")
+
+    print(f"[Report] a100 tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] a100 tot avg error : {np.average(pg_errs + tm_errs)}")
+
 
     ax1.set_title('(a) V100',y=-0.35, fontsize=25)
     ax2.set_title('(b) A100',y=-0.35, fontsize=25)
@@ -1877,8 +1923,9 @@ def plot_evaluator_v100_a100():
     plt.show()
 
 
-plot_comm()
 plot_evaluator_v100_a100()
+'''
+plot_comm()
 plot_numgate()
 plot_cublas()
 plot_single_gpu()
@@ -1890,3 +1937,4 @@ plot_transmm()
 plot_pergate_v100()
 plot_scale_v100()
 plot_weak()
+'''
