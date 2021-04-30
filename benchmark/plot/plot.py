@@ -102,7 +102,7 @@ def plot_single_gpu():
     # basis_change, bv, hidden_shift, qaoa, qft, quantum_volume, supremacy
     qcgpu_v100 = [22.648587465286255, 1.0285909175872803, 1.342470884323120, 9.01806902885437, 2.343612194061279, 8.310634136199951, 4.993691444396973]
     qcgpu_a100 = [13.230310916900635, 0.42561984062194824, 0.5957441329956055, 5.057258605957031, 1.1482579708099365, 4.636551856994629, 2.6947784423828125]
-    qulacs_v100 = [4.653303750324994, 0.26372975390404463, 0.1442320728674531, 1.0468542012386024, 1.7434257962740958, 1.1854395898990333, 2.6002652649767697]
+    qulacs_v100 = [3.8187052411958575, 0.26140232384204865, 0.14451974583789706, 1.121246271301061, 1.74505520099774, 1.1784356785938144, 2.5801372877322137]
     qulacs_a100 = [2.047857452998869, 0.12407842103857547, 0.07454732398036867, 0.5061613629804924, 0.9289786290610209, 0.5753191190306097, 1.2552453679963946]
     qiskit_v100 = [7.849320411682129, 3.282461404800415, 3.10962176322937, 3.8705062866210938, 4.256688356399536, 3.9623775482177734, 4.732935905456543]
     qiskit_a100 = [3.8374032974243164, 0.9415936470031738, 0.8835525512695312, 1.3567233085632324, 1.5370030403137207, 1.4436469078063965, 1.8720848560333252]
@@ -473,7 +473,7 @@ def plot_transmm():
     sz = (15, 5)
     figsz = {'figure.figsize': sz}
     plt.rcParams.update(figsz)
-    color_vec = color_def[1:]
+    color_vec = [color_def[1], color_def[-1]]
     num_bars = 2
     apps = list(range(3, 11))
 
@@ -497,7 +497,7 @@ def plot_transmm():
     #ax.set_ylim(0, 1.4)
     #bx.set_ylim(10, 80)
 
-    color_vec = color_def[1:num_bars+1]
+    color_vec = [color_def[1], color_def[-1]]
 
     #fig, ax = plt.subplots()
     ax = ax2
@@ -765,7 +765,7 @@ def plot_groupsz():
     frameworks = labels
     num_apps = len(dat[0])
     num_bars = len(dat)
-    color_vec = color_def[1:num_bars+1]
+    color_vec = [color_def[1], color_def[-1]]
     hatch_vec = ['..', '']
 
     ax = ax1
@@ -785,7 +785,8 @@ def plot_groupsz():
 
     dat = [qulacs_a100, my_a100]
     labels = ['BatchMV', 'TransMM']
-    print("[Report] groupsz speedup 6 {} 10 {}".format(qulacs_a100[3]/my_a100[3], qulacs_a100[-1]/my_a100[-1]))
+    print("[Report] groupsz speedup a100 6 {} 10 {}".format(qulacs_a100[3]/my_a100[3], qulacs_a100[-1]/my_a100[-1]))
+    print("[Report] groupsz speedup v100 6 {} 10 {}".format(qulacs_v100[3]/my_v100[3], qulacs_v100[-1]/my_v100[-1]))
 
     apps = list(range(3, 11))
     frameworks = labels
@@ -796,7 +797,7 @@ def plot_groupsz():
     figsz = {'figure.figsize': sz}
     plt.rcParams.update(figsz)
 
-    color_vec = color_def[1:num_bars+1]
+    color_vec = [color_def[1], color_def[-1]]
 
     #fig, ax = plt.subplots()
     ax = ax2
@@ -1019,8 +1020,8 @@ def plot_backend():
     ax2.set_xticklabels(trans(apps),rotation=20)
     # plt.xticks(ind+(width+lgap+gggap/2), trans(apps))
 
-    ax1.set_title('(a) A100',y=-0.3,fontsize=25)
-    ax2.set_title('(b) V100',y=-0.3,fontsize=25)
+    ax1.set_title('(a) V100',y=-0.3,fontsize=25)
+    ax2.set_title('(b) A100',y=-0.3,fontsize=25)
 
     legend_handles = [mpatches.Patch(
         facecolor=color_vec[i], edgecolor='black', hatch=hatch_vec[i]) for i in range(num_bars)]
@@ -1220,7 +1221,7 @@ def calc_compile():
     print("[Report] compile overhead (28 max): ", max([x/y for x,y in zip(t_compile, t_exec)]))
     
 def calc_diff():
-    qulacs_v100 = [4.653303750324994, 0.26372975390404463, 0.1442320728674531, 1.0468542012386024, 1.7434257962740958, 1.1854395898990333, 2.6002652649767697]
+    qulacs_v100 = [3.8187052411958575, 0.26140232384204865, 0.14451974583789706, 1.121246271301061, 1.74505520099774, 1.1784356785938144, 2.5801372877322137]
     shm_v100 = []
     with open(logbase + 'sharemem.log') as f:
         for s in f.readlines():
@@ -1929,6 +1930,7 @@ def plot_evaluator_v100_a100():
     plt.show()
 
 
+calc_diff()
 plot_numgate()
 plot_cublas()
 plot_single_gpu()
