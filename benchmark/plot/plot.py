@@ -1336,7 +1336,7 @@ class PlotComm:
         dict["avg"] = getavg(dict)
         return dict
 
-def plot_comm():
+def plot_comm_origin():
     raw_qibo_2v100_comm = '''
         basis_change_28 :
         H2D: 9.912680875001051s, 28.000438672008286GB
@@ -1512,6 +1512,206 @@ def plot_comm():
     plt.show()
     fig.savefig(dirbase + 'v100-comm.pdf', bbox_inches='tight')
 
+    comm_cmp_2v100 = []
+    comm_cmp_4v100 = []
+    for i in range(size):
+        t = benchs[i]
+        comm_cmp_2v100.append(qibo_2v100[t]["sum"][1] / my_2v100[t]["sum"][1])
+        comm_cmp_4v100.append(qibo_4v100[t]["sum"][1] / my_4v100[t]["sum"][1])
+
+    print(f"[Report] avg comm traffic compare 2v100 : {np.average(comm_cmp_2v100)}X")
+    print(f"[Report] avg comm traffic compare 4v100 : {np.average(comm_cmp_4v100)}X")
+
+
+def plot_comm():
+    raw_qibo_2v100_comm = '''
+        basis_change_28 :
+        H2D: 9.912680875001051s, 28.000438672008286GB
+        D2H: 21.37262s, 28.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        bv_28 :
+        H2D: 2.1218479339999994s, 8.00000792800002GB
+        D2H: 5.98929s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        hidden_shift_28 :
+        H2D: 3.6947948919999942s, 8.000012136000045GB
+        D2H: 6.12092s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qaoa_28 :
+        H2D: 2.8111846110009178s, 12.000184348001158GB
+        D2H: 9.44548s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qft_28 :
+        H2D: 1.582685306999977s, 8.000010716000492GB
+        D2H: 6.136889999999999s, 8.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        quantum_volume_28 :
+        H2D: 3.281754835000573s, 12.000159036000973GB
+        D2H: 9.290560000000001s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        supremacy_28 :
+        H2D: 4.540162467000385s, 16.0000864840008GB
+        D2H: 12.265190000000002s, 16.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        '''
+    raw_qibo_4v100_comm = '''
+        basis_change_28 :
+        H2D: 32.68457255199693s, 72.00087719199769GB
+        D2H: 63.162679999999995s, 72.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        bv_28 :
+        H2D: 8.88634303600005s, 12.000015848000043GB
+        D2H: 10.111540000000002s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        hidden_shift_28 :
+        H2D: 5.439231352000002s, 12.000024264000114GB
+        D2H: 10.03555s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qaoa_28 :
+        H2D: 11.621983130000258s, 28.00036864000806GB
+        D2H: 24.035110000000003s, 28.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        qft_28 :
+        H2D: 4.6731373090002055s, 12.000021376000973GB
+        D2H: 9.823450000000001s, 12.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        quantum_volume_28 :
+        H2D: 10.575412402000227s, 20.000318064003885GB
+        D2H: 17.32105s, 20.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        supremacy_28 :
+        H2D: 18.5375312779992s, 32.00017293600376GB
+        D2H: 26.980380000000004s, 32.0GB
+        D2D: 0.0s, 0.0GB
+        P2P: 0.0s, 0.0GB
+        '''
+    from brokenaxes import brokenaxes
+    plt.rcParams['figure.figsize'] = (16.0, 9.0)
+
+    fig = plt.figure(figsize=(16.0, 9.0))
+    
+    bax = brokenaxes(ylims=((0, 76), (140, 150)), xlims=((-1,36),), hspace= .1, despine=False)
+
+    benchs = ["basis_change_28", "bv_28", "hidden_shift_28", "qaoa_28", "qft_28", "quantum_volume_28", "supremacy_28",]
+    abbrs = ["bc", "bv", "hs", "qaoa", "qft", "qv", "sp"]
+    size = len(benchs)
+
+    height = {}
+    qibo_2v100 = PlotComm.getcommbenchs(raw_qibo_2v100_comm, benchs, "qibo 2 V100 comm")
+    qibo_4v100 = PlotComm.getcommbenchs(raw_qibo_4v100_comm, benchs, "qibo 4 V100 comm")
+    my_2v100 = {}
+    my_4v100 = {}
+
+    for bench in benchs:
+        #print(f"{bench} : ")
+        my_2v100[bench] = {}
+        H2D_tim, H2D_size, D2H_tim, D2H_size, D2D_tim, D2D_size, P2P_tim, P2P_size = PlotComm.proc(f"../logs/bench_comm/2V100/{bench}.out")
+        my_2v100[bench]["H2D"] = (H2D_tim, H2D_size)
+        my_2v100[bench]["D2H"] = (D2H_tim, D2H_size)
+        my_2v100[bench]["P2P"] = (P2P_tim, P2P_size)
+        my_2v100[bench]["sum"] = [my_2v100[bench]["H2D"][0] + my_2v100[bench]["D2H"][0] + my_2v100[bench]["P2P"][0], 
+            my_2v100[bench]["H2D"][1] + my_2v100[bench]["D2H"][1] + my_2v100[bench]["P2P"][1]]
+
+    for bench in benchs:
+        #print(f"{bench} : ")
+        my_4v100[bench] = {}
+        H2D_tim, H2D_size, D2H_tim, D2H_size, D2D_tim, D2D_size, P2P_tim, P2P_size = PlotComm.proc(f"../logs/bench_comm/4V100/{bench}.out")
+        my_4v100[bench]["H2D"] = (H2D_tim, H2D_size)
+        my_4v100[bench]["D2H"] = (D2H_tim, D2H_size)
+        my_4v100[bench]["P2P"] = (P2P_tim, P2P_size)
+        my_4v100[bench]["sum"] = [my_4v100[bench]["H2D"][0] + my_4v100[bench]["D2H"][0] + my_4v100[bench]["P2P"][0], 
+            my_4v100[bench]["H2D"][1] + my_4v100[bench]["D2H"][1] + my_4v100[bench]["P2P"][1]]
+
+    def getbot(inds):
+        ret = []
+        for ind in inds:
+            if ind in height:
+                ret.append(height[ind])
+            else:
+                height[ind] = 0
+                ret.append(0)
+        return ret        
+        
+    def updbot(inds, vals):
+        for i in range(len(inds)):
+            height[inds[i]] += vals[i]
+    
+    bax.bar([i * 5 + 1 for i in range(size)] + [i * 5 + 3 for i in range(size)], 
+            [qibo_2v100[benchs[i]]["sum"][1]  for i in range(size)] + [qibo_4v100[benchs[i]]["sum"][1]  for i in range(size)], label = "Qibo", color='#ffd966')
+
+    bax.bar([i * 5 + 2 for i in range(size)] + [i * 5 + 4 for i in range(size)], 
+            [my_2v100[benchs[i]]["sum"][1]  for i in range(size)] + [my_4v100[benchs[i]]["sum"][1]  for i in range(size)], label = "HyQuas", color='#66c2a4')
+
+    inds = []
+    bottoms = []
+    vals = []
+    size = len(benchs)
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["H2D"][1], qibo_4v100[t]["H2D"][1], my_2v100[t]["H2D"][1], my_4v100[t]["H2D"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='//', fill=False, label = "H2D")
+
+    inds = []
+    bottoms = []
+    vals = []
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["D2H"][1], qibo_4v100[t]["D2H"][1], my_2v100[t]["D2H"][1], my_4v100[t]["D2H"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='\\\\', fill=False, label = "D2H")
+
+
+    inds = []
+    bottoms = []
+    vals = []
+    for i in range(size):
+        t = benchs[i]
+        inds += [i*5 + 1, i*5 + 3, i*5 + 2, i*5 + 4]
+        vals += [qibo_2v100[t]["P2P"][1], qibo_4v100[t]["P2P"][1], my_2v100[t]["P2P"][1], my_4v100[t]["P2P"][1], ]
+    bottoms = getbot(inds)
+    updbot(inds, vals)
+    bax.bar(inds, vals, bottom = bottoms, hatch='//\\\\', fill=False, label = "P2P")
+
+    bax.set_ylabel("comm traffic (GB)", fontsize=28, labelpad=50)
+
+    bax.legend(fontsize=28, ncol = 3)
+    plt.xticks([i * 5 + 1.5 for i in range(size)] + [i * 5 + 3.5 for i in range(size)] + [-1,36,], [abbrs[i] + "-2GPU" for i in range(size)] + [abbrs[i] + "-4GPU" for i in range(size)] + ["",""], fontsize=28, rotation=30)
+    bax.axs[1].set_xticks([])
+    plt.setp(bax.axs[0].get_yticklabels(), fontsize=28)
+    plt.setp(bax.axs[1].get_yticklabels(), fontsize=28)
+    plt.gcf().subplots_adjust(bottom=0.2)
+
+    plt.show()
+    fig.savefig(dirbase + 'v100-comm.pdf', bbox_inches='tight')
+
+    comm_cmp_2v100 = []
+    comm_cmp_4v100 = []
+    for i in range(size):
+        t = benchs[i]
+        comm_cmp_2v100.append(qibo_2v100[t]["sum"][1] / my_2v100[t]["sum"][1])
+        comm_cmp_4v100.append(qibo_4v100[t]["sum"][1] / my_4v100[t]["sum"][1])
+
+    print(f"[Report] avg comm traffic compare 2v100 : {np.average(comm_cmp_2v100)}X")
+    print(f"[Report] avg comm traffic compare 4v100 : {np.average(comm_cmp_4v100)}X")
+
 
 class PlotEval:
     def get_pg_actual(file):
@@ -1666,18 +1866,18 @@ def plot_evaluator_v100():
     for i in range(len(pg_pred)):
         pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
         
-    print(f"pg max error : {np.max(pg_errs)}")
-    print(f"pg avg error : {np.average(pg_errs)}")
+    print(f"[Report] pg max error : {np.max(pg_errs)}")
+    print(f"[Report] pg avg error : {np.average(pg_errs)}")
 
     tm_errs = []
     for i in range(len(tm_pred)):
         tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
         
-    print(f"tm max error : {np.max(tm_errs)}")
-    print(f"tm avg error : {np.average(tm_errs)}")
+    print(f"[Report] tm max error : {np.max(tm_errs)}")
+    print(f"[Report] tm avg error : {np.average(tm_errs)}")
 
-    print(f"tot max error : {np.max(pg_errs + tm_errs)}")
-    print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
+    print(f"[Report] tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] tot avg error : {np.average(pg_errs + tm_errs)}")
 
 def plot_evaluator_a100():
     import matplotlib.pyplot as plt 
@@ -1762,18 +1962,18 @@ def plot_evaluator_a100():
     for i in range(len(pg_pred)):
         pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
         
-    print(f"pg max error : {np.max(pg_errs)}")
-    print(f"pg avg error : {np.average(pg_errs)}")
+    print(f"[Report] pg max error : {np.max(pg_errs)}")
+    print(f"[Report] pg avg error : {np.average(pg_errs)}")
 
     tm_errs = []
     for i in range(len(tm_pred)):
         tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
         
-    print(f"tm max error : {np.max(tm_errs)}")
-    print(f"tm avg error : {np.average(tm_errs)}")
+    print(f"[Report] tm max error : {np.max(tm_errs)}")
+    print(f"[Report] tm avg error : {np.average(tm_errs)}")
 
-    print(f"tot max error : {np.max(pg_errs + tm_errs)}")
-    print(f"tot avg error : {np.average(pg_errs + tm_errs)}")
+    print(f"[Report] tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] tot avg error : {np.average(pg_errs + tm_errs)}")
 
 def plot_evaluator_v100_a100():
     sz = (15, 5)
@@ -1782,7 +1982,7 @@ def plot_evaluator_v100_a100():
     fig, axes = plt.subplots(ncols=2)
     # axes = [ax for vec in axes_ori for ax in vec]
     ax1, ax2 = axes[0], axes[1]
-    ax1.set_ylim(0, 110)
+    ax1.set_ylim(0, 130)
     plt.setp(ax1.get_xticklabels(), fontsize=20)
     plt.setp(ax1.get_yticklabels(), fontsize=20)
     plt.setp(ax2.get_xticklabels(), fontsize=20)
@@ -1836,7 +2036,7 @@ def plot_evaluator_v100_a100():
     ax1.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
     ax1.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
 
-    ax1.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax1.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
     ax1.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
 
     for i in range(1, len(pg_pred)):
@@ -1846,12 +2046,30 @@ def plot_evaluator_v100_a100():
 
     for i in range(1, len(tm_pred)):
         ax1.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
-        ax1.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax1.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
         ax1.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
         
-    ax2.set_ylim(0, 130)
+    ax2.set_ylim(0, 110)
     # plt.xticks(fontsize=18)
     # plt.yticks(fontsize=18)
+
+    pg_errs = []
+    for i in range(len(pg_pred)):
+        pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
+        
+    print(f"[Report] v100 pg max error : {np.max(pg_errs)}")
+    print(f"[Report] v100 pg avg error : {np.average(pg_errs)}")
+
+    tm_errs = []
+    for i in range(len(tm_pred)):
+        tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
+        
+    print(f"[Report] v100 tm max error : {np.max(tm_errs)}")
+    print(f"[Report] v100 tm avg error : {np.average(tm_errs)}")
+
+    print(f"[Report] v100 tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] v100 tot avg error : {np.average(pg_errs + tm_errs)}")
+
 
     ax2.set_xlabel("Group size", fontsize = 25)
 
@@ -1899,7 +2117,7 @@ def plot_evaluator_v100_a100():
     ax2.scatter([pg_data[0][0], ], [pg_data[0][1], ],  marker = 'o', s=100, linewidth=.8, color = 'w', edgecolors = 'g')    
     ax2.scatter([pg_data[0][0], ], [pg_data[0][2], ],  marker = 'x', s=100, linewidth=1, color = 'r')    
 
-    ax2.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+    ax2.scatter([tm_data[0][0], ], [tm_data[0][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
     ax2.scatter([tm_data[0][0], ], [tm_data[0][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
 
     plt.legend(["OShareMem predicted", "OShareMem actual", "TransMM predicted", "TransMM actual"],
@@ -1912,8 +2130,26 @@ def plot_evaluator_v100_a100():
 
     for i in range(1, len(tm_pred)):
         ax2.plot([tm_data[i][0], tm_data[i][0]], [tm_data[i][1], tm_data[i][2]], color = "grey", linewidth = 1, linestyle='dashed')
-        ax2.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = '*', s=100, linewidth=.8, color = 'w', edgecolors = 'orange')        
+        ax2.scatter([tm_data[i][0], ], [tm_data[i][1], ],  marker = 's', s=100, linewidth=.8, color = 'orange', edgecolors = 'orange')        
         ax2.scatter([tm_data[i][0], ], [tm_data[i][2], ],  marker = '>', s=100, linewidth=1, color = 'b')    
+
+    pg_errs = []
+    for i in range(len(pg_pred)):
+        pg_errs.append(abs(pg_pred[i] - pg_actual[i]) / pg_actual[i])
+        
+    print(f"[Report] a100 pg max error : {np.max(pg_errs)}")
+    print(f"[Report] a100 pg avg error : {np.average(pg_errs)}")
+
+    tm_errs = []
+    for i in range(len(tm_pred)):
+        tm_errs.append(abs(tm_pred[i] - tm_actual[i]) / tm_actual[i])
+        
+    print(f"[Report] a100 tm max error : {np.max(tm_errs)}")
+    print(f"[Report] a100 tm avg error : {np.average(tm_errs)}")
+
+    print(f"[Report] a100 tot max error : {np.max(pg_errs + tm_errs)}")
+    print(f"[Report] a100 tot avg error : {np.average(pg_errs + tm_errs)}")
+
 
     ax1.set_title('(a) V100',y=-0.35, fontsize=25)
     ax2.set_title('(b) A100',y=-0.35, fontsize=25)
