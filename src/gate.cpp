@@ -6,6 +6,54 @@
 
 static int globalGateID = 0;
 
+Gate Gate::U(int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::U;
+    g.mat[0][0] = a0; g.mat[0][1] = a1;
+    g.mat[1][0] = b0; g.mat[1][1] = b1;
+    g.name = "U";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::UC(int targetQubit, qComplex alpha, qComplex beta) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::UC;
+    g.mat[0][0] = make_qComplex(alpha.x, alpha.y); g.mat[0][1] = make_qComplex(-beta.x, beta.y);
+    g.mat[1][0] = make_qComplex(beta.x, beta.y); g.mat[1][1] = make_qComplex(alpha.x, -alpha.y);
+    g.name = "UC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::CU(int controlQubit, int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CU;
+    g.mat[0][0] = a0; g.mat[0][1] = a1;
+    g.mat[1][0] = b0; g.mat[1][1] = b1;
+    g.name = "CU";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CUC(int controlQubit, int targetQubit, qComplex alpha, qComplex beta) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CUC;
+    g.mat[0][0] = make_qComplex(alpha.x, alpha.y); g.mat[0][1] = make_qComplex(-beta.x, beta.y);
+    g.mat[1][0] = make_qComplex(beta.x, beta.y); g.mat[1][1] = make_qComplex(alpha.x, -alpha.y);
+    g.name = "CUC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
 Gate Gate::CCX(int controlQubit, int controlQubit2, int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
@@ -51,6 +99,38 @@ Gate Gate::CZ(int controlQubit, int targetQubit) {
     g.mat[0][0] = make_qComplex(1); g.mat[0][1] = make_qComplex(0);
     g.mat[1][0] = make_qComplex(0); g.mat[1][1] = make_qComplex(-1);
     g.name = "CZ";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CP(int controlQubit, int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CP;
+    g.mat[0][0] = make_qComplex(1); g.mat[0][1] = make_qComplex(0);
+    g.mat[1][0] = make_qComplex(0); g.mat[1][1] = make_qComplex(cos(angle), sin(angle));
+    g.name = "CP";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CR(int controlQubit, int targetQubit, qreal angle, qreal axisX, qreal axisY, qreal axisZ) {
+    qreal mag = sqrt(axisX*axisX + axisY*axisY + axisZ*axisZ);
+    qreal unitX = axisX/mag, unitY=axisY/mag, unitZ=axisZ/mag;
+
+    qreal alphaR =   cos(angle/2.0);
+    qreal alphaI = - sin(angle/2.0)*unitZ;  
+    qreal betaR  =   sin(angle/2.0)*unitY;
+    qreal betaI  = - sin(angle/2.0)*unitX;
+
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CR;
+    g.mat[0][0] = make_qComplex(alphaR, alphaI); g.mat[0][1] = make_qComplex(-betaR, betaI);
+    g.mat[1][0] = make_qComplex(betaR, betaI); g.mat[1][1] = make_qComplex(alphaR, -alphaI);
+    g.name = "CR";
     g.targetQubit = targetQubit;
     g.controlQubit = controlQubit;
     return g;
@@ -197,6 +277,18 @@ Gate Gate::Z(int targetQubit) {
     return g;
 }
 
+Gate Gate::P(int targetQubit, qreal angle) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::P;
+    g.mat[0][0] = make_qComplex(1); g.mat[0][1] = make_qComplex(0);
+    g.mat[1][0] = make_qComplex(0); g.mat[1][1] = make_qComplex(cos(angle), sin(angle));
+    g.name = "P";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
 Gate Gate::S(int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
@@ -240,6 +332,26 @@ Gate Gate::TDG(int targetQubit) {
     g.mat[0][0] = make_qComplex(1); g.mat[0][1] = make_qComplex(0);
     g.mat[1][0] = make_qComplex(0); g.mat[1][1] = make_qComplex(1/sqrt(2), -1/sqrt(2));
     g.name = "TDG";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::R(int targetQubit, qreal angle, qreal axisX, qreal axisY, qreal axisZ) {
+    qreal mag = sqrt(axisX*axisX + axisY*axisY + axisZ*axisZ);
+    qreal unitX = axisX/mag, unitY=axisY/mag, unitZ=axisZ/mag;
+
+    qreal alphaR =   cos(angle/2.0);
+    qreal alphaI = - sin(angle/2.0)*unitZ;  
+    qreal betaR  =   sin(angle/2.0)*unitY;
+    qreal betaI  = - sin(angle/2.0)*unitX;
+
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::R;
+    g.mat[0][0] = make_qComplex(alphaR, alphaI); g.mat[0][1] = make_qComplex(-betaR, betaI);
+    g.mat[1][0] = make_qComplex(betaR, betaI); g.mat[1][1] = make_qComplex(alphaR, -alphaI);
+    g.name = "R";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
     return g;
@@ -393,6 +505,16 @@ Gate Gate::random(int lo, int hi, GateType type) {
             gen_c1_id(t, c1);
             return CZ(c1, t);
         }
+        case GateType::CP: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CP(c1, t, gen_0_2pi_float());
+        }
+        case GateType::CR: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CR(c1, t, gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float());
+        }
         case GateType::CRX: {
             int t, c1;
             gen_c1_id(t, c1);
@@ -448,6 +570,11 @@ Gate Gate::random(int lo, int hi, GateType type) {
             gen_single_id(t);
             return Z(t);
         }
+        case GateType::P: {
+            int t;
+            gen_single_id(t);
+            return P(t, gen_0_2pi_float());
+        }
         case GateType::S: {
             int t;
             gen_single_id(t);
@@ -467,6 +594,11 @@ Gate Gate::random(int lo, int hi, GateType type) {
             int t;
             gen_single_id(t);
             return TDG(t);
+        }
+        case GateType::R: {
+            int t;
+            gen_single_id(t);
+            return R(t, gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float());
         }
         case GateType::RX: {
             int t;
@@ -502,6 +634,12 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
         case GateType::CZ: {
             return CZ(controlQubit, targetQubit);
         }
+        case GateType::CP: {
+            return CP(controlQubit, targetQubit, gen_0_2pi_float());
+        }
+        case GateType::CR: {
+            return CR(controlQubit, targetQubit, gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float(), gen_0_2pi_float());
+        }
         case GateType::CRX: {
             return CRX(controlQubit, targetQubit, gen_0_2pi_float());
         }
@@ -532,12 +670,20 @@ GateType Gate::toCU(GateType type) {
 GateType Gate::toU(GateType type) {
     switch (type) {
         case GateType::CCX:
+        case GateType::CU:
+            return GateType::U;
+        case GateType::CUC:
+            return GateType::UC;
         case GateType::CNOT:
             return GateType::X;
         case GateType::CY:
             return GateType::Y;
         case GateType::CZ:
             return GateType::Z;
+        case GateType::CP:
+            return GateType::P;
+        case GateType::CR:
+            return GateType::R;
         case GateType::CRX:
             return GateType::RX;
         case GateType::CRY:
