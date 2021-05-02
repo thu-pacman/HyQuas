@@ -1,11 +1,12 @@
-// quest:unitary
-// quest:compactUnitary
-// quest:controlledUnitary
-// quest:controlledCompactUnitary
-
 // quest:multiControlledUnitary
 // quest:multiControlledPhaseShift
 // quest:multiControlledPhaseFlip
+
+statuc Gate Unitary(int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1); // quest:unitary
+statuc Gate CompactUnitary(int targetQubit, qComplex alpha, qComplex beta); // quest:compactUnitary
+statuc Gate ControlledUnitary(int controlQubit, int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1); // quest:controlledUnitary
+statuc Gate ControlledCompactUnitary(int controlQubit, int targetQubit, qComplex alpha, qComplex beta); // quest:controlledCompactUnitary
+
 
 static Gate CCX(int c1, int c2, int targetQubit);
 static Gate CNOT(int controlQubit, int targetQubit); // qiskit:CXGate quest:controlledNot

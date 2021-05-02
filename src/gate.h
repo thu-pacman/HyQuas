@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CP, CR, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, P, S, SDG, T, TDG, R, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC 
+    CCX, CNOT, CY, CZ, CP, CR, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, P, S, SDG, T, TDG, R, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC, U, UC, CU, CUC
 };
 
 struct Gate {
@@ -27,6 +27,11 @@ struct Gate {
     bool isDiagonal() const {
         return type == GateType::CZ || type == GateType::CP || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::P || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ;
     }
+
+    static Gate U(int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1);
+    static Gate UC(int targetQubit, qComplex alpha, qComplex beta);
+    static Gate CU(int controlQubit, int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1);
+    static Gate CUC(int controlQubit, int targetQubit, qComplex alpha, qComplex beta);
 
     static Gate CCX(int c1, int c2, int targetQubit);
     static Gate CNOT(int controlQubit, int targetQubit);

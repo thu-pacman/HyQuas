@@ -6,6 +6,54 @@
 
 static int globalGateID = 0;
 
+Gate Gate::U(int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::U;
+    g.mat[0][0] = a0; g.mat[0][1] = a1;
+    g.mat[1][0] = b0; g.mat[1][1] = b1;
+    g.name = "U";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::UC(int targetQubit, qComplex alpha, qComplex beta) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::UC;
+    g.mat[0][0] = make_qComplex(alpha.x, alpha.y); g.mat[0][1] = make_qComplex(-beta.x, beta.y);
+    g.mat[1][0] = make_qComplex(beta.x, beta.y); g.mat[1][1] = make_qComplex(alpha.x, -alpha.y);
+    g.name = "UC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = -1;
+    return g;
+}
+
+Gate Gate::CU(int controlQubit, int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CU;
+    g.mat[0][0] = a0; g.mat[0][1] = a1;
+    g.mat[1][0] = b0; g.mat[1][1] = b1;
+    g.name = "CU";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
+Gate Gate::CUC(int controlQubit, int targetQubit, qComplex alpha, qComplex beta) {
+    Gate g;
+    g.gateID = ++ globalGateID;
+    g.type = GateType::CUC;
+    g.mat[0][0] = make_qComplex(alpha.x, alpha.y); g.mat[0][1] = make_qComplex(-beta.x, beta.y);
+    g.mat[1][0] = make_qComplex(beta.x, beta.y); g.mat[1][1] = make_qComplex(alpha.x, -alpha.y);
+    g.name = "CUC";
+    g.targetQubit = targetQubit;
+    g.controlQubit = controlQubit;
+    return g;
+}
+
 Gate Gate::CCX(int controlQubit, int controlQubit2, int targetQubit) {
     Gate g;
     g.gateID = ++ globalGateID;
@@ -622,6 +670,10 @@ GateType Gate::toCU(GateType type) {
 GateType Gate::toU(GateType type) {
     switch (type) {
         case GateType::CCX:
+        case GateType::CU:
+            return GateType::U;
+        case GateType::CUC:
+            return GateType::UC;
         case GateType::CNOT:
             return GateType::X;
         case GateType::CY:
