@@ -19,6 +19,7 @@ typedef long long qindex;
 typedef cuDoubleComplex qComplex;
 #define make_qComplex make_cuDoubleComplex
 #define MPI_Complex MPI_C_DOUBLE_COMPLEX
+#define MPI_CREAL MPI_DOUBLE
 #define cublasGEMM cublasZgemm
 #define NCCL_FLOAT_TYPE ncclDouble
 #else
@@ -27,6 +28,7 @@ typedef long long qindex;
 typedef cuFloatComplex qComplex;
 #define make_qComplex make_cuFloatComplex
 #define MPI_Complex MPI_C_COMPLEX
+#define MPI_CREAL MPI_FLOAT
 #define cublasGEMM cublasCgemm
 #define NCCL_FLOAT_TYPE ncclFloat
 #endif

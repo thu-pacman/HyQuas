@@ -19,18 +19,23 @@ struct ResultItem {
 
 class Circuit {
 public:
-    Circuit(int numQubits): numQubits(numQubits) {}
+    Circuit(int numQubits);
+
+    void addGate(const Gate& gate);
+    void printState();
+    qComplex ampAtGPU(qindex idx);
+    const int numQubits;
+    qreal measure(int qb);
+
+#ifdef IMPERATIVE
+private:
+    void applyGates();
+#endif
+    ResultItem ampAt(qindex idx);
+    void dumpGates();
+    bool localAmpAt(qindex idx, ResultItem& item);
     void compile();
     int run(bool copy_back = true, bool destroy = true);
-    void addGate(const Gate& gate) {
-        gates.push_back(gate);
-    }
-    void dumpGates();
-    void printState();
-    ResultItem ampAt(qindex idx);
-    qComplex ampAtGPU(qindex idx);
-    bool localAmpAt(qindex idx, ResultItem& item);
-    const int numQubits;
 
 private:
     qindex toPhysicalID(qindex idx);
@@ -44,4 +49,6 @@ private:
     std::vector<std::vector<qComplex*>> deviceMats;
     Schedule schedule;
     std::vector<qComplex> result;
+    enum class State {dirty, empty, measured} state;
+    std::vector<qreal> measureResults;
 };
