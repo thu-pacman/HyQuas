@@ -5,8 +5,10 @@ case $(hostname -s) in
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /v5oqq5n
     spack load openmpi@4.0.5 /h5eun6a
-    spack load nccl@2.7.8-1 /l3466wl
-    export NCCL_ROOT=/home/spack/opt/spack/linux-debian10-skylake_avx512/gcc-8.3.0/nccl-2.7.8-1-l3466wlxanfsfdna367pra5og2m7d3ut
+    export NCCL_ROOT=/home/heheda/tools/nccl/build
+    export CPATH=$NCCL_ROOT/include:$CPATH
+    export LIBRARY_PATH=$NCCL_ROOT/lib:$LIBRARY_PATH
+    export LD_LIBRARY_PATH=$NCCL_ROOT/lib:$LD_LIBRARY_PATH
     ;;
   gorgon*)
     echo "[CLUSTER] gorgon"
@@ -20,8 +22,6 @@ case $(hostname -s) in
     source /opt/spack/share/spack/setup-env.sh
     spack load cuda@10.2.89 /tlfcinz
     spack load openmpi@3.1.6 /5aaect6
-    spack load nccl@2.7.8-1 /bapygpe
-    export NCCL_ROOT=/opt/spack/opt/spack/linux-debian10-broadwell/gcc-8.3.0/nccl-2.7.8-1-bapygpevofy26tc7bl73enw73ntwvhmk
     ;;
   hanzo)
     echo "[CLUSTER] hanzo"
@@ -31,8 +31,6 @@ case $(hostname -s) in
     export CPATH=/usr/mpi/gcc/openmpi-4.1.0rc5/include:${CPATH-}
     spack load gcc@8.3.0 /liymwyb
     spack load cuda@10.2.89 /tlfcinz
-    spack load nccl@2.7.8-1 /bapygpe
-    export NCCL_ROOT=/opt/spack/opt/spack/linux-debian10-broadwell/gcc-8.3.0/nccl-2.7.8-1-bapygpevofy26tc7bl73enw73ntwvhmk
     ;;
   nova)
     echo "[CLUSTER] nova"

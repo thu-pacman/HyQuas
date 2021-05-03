@@ -377,8 +377,8 @@ qreal Circuit::measure(int qb) {
             MPI_Bcast(measureResults.data(), numQubits, MPI_CREAL, 0, MPI_COMM_WORLD);
         } else {
             MPI_Gather(
-                prob, MyGlobalVars::localGPUs * numLocalQubits, MPI_CREAL,
-                nullptr, MyGlobalVars::localGPUs * numLocalQubits, MPI_CREAL,
+                prob, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
+                nullptr, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
                 0, MPI_COMM_WORLD
             );
             MPI_Bcast(measureResults.data(), numQubits, MPI_CREAL, 0, MPI_COMM_WORLD);
