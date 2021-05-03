@@ -102,6 +102,7 @@ void Circuit::addGate(const Gate& gate) {
 #endif
 }
 
+#ifdef IMPERATIVE
 void Circuit::applyGates() {
     if (state == State::dirty) {
         compile();
@@ -110,6 +111,7 @@ void Circuit::applyGates() {
         state = State::empty;
     }
 }
+#endif
 
 qindex Circuit::toPhysicalID(qindex idx) {
     qindex id = 0;

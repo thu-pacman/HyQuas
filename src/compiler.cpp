@@ -68,7 +68,7 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
 }
 
 Schedule Compiler::run() {
-    SimpleCompiler localCompiler(numQubits, localSize, localSize, gates, true);
+    SimpleCompiler localCompiler(numQubits, localSize, (qindex) -1, gates, true);
     // ChunkCompiler localCompiler(numQubits, localSize, 21, gates);
     LocalGroup localGroup = localCompiler.run();
     auto moveBack = moveToNext(localGroup);
