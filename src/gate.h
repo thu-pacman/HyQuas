@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CCX, CNOT, CY, CZ, CP, CR, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, P, S, SDG, T, TDG, R, RX, RY, RZ, TOTAL, ID, GII, GZZ, GOC, GCC, U, UC, CU, CUC
+    CCX, CNOT, CY, CZ, CP, CR, CRX, CRY, CU1, CRZ, U1, U2, U3, H, X, Y, Z, P, S, SDG, T, TDG, R, RX, RY, RZ, U, UC, CU, CUC, TOTAL, ID, GII, GZZ, GOC, GCC
 };
 
 struct Gate {

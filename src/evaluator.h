@@ -3,7 +3,6 @@
 #include "utils.h"
 #include "gate.h"
 
-#define GATE_NUM 24
 #define MAX_QBITS 40
 
 #define CALC_ALL_PARAM 0
@@ -117,9 +116,9 @@ private:
     };
 
     // pergate single gate performance for 512 runs with 28 qbits
-    double pergate_single_perf[MAX_QBITS + 1][GATE_NUM][LOCAL_QUBIT_SIZE];
+    double pergate_single_perf[MAX_QBITS + 1][(size_t)GateType::TOTAL][LOCAL_QUBIT_SIZE];
     // pergate control gate performance for 512 runs with 28 qbits
-    double pergate_ctr_perf[MAX_QBITS + 1][GATE_NUM][LOCAL_QUBIT_SIZE][LOCAL_QUBIT_SIZE];
+    double pergate_ctr_perf[MAX_QBITS + 1][(size_t)GateType::TOTAL][LOCAL_QUBIT_SIZE][LOCAL_QUBIT_SIZE];
     // overhead of one pergate group
     double BLAS_perf[MAX_QBITS + 1][MAX_QBITS + 1];
     double cutt_cost[MAX_QBITS + 1];
