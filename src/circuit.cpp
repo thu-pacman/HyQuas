@@ -13,8 +13,11 @@
 #include "executor.h"
 using namespace std;
 
-int Circuit::run(bool copy_back, bool destroy) {
+Circuit::Circuit(int numQubits): numQubits(numQubits), state(State::empty), measureResults(numQubits, -1) {
     kernelInit(deviceStateVec, numQubits);
+}
+
+int Circuit::run(bool copy_back, bool destroy) {
     for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaProfilerStart());
@@ -92,6 +95,22 @@ void Circuit::dumpGates() {
     }
 }
 
+void Circuit::addGate(const Gate& gate) {
+    gates.push_back(gate);
+#ifdef IMPERATIVE
+    state = State::dirty;
+#endif
+}
+
+void Circuit::applyGates() {
+    if (state == State::dirty) {
+        compile();
+        run(false, false);
+        gates.clear();
+        state = State::empty;
+    }
+}
+
 qindex Circuit::toPhysicalID(qindex idx) {
     qindex id = 0;
     auto& pos = schedule.finalState.pos;
@@ -118,13 +137,16 @@ ResultItem Circuit::ampAt(qindex idx) {
 }
 
 qComplex Circuit::ampAtGPU(qindex idx) {
+#ifdef IMPERATIVE
+    applyGates();
+#endif
     qindex id = toPhysicalID(idx);
     qComplex ret;
 #if USE_MPI
     qindex localAmps = (1 << numQubits) / MyMPI::commSize;
     qindex rankID = id / localAmps;
 
-    if (!USE_MPI || MyMPI::rank == rankID) {
+    if (MyMPI::rank == rankID) {
         int localID = id % localAmps;
 #else
         int localID = id;
@@ -248,6 +270,9 @@ void Circuit::gatherAndPrint(const std::vector<ResultItem>& results) {
 
 
 void Circuit::printState() {
+#ifdef IMPERATIVE
+    applyGates();
+#endif
 #if USE_MPI
     std::vector<ResultItem> results;
     ResultItem item;
@@ -307,4 +332,59 @@ void Circuit::printState() {
     for (auto& item: results)
         item.print();
 #endif
+}
+
+qreal Circuit::measure(int qb) {
+#ifdef IMPERATIVE
+    applyGates();
+#endif
+    if (state != State::measured) {
+        int numLocalQubits = numQubits - MyGlobalVars::bit;
+        qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
+        for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
+            checkCudaErrors(cudaSetDevice(i));
+            kernelMeasureAll(deviceStateVec[i], prob[i], numLocalQubits);
+        }
+        qreal allProb[MyGlobalVars::numGPUs][numLocalQubits + 1];
+#if USE_MPI
+        if (MyMPI::rank == 0) {
+            MPI_Gather(
+                prob, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
+                allProb, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
+                0, MPI_COMM_WORLD
+            );
+#else
+            memcpy(allProb, prob, sizeof(prob));
+#endif
+            auto& pos = schedule.finalState.pos;
+            for (int i = 0; i < numQubits; i++) {
+                measureResults[i] = 0;
+                int x = pos[i];
+                if (x < numLocalQubits) {
+                    for (int j = 0; j < MyGlobalVars::numGPUs; j++) {
+                        measureResults[i] += allProb[j][x];
+                    }
+                } else {
+                    int y = x - numLocalQubits;
+                    for (int j = 0; j < MyGlobalVars::numGPUs; j++) {
+                        if (!(j >> y & 1)) {
+                            measureResults[i] += allProb[j][numLocalQubits];
+                        }
+                    }
+                }
+            }
+#if USE_MPI
+            MPI_Bcast(measureResults.data(), numQubits, MPI_CREAL, 0, MPI_COMM_WORLD);
+        } else {
+            MPI_Gather(
+                prob, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
+                nullptr, MyGlobalVars::localGPUs * (numLocalQubits + 1), MPI_CREAL,
+                0, MPI_COMM_WORLD
+            );
+            MPI_Bcast(measureResults.data(), numQubits, MPI_CREAL, 0, MPI_COMM_WORLD);
+        }
+#endif
+        state = State::measured;
+    }
+    return measureResults[qb];
 }

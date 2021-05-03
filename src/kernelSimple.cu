@@ -494,13 +494,36 @@ __global__ void measure(qComplex* a, qreal* ans, int numQubit_, int targetQubit)
     if (tid == 0) ans[blockIdx.x] = sdata[0];
 }
 
+// need to optimize
+template <unsigned int blockSize>
+__global__ void sum(qComplex* a, qreal* ans, int numQubit_, int targetQubit) {
+    __shared__ qreal sdata[blockSize];
+    qindex idx = blockIdx.x * blockSize + threadIdx.x;
+    int tid = threadIdx.x;
+    qindex mask = (qindex(1) << targetQubit) - 1;
+    sdata[tid] = 0;
+    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
+        qindex hi = lo | (1 << targetQubit);
+        sdata[tid] += a[lo].x * a[lo].x + a[lo].y * a[lo].y;
+        sdata[tid] += a[hi].x * a[hi].x + a[hi].y * a[hi].y;
+    }
+    __syncthreads();
+    blockReduce<blockSize>(sdata, tid);
+    if (tid == 0) ans[blockIdx.x] = sdata[0];
+}
+
 qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit) {
     int numQubit_ = numQubits - 1;
     qindex nVec = 1 << numQubit_;
     qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
     qreal *ans1, *ans2, *ans3;
     checkCudaErrors(cudaMalloc(&ans1, sizeof(qreal) * totalBlocks));
-    measure<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, targetQubit);
+    if (targetQubit == -1) {
+        sum<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, 0);
+    } else {
+        measure<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP>>>(deviceStateVec, ans1, numQubit_, targetQubit);
+    }
     checkCudaErrors(cudaMalloc(&ans2, sizeof(qreal) * (1<<REDUCE_BLOCK_DEP)));
     reduce<1<<THREAD_DEP><<<1<<REDUCE_BLOCK_DEP, 1<<THREAD_DEP>>>
         (ans1, ans2, totalBlocks, 1 << (THREAD_DEP + REDUCE_BLOCK_DEP));
@@ -527,4 +550,11 @@ void kernelDeviceToHost(qComplex* hostStateVec, qComplex* deviceStateVec, int nu
 
 void kernelDestroy(qComplex* deviceStateVec) {
     cudaFree(deviceStateVec);
+}
+
+void kernelMeasureAll(qComplex* deviceStateVec, qreal* results, int numLocalQubits) {
+    for (int i = 0; i < numLocalQubits; i++) {
+        results[i] = kernelMeasure(deviceStateVec, numLocalQubits, i);
+    }
+    results[numLocalQubits] = kernelMeasure(deviceStateVec, numLocalQubits, -1);
 }

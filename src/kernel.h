@@ -12,6 +12,7 @@
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits);
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates);
 qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit);
+void kernelMeasureAll(qComplex* deviceStateVec, qreal* results, int numLocalQubits);
 qComplex kernelGetAmp(qComplex* deviceStateVec, qindex idx);
 void kernelDeviceToHost(qComplex* hostStateVec, qComplex* deviceStateVec, int numQubits);
 void kernelDestroy(qComplex* deviceStateVec);
