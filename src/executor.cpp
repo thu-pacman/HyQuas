@@ -663,4 +663,7 @@ void Executor::allBarrier() {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams_comm[g]));
     }
+#if USE_MPI
+    checkMPIErrors(MPI_Barrier(MPI_COMM_WORLD));
+#endif
 }
