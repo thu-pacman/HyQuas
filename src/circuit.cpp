@@ -339,12 +339,10 @@ qreal Circuit::measure(int qb) {
     applyGates();
 #endif
     if (state != State::measured) {
+        auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
         qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
-        for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
-            checkCudaErrors(cudaSetDevice(i));
-            kernelMeasureAll(deviceStateVec[i], prob[i], numLocalQubits);
-        }
+        kernelMeasureAll(deviceStateVec, prob[0], numLocalQubits);
         qreal allProb[MyGlobalVars::numGPUs][numLocalQubits + 1];
 #if USE_MPI
         if (MyMPI::rank == 0) {
@@ -385,6 +383,9 @@ qreal Circuit::measure(int qb) {
         }
 #endif
         state = State::measured;
+        auto end = chrono::system_clock::now();
+        auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
+        Logger::add("Measure Time: %d us", int(duration.count()));
     }
     return measureResults[qb];
 }
