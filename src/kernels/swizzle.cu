@@ -77,7 +77,7 @@ __device__ __forceinline__ void U1Hi(int hiIdx, qComplex p) {
     shm[hiIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(hi, p), COMPLEX_MULTIPLY_IMAG(hi, p));
 }
 
-__device__ __forceinline__ void USingle(int loIdx, int hiIdx, qComplex v00, qComplex v01, qComplex v10, qComplex v11) {
+__device__ __forceinline__ void U3Single(int loIdx, int hiIdx, qComplex v00, qComplex v01, qComplex v10, qComplex v11) {
     qComplex lo = shm[loIdx];
     qComplex hi = shm[hiIdx];
     shm[loIdx] = make_qComplex(COMPLEX_MULTIPLY_REAL(lo, v00) + COMPLEX_MULTIPLY_REAL(hi, v01),
@@ -257,6 +257,8 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     CASE_CONTROL(CNOT, XSingle(lo, hi))
                     CASE_CONTROL(CY, YSingle(lo, hi))
                     CASE_CONTROL(CZ, ZHi(hi))
+                    FOLLOW_NEXT(CU)
+                    CASE_CONTROL(CUC, U3Single(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)));
                     CASE_CONTROL(CRX, RXSingle(lo, hi, deviceGates[i].r00, -deviceGates[i].i01))
                     CASE_CONTROL(CRY, RYSingle(lo, hi, deviceGates[i].r00, deviceGates[i].r10))
                     CASE_CONTROL(CU1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
@@ -330,7 +332,11 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
                     FOLLOW_NEXT(CU1)
                     CASE_SINGLE(U1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
                     FOLLOW_NEXT(U2)
-                    CASE_SINGLE(U3, USingle(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)));
+                    FOLLOW_NEXT(U)
+                    FOLLOW_NEXT(UC)
+                    FOLLOW_NEXT(CU)
+                    FOLLOW_NEXT(CUC)
+                    CASE_SINGLE(U3, U3Single(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)));
                     CASE_SINGLE(H, HSingle(lo, hi))
                     FOLLOW_NEXT(X)
                     FOLLOW_NEXT(CNOT)

@@ -121,6 +121,10 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CY)][0][2]; break;
             case GateType::CZ : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CZ)][0][2]; break;
+            case GateType::CU :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CU)][0][2]; break;
+            case GateType::CUC :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CUC)][0][2]; break;
             case GateType::CRX : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRX)][0][2]; break;
             case GateType::CRY : 
@@ -157,6 +161,10 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
                 tim_pred += pergate_single_perf[numQubits][int(GateType::RY)][1]; break;
             case GateType::RZ : 
                 tim_pred += pergate_single_perf[numQubits][int(GateType::RZ)][1]; break;
+            case GateType::U :
+                tim_pred += pergate_single_perf[numQubits][int(GateType::U)][1]; break;
+            case GateType::UC :
+                tim_pred += pergate_single_perf[numQubits][int(GateType::UC)][1]; break;
             default:
                 printf("meet wrong gate : %s\n", Gate::get_name(gate.type).c_str());
                 UNREACHABLE()
@@ -178,6 +186,10 @@ double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types)
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CY)][0][2]; break;
             case GateType::CZ : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CZ)][0][2]; break;
+            case GateType::CU :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CU)][0][2]; break;
+            case GateType::CUC :
+                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CUC)][0][2]; break;
             case GateType::CRX : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CRX)][0][2]; break;
             case GateType::CRY : 
@@ -214,6 +226,10 @@ double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types)
                 tim_pred += pergate_single_perf[numQubits][int(GateType::RY)][1]; break;
             case GateType::RZ : 
                 tim_pred += pergate_single_perf[numQubits][int(GateType::RZ)][1]; break;
+            case GateType::U :
+                tim_pred += pergate_single_perf[numQubits][int(GateType::U)][1]; break;
+            case GateType::UC :
+                tim_pred += pergate_single_perf[numQubits][int(GateType::UC)][1]; break;
             default:
                 printf("meet wrong gate : %s\n", Gate::get_name(ty).c_str());
                 UNREACHABLE()
