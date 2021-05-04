@@ -19,4 +19,4 @@ for test in ${tests[*]}; do
     diff -q -B $std_dir/$test.log tmp.log || true
 done
 
-grep -Er "Logger:.*Time" $1/*.log 
+grep -Er "Logger.*Time" $1/*.log 
