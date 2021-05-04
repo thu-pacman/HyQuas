@@ -95,13 +95,11 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
     int sliceSize = INPLACE;
     while (sliceSize < MAX_SLICE && !(localMask >> sliceSize & 1))
         sliceSize ++;
-    
-    cudaEvent_t event[MyGlobalVars::localGPUs];
+
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        checkCudaErrors(cudaEventCreate(&event[g]));
-        checkCudaErrors(cudaEventRecord(event[g], MyGlobalVars::streams[g]));
-        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[g], event[g], 0));
+        checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams[g]));
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[g], MyGlobalVars::events[g], 0));
     }
 
     qComplex* tmpBuffer[MyGlobalVars::localGPUs];
@@ -111,14 +109,14 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
     for (int i = 0; i < MyGlobalVars::localGPUs; i++)
         tmpBuffer[i] = deviceStateVec[i] + tmpStart;
 
-    if (commSize != MyGlobalVars::numGPUs)
-        UNREACHABLE();
-    // printf("commSize %d\n", commSize);
-    // for (int i = 0; i < commSize; i++) printf("%x ", localMasks[i]); printf("\n");
     for (qindex iter = 0; iter < (1 << numLocalQubits); iter += (1 << sliceSize)) {
         if (iter & localMask) continue;
         for (int xr = 1; xr < commSize; xr++) {
             // copy from src to tmp_buffer
+            for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+                checkCudaErrors(cudaSetDevice(g));
+                checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams_comm[g]));
+            }
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                 // the (a%commSize)-th GPU in the a/commSize comm_world (comm[a]) ->
                 // the (a%commSize)^xr -th GPU in the same comm_world comm[a^xr]
@@ -131,6 +129,7 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
                 UNREACHABLE();
 #else
                 checkCudaErrors(cudaSetDevice(comm[b]));
+                checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[comm[b]], MyGlobalVars::events[comm[a]], 0));
                 checkCudaErrors(cudaMemcpyAsync(
                     tmpBuffer[comm[b]],
                     deviceStateVec[comm[a]] + srcBias,
@@ -138,8 +137,11 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
                     cudaMemcpyDeviceToDevice,
                     MyGlobalVars::streams_comm[comm[b]]
                 ));
-                checkCudaErrors(cudaEventRecord(event[comm[b]], MyGlobalVars::streams_comm[comm[b]]));
 #endif
+            }
+            for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+                checkCudaErrors(cudaSetDevice(g));
+                checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams_comm[g]));
             }
             // copy from tmp_buffer to dst
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
@@ -152,7 +154,7 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
                 UNREACHABLE();
 #else
                 checkCudaErrors(cudaSetDevice(comm[b]));
-                checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[comm[b]], event[comm[a]], 0));
+                checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[comm[b]], MyGlobalVars::events[comm[a]], 0));
                 checkCudaErrors(cudaMemcpyAsync(
                     deviceStateVec[comm[b]] + dstBias,
                     tmpBuffer[comm[b]],

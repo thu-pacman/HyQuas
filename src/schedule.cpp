@@ -483,12 +483,9 @@ State LocalGroup::initStateInplace(const State& oldState, int numQubits, const s
     int overlapCnt = bitCount(overlapGlobals);
     std::vector<int> oldGlobals;
     for (int i = 0; i < MyGlobalVars::bit; i++) {
-        if (!(overlapGlobals >> i & 1)) {
-            oldGlobals.push_back(layout[i + numLocalQubits]);
-        }
+        oldGlobals.push_back(layout[i + numLocalQubits]);
     }
-    assert(oldGlobals.size() == newGlobals.size());
-    assert(oldGlobals.size() + overlapCnt == MyGlobalVars::bit);
+    assert(oldGlobals.size() == MyGlobalVars::bit);
     std::vector<int> newPos;
     for (size_t i = 0; i < oldGlobals.size(); i++) {
         if (oldGlobals[i] != newGlobals[i])
