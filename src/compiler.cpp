@@ -68,7 +68,7 @@ std::vector<std::pair<std::vector<Gate>, qindex>> Compiler::moveToNext(LocalGrou
 }
 
 Schedule Compiler::run() {
-    SimpleCompiler localCompiler(numQubits, localSize, (qindex) -1, gates, true);
+    SimpleCompiler localCompiler(numQubits, localSize, (qindex) -1, gates, true, 0, (1 << INPLACE) - 1);
     // ChunkCompiler localCompiler(numQubits, localSize, 21, gates);
     LocalGroup localGroup = localCompiler.run();
     auto moveBack = moveToNext(localGroup);
@@ -123,7 +123,12 @@ Schedule Compiler::run() {
         if (id == 0) {
             state = lg.initFirstGroupState(state, numQubits, newGlobals);
         } else {
-            state = lg.initState(state, numQubits, newGlobals, overlapGlobals, moveBack[id].second);
+            if (INPLACE) {
+                state = lg.initStateInplace(state, numQubits, newGlobals, overlapGlobals);
+            } else {
+                state = lg.initState(state, numQubits, newGlobals, overlapGlobals, moveBack[id].second);
+            }
+
         }
 
         qindex overlapLocals = gg.relatedQubits;
@@ -198,9 +203,9 @@ LocalGroup SimpleCompiler::run() {
             for (int i = 0; i < numQubits; i++)
                 if (!(whiteList >> i & 1))
                     full[i] = 1;
-            for (int i = 0; i < numQubits; i++)
-                related[i] = required;
         }
+        for (int i = 0; i < numQubits; i++)
+            related[i] = required;
 
         std::vector<int> idx = getGroupOpt(full, related, enableGlobal, localSize, localQubits);
         GateGroup gg;

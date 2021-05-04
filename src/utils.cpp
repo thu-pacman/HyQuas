@@ -10,6 +10,7 @@ int bit;
 std::unique_ptr<cudaStream_t[]> streams;
 std::unique_ptr<cudaStream_t[]> streams_comm;
 std::unique_ptr<cublasHandle_t[]> blasHandles;
+std::unique_ptr<cudaEvent_t[]> events;
 #if USE_MPI
 std::unique_ptr<ncclComm_t[]> ncclComms;
 #endif
@@ -27,6 +28,7 @@ void init() {
     streams = std::make_unique<cudaStream_t[]>(MyGlobalVars::localGPUs);
     streams_comm = std::make_unique<cudaStream_t[]>(MyGlobalVars::localGPUs);
     blasHandles = std::make_unique<cublasHandle_t[]>(MyGlobalVars::localGPUs);
+    events = std::make_unique<cudaEvent_t[]>(MyGlobalVars::localGPUs);
     checkCuttErrors(cuttInit());
     for (int i = 0; i < localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
@@ -42,6 +44,7 @@ void init() {
         checkBlasErrors(cublasSetStream(blasHandles[i], streams[i]));
         checkCudaErrors(cudaStreamCreate(&streams_comm[i]));
         checkCudaErrors(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+        checkCudaErrors(cudaEventCreate(&events[i]));
     }
     #if USE_MPI
         checkMPIErrors(MPI_Barrier(MPI_COMM_WORLD));

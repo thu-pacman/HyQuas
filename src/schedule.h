@@ -85,9 +85,10 @@ struct LocalGroup {
     LocalGroup(LocalGroup&&) = default;
 
     bool contains(int i) { return (relatedQubits >> i) & 1; }
-    State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
     void getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup = false);
+    State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
     State initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals);
+    State initStateInplace(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals);
     std::vector<unsigned char> serialize() const;
     static LocalGroup deserialize(const unsigned char* arr, int& cur);
 };

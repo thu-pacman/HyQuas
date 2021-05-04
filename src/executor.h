@@ -14,6 +14,7 @@ public:
 private:
     // instructions
     void transpose(std::vector<cuttHandle> plans);
+    void inplaceAll2All(int commSize, std::vector<int> comm, const State& newState);
     void all2all(int commSize, std::vector<int> comm);
     void setState(const State& newState) { state = newState; }
     void applyGateGroup(GateGroup& gg, int sliceID = -1);
@@ -25,6 +26,8 @@ private:
     void storeState();
     void loadState();
     void sliceBarrier(int sliceID);
+    void eventBarrier();
+    void eventBarrierAll();
     void allBarrier();
 
     // utils

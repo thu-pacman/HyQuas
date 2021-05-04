@@ -477,6 +477,55 @@ State LocalGroup::initState(const State& oldState, int numQubits, const std::vec
     return newState;
 }
 
+State LocalGroup::initStateInplace(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    auto pos = oldState.pos, layout = oldState.layout;
+    int overlapCnt = bitCount(overlapGlobals);
+    std::vector<int> oldGlobals;
+    for (int i = 0; i < MyGlobalVars::bit; i++) {
+        if (!(overlapGlobals >> i & 1)) {
+            oldGlobals.push_back(layout[i + numLocalQubits]);
+        }
+    }
+    assert(oldGlobals.size() == newGlobals.size());
+    assert(oldGlobals.size() + overlapCnt == MyGlobalVars::bit);
+    std::vector<int> newPos;
+    for (size_t i = 0; i < oldGlobals.size(); i++) {
+        if (oldGlobals[i] != newGlobals[i])
+            newPos.push_back(pos[newGlobals[i]]);
+    }
+    std::sort(newPos.begin(), newPos.end());
+    int psCnt = 0;
+    for (size_t i = 0; i < oldGlobals.size(); i++) {
+        if (oldGlobals[i] != newGlobals[i]) {
+            int x = oldGlobals[i];
+            int y = layout[newPos[psCnt]];
+            layout[pos[x]] = y; layout[pos[y]] = x;
+            std::swap(pos[x], pos[y]);
+            psCnt++;
+        }
+    }
+#ifdef SHOW_SCHEDULE
+    printf("pos: "); for (auto x: pos) printf("%d ", x); printf("\n");
+    printf("layout: "); for (auto x: layout) printf("%d ", x); printf("\n");
+    printf("------------------------------------------------------\n");
+#endif
+    auto newState = State(pos, layout);
+    this->state = newState;
+    std::vector<std::pair<int, int>> newCommPair;
+    for (int i = 0; i < MyGlobalVars::numGPUs; i++) {
+        newCommPair.push_back(std::make_pair(i & overlapGlobals, i));
+    }
+    std::sort(newCommPair.begin(), newCommPair.end());
+    std::vector<int> newComm;
+    for (auto x: newCommPair) {
+        newComm.push_back(x.second);
+    }
+    a2aComm = newComm;
+    a2aCommSize = 1 << (MyGlobalVars::bit - overlapCnt);
+    return newState;
+}
+
 State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals) {
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     auto pos = oldState.pos, layout = oldState.layout;
@@ -509,6 +558,7 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
 
 void LocalGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup) {
     cuttPlans.clear();
+#if not INPLACE > 0
     if (isFirstGroup) {
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             cuttPlans.push_back(cuttHandle());
@@ -520,6 +570,7 @@ void LocalGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*
         cuttPermPointers.push_back(cuttPerm.data());
         locals.push_back(numLocalQubits);
     }
+#endif
     for (auto& gg: overlapGroups) {
         gg.getCuttPlanPointers(numLocalQubits - MyGlobalVars::bit, cuttPlanPointers, cuttPermPointers, locals);
     }

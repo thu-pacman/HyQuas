@@ -8,9 +8,12 @@ const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reducti
 
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     size_t size = (sizeof(qComplex) << numQubits) >> MyGlobalVars::bit;
-    if (MyGlobalVars::numGPUs > 1 || BACKEND == 3 || BACKEND == 4) {
+    if ((MyGlobalVars::numGPUs > 1 && !INPLACE) || BACKEND == 3 || BACKEND == 4) {
         size <<= 1;
     }
+#if INPLACE
+    size += sizeof(qComplex) * (1 << MAX_SLICE);
+#endif
 #if BACKEND == 2
     deviceStateVec.resize(1);
     checkCudaErrors(cudaSetDevice(0));

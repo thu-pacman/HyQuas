@@ -34,9 +34,14 @@ void Executor::run() {
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID ++) {
         auto& localGroup = schedule.localGroups[lgID];
         if (lgID > 0) {
-            this->transpose(localGroup.cuttPlans);
-            this->all2all(localGroup.a2aCommSize, localGroup.a2aComm);
+            if (INPLACE) {
+                this->inplaceAll2All(localGroup.a2aCommSize, localGroup.a2aComm, localGroup.state);
+            } else {
+                this->transpose(localGroup.cuttPlans);
+                this->all2all(localGroup.a2aCommSize, localGroup.a2aComm);
+            }
             this->setState(localGroup.state);
+#ifdef ENABLE_OVERLAP
             this->storeState();
             for (int s = 0; s < numSlice; s++) {
                 this->loadState();
@@ -45,6 +50,7 @@ void Executor::run() {
                     this->applyGateGroup(gg, s);
                 }
             }
+#endif
         } else {
             this->setState(localGroup.state);
             assert(localGroup.overlapGroups.size() == 0);
@@ -63,6 +69,104 @@ void Executor::transpose(std::vector<cuttHandle> plans) {
     }
 }
 
+void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& newState) {
+    int numLocalQubits = numQubits - MyGlobalVars::bit;
+    qindex oldGlobals = 0;
+    for (int i = numLocalQubits; i < numQubits; i++)
+        oldGlobals |= 1ll << state.layout[i];
+    qindex newGlobals = 0;
+    for (int i = numLocalQubits; i < numQubits; i++)
+        newGlobals |= 1ll << newState.layout[i];
+    
+    qindex globalMask = 0;
+    qindex localMasks[commSize];
+    qindex localMask = 0;
+    for (int i = numLocalQubits; i < numQubits; i++)
+        if (newState.layout[i] != state.layout[i]) {
+            int x = state.layout[i];
+            globalMask |= 1ll << i;
+            localMask |= 1ll << newState.pos[x];
+        }
+
+    for (qindex i = commSize-1, msk = localMask; i >= 0; i--, msk = localMask & (msk - 1)) {
+        localMasks[i] = msk;
+    }
+
+    int sliceSize = INPLACE;
+    while (sliceSize < MAX_SLICE && !(localMask >> sliceSize & 1))
+        sliceSize ++;
+    
+    cudaEvent_t event[MyGlobalVars::localGPUs];
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCudaErrors(cudaEventCreate(&event[g]));
+        checkCudaErrors(cudaEventRecord(event[g], MyGlobalVars::streams[g]));
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[g], event[g], 0));
+    }
+
+    qComplex* tmpBuffer[MyGlobalVars::localGPUs];
+    size_t tmpStart = 1ll << numLocalQubits;
+    if (BACKEND == 3 || BACKEND == 4)
+        tmpStart <<= 1;
+    for (int i = 0; i < MyGlobalVars::localGPUs; i++)
+        tmpBuffer[i] = deviceStateVec[i] + tmpStart;
+
+    if (commSize != MyGlobalVars::numGPUs)
+        UNREACHABLE();
+    // printf("commSize %d\n", commSize);
+    // for (int i = 0; i < commSize; i++) printf("%x ", localMasks[i]); printf("\n");
+    for (qindex iter = 0; iter < (1 << numLocalQubits); iter += (1 << sliceSize)) {
+        if (iter & localMask) continue;
+        for (int xr = 1; xr < commSize; xr++) {
+            // copy from src to tmp_buffer
+            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                // the (a%commSize)-th GPU in the a/commSize comm_world (comm[a]) ->
+                // the (a%commSize)^xr -th GPU in the same comm_world comm[a^xr]
+                int b = a ^ xr;
+                if (comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
+                    continue;
+                qindex srcBias = iter + localMasks[b % commSize];
+#if USE_MPI
+                int comm_a = comm[a] %  MyGlobalVars::localGPUs;
+                UNREACHABLE();
+#else
+                checkCudaErrors(cudaSetDevice(comm[b]));
+                checkCudaErrors(cudaMemcpyAsync(
+                    tmpBuffer[comm[b]],
+                    deviceStateVec[comm[a]] + srcBias,
+                    (sizeof(qComplex) << sliceSize),
+                    cudaMemcpyDeviceToDevice,
+                    MyGlobalVars::streams_comm[comm[b]]
+                ));
+                checkCudaErrors(cudaEventRecord(event[comm[b]], MyGlobalVars::streams_comm[comm[b]]));
+#endif
+            }
+            // copy from tmp_buffer to dst
+            for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
+                int b = a ^ xr;
+                if (comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
+                    continue;
+                qindex dstBias = iter + localMasks[a % commSize];
+#if USE_MPI
+                int comm_a = comm[a] %  MyGlobalVars::localGPUs;
+                UNREACHABLE();
+#else
+                checkCudaErrors(cudaSetDevice(comm[b]));
+                checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams_comm[comm[b]], event[comm[a]], 0));
+                checkCudaErrors(cudaMemcpyAsync(
+                    deviceStateVec[comm[b]] + dstBias,
+                    tmpBuffer[comm[b]],
+                    (sizeof(qComplex) << sliceSize),
+                    cudaMemcpyDeviceToDevice,
+                    MyGlobalVars::streams_comm[comm[b]]
+                ));
+#endif
+            }
+        }
+    }
+    this->eventBarrier();
+}
+
 void Executor::all2all(int commSize, std::vector<int> comm) {
     int numLocalQubit = numQubits - MyGlobalVars::bit;
     qindex numElements = 1ll << numLocalQubit;
@@ -72,11 +176,10 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
     partID.resize(numSlice * MyGlobalVars::localGPUs);
     peer.resize(numSlice * MyGlobalVars::localGPUs);
     int sliceID = 0;
-    cudaEvent_t lastGroupEvent[MyGlobalVars::localGPUs];
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
-        checkCudaErrors(cudaEventCreate(&lastGroupEvent[g]));
-        checkCudaErrors(cudaEventRecord(lastGroupEvent[g], MyGlobalVars::streams[g]));
+        checkCudaErrors(cudaEventCreate(&MyGlobalVars::events[g]));
+        checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams[g]));
     }
     for (int xr = 0; xr < commSize; xr++) {
         for (int p = 0; p < numPart; p++) {
@@ -94,7 +197,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 if (p == 0) {
                     checkCudaErrors(cudaStreamWaitEvent(
                         MyGlobalVars::streams_comm[comm_a],
-                        lastGroupEvent[comm_a], 0)
+                        MyGlobalVars::events[comm_a], 0)
                     );
                 }
                 checkCudaErrors(cudaSetDevice(comm_a));
@@ -145,7 +248,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 if (p == 0) {
                     checkCudaErrors(cudaStreamWaitEvent(
                         MyGlobalVars::streams_comm[comm[a]],
-                        lastGroupEvent[comm[b]], 0)
+                        MyGlobalVars::events[comm[b]], 0)
                     );
                 }
                 checkCudaErrors(cudaMemcpyAsync(
@@ -163,6 +266,7 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
             checkNCCLErrors(ncclGroupEnd());
 #endif
             // events should be recorded after ncclGroupEnd
+#ifdef ENABLE_OVERLAP
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
                 if (USE_MPI && comm[a] / MyGlobalVars::localGPUs != MyMPI::rank)
                     continue;
@@ -173,9 +277,13 @@ void Executor::all2all(int commSize, std::vector<int> comm) {
                 checkCudaErrors(cudaEventRecord(event, MyGlobalVars::streams_comm[comm_a]));
                 commEvents[sliceID * MyGlobalVars::localGPUs + comm_a] = event;
             }
+#endif
             sliceID++;
         }
     }
+#ifndef ENABLE_OVERLAP
+    this->eventBarrierAll();
+#endif
 }
 
 #define SET_GATE_TO_ID(g, i) { \
@@ -666,4 +774,25 @@ void Executor::allBarrier() {
 #if USE_MPI
     checkMPIErrors(MPI_Barrier(MPI_COMM_WORLD));
 #endif
+}
+
+void Executor::eventBarrierAll() {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams_comm[g]));
+    }
+    for (int gg = 0; gg < MyGlobalVars::localGPUs; gg++) {
+        checkCudaErrors(cudaSetDevice(gg));
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[gg], MyGlobalVars::events[g], 0));
+        }
+    }
+}
+
+void Executor::eventBarrier() {
+    for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+        checkCudaErrors(cudaSetDevice(g));
+        checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams_comm[g]));
+        checkCudaErrors(cudaStreamWaitEvent(MyGlobalVars::streams[g], MyGlobalVars::events[g], 0));
+    }
 }

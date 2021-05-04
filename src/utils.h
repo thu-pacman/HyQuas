@@ -152,6 +152,7 @@ namespace MyGlobalVars {
     extern std::unique_ptr<cudaStream_t[]> streams;
     extern std::unique_ptr<cudaStream_t[]> streams_comm;
     extern std::unique_ptr<cublasHandle_t[]> blasHandles;
+    extern std::unique_ptr<cudaEvent_t[]> events;
 #if USE_MPI
     extern std::unique_ptr<ncclComm_t[]> ncclComms;
 #endif

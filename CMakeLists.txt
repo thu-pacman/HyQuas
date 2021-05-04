@@ -98,6 +98,18 @@ set(THREAD_DEP "7" CACHE STRING "thread dep")
 MESSAGE(STATUS "thread_dep = ${THREAD_DEP}")
 add_definitions(-DTHREAD_DEP_DEFINED=${THREAD_DEP})
 
+set(INPLACE "0" CACHE STRING "fixed local size")
+MESSAGE(STATUS "INPLACE = ${INPLACE}")
+add_definitions(-DINPLACE=${INPLACE})
+
+set(MAX_SLICE "20" CACHE STRING "max slice in inplace mode")
+MESSAGE(STATUS "MAX_SLICE = ${MAX_SLICE}")
+add_definitions(-DMAX_SLICE=${MAX_SLICE})
+
+if (NOT ${INPLACE} EQUAL "0" AND ${ENABLE_OVERLAP})
+    MESSAGE(FATAL_ERROR "Do not support INPLACE and ENABLE_OVERLAP simultaneously")
+endif()
+
 if (EVALUATOR_PREPROCESS)
     set(PROCESS process)
     add_executable(process evaluator-preprocess/process.cpp)
