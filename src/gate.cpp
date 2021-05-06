@@ -330,6 +330,7 @@ Gate Gate::MU1(std::vector<int> controlQubits, int targetQubit, qreal lambda) {
     g.encodeQubit = to_bitmap(controlQubits);
     g.targetQubit = targetQubit;
     g.controlQubit = -2;
+    g.controlQubits = controlQubits;
     return g;
 }
 
@@ -345,6 +346,7 @@ Gate Gate::MZ(std::vector<int> controlQubits, int targetQubit) {
     g.encodeQubit = to_bitmap(controlQubits);
     g.targetQubit = targetQubit;
     g.controlQubit = -2;
+    g.controlQubits = controlQubits;
     return g;
 }
 
@@ -360,6 +362,7 @@ Gate Gate::MU(std::vector<int> controlQubits, int targetQubit, qComplex a0, qCom
     g.encodeQubit = to_bitmap(controlQubits);
     g.targetQubit = targetQubit;
     g.controlQubit = -2;
+    g.controlQubits = controlQubits;
     return g;
 }
 
@@ -628,7 +631,7 @@ Gate Gate::random(int lo, int hi, GateType type) {
         case GateType::MU1: // no break
         case GateType::MZ: // no break
         case GateType::MU: {
-            UNIMPLENTAED();
+            UNIMPLEMENTAED();
         }
         default: {
             printf("invalid %d\n", (int) type);
@@ -748,5 +751,14 @@ Gate Gate::deserialize(const unsigned char* arr, int& cur) {
     DESERIALIZE_STEP(g.targetQubit);
     DESERIALIZE_STEP(g.controlQubit);
     DESERIALIZE_STEP(g.encodeQubit);
+    if (g.controlQubit == -2) {
+        g.controlQubits.clear();
+        int qid = 0;
+        qindex ctrs = g.encodeQubit;
+        while (ctrs > 0) {
+            if (ctrs & 1) g.controlQubits.push_back(qid);
+            qid ++;
+        }
+    }
     return g;
 }

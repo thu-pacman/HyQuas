@@ -55,7 +55,7 @@ typedef cuFloatComplex qComplex;
     exit(1); \
 }
 
-#define UNIMPLENTAED() { \
+#define UNIMPLEMENTAED() { \
     printf("file %s line %i: unimplemented!\n", __FILE__, __LINE__); \
     fflush(stdout); \
     exit(1); \

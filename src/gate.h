@@ -16,6 +16,7 @@ struct Gate {
     int targetQubit;
     int controlQubit; // -1 for single bit gate， -2 for MC gates, -3 for two qubit gates
     qindex encodeQubit; // bit map of the control qubits of MC gates, target2 for two qubit gate
+    std::vector<int> controlQubits;
     Gate(): controlQubit(-1), encodeQubit(0) {};
     Gate(const Gate&) = default;
     
@@ -37,6 +38,17 @@ struct Gate {
     
     bool isDiagonal() const {
         return type == GateType::CZ || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ || type == GateType::MU1 || type == GateType::MZ;
+    }
+
+    bool hasControl(int q) const {
+        if (isControlGate()) return controlQubit == q;
+        if (isMCGate()) return encodeQubit >> q & 1;
+        return false;
+    }
+
+    bool hasTarget(int q) const {
+        if (isTwoQubitGate()) return targetQubit == q || encodeQubit == q;
+        return targetQubit == q;
     }
 
     // static Gate CCX(int c1, int c2, int targetQubit);

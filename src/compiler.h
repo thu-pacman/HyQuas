@@ -27,7 +27,7 @@ public:
 protected:
     int numQubits;
     std::vector<Gate> remainGates;
-    std::vector<int> getGroupOpt(bool full[], qindex related[], bool enableGlobal, int localSize, qindex localQubits);
+    std::vector<int> getGroupOpt(qindex full, qindex related[], bool enableGlobal, int localSize, qindex localQubits);
     void removeGatesOpt(const std::vector<int>& remove);
     std::set<int> remain;
 };
