@@ -20,8 +20,12 @@ case $(hostname -s) in
   i*)
     echo "[CLUSTER] scc"
     source /opt/spack/share/spack/setup-env.sh
-    spack load cuda@10.2.89 /tlfcinz
-    spack load openmpi@3.1.6 /5aaect6
+    spack load cuda@11.2.2 /jcseufw
+    spack load openmpi@4.0.5 /s32f5ly
+    export NCCL_ROOT=/home/heheda/software/nccl/build
+    export CPATH=$NCCL_ROOT/include:$CPATH
+    export LIBRARY_PATH=$NCCL_ROOT/lib:$LIBRARY_PATH
+    export LD_LIBRARY_PATH=$NCCL_ROOT/lib:$LD_LIBRARY_PATH
     ;;
   hanzo)
     echo "[CLUSTER] hanzo"
