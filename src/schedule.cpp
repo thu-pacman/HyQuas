@@ -744,7 +744,7 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
             //     }
             if (gate.isMCGate()) {
                 int t = pos[gate.targetQubit];
-                qindex cbits;
+                qindex cbits = 0;
                 for (auto q: gate.controlQubits) {
                     int c = pos[q];
                     if (c >= numLocalQubit && !isHiGPU(c))

@@ -5,7 +5,7 @@
 #include "utils.h"
 
 enum class GateType {
-    CNOT, CY, CZ, CU, CUC, CRX, CRY, CU1, CRZ, U1, U2, U, UC, U3, H, X, Y, Z, S, SDG, T, TDG, RX, RY, RZ, FSM, MU1, MZ, MU, TOTAL, ID, GII, GZZ, GOC, GCC
+    CNOT, CY, CZ, CU, CUC, CRX, CRY, CU1, CRZ, U1, U2, U, UC, U3, H, X, Y, Z, S, SDG, T, TDG, RX, RY, RZ, FSM, MU1, MZ, MU, TOTAL, ID, GII, GZZ, GOC, GCC, MCI
 };
 
 struct Gate {
@@ -121,8 +121,8 @@ struct KernelGate {
 
     KernelGate() = default;
 
-    // controlled gate
-    static KernelGate controlledGate(
+    // control gate
+    static KernelGate controlGate(
         GateType type,
         int controlQubit, char controlIsGlobal,
         int targetQubit, char targetIsGlobal,

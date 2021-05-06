@@ -6,6 +6,7 @@
 #include <cutt.h>
 #include <cuda_runtime.h>
 #include <memory>
+#include <vector>
 #include <cublas_v2.h>
 
 #if USE_MPI
