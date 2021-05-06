@@ -585,9 +585,9 @@ qindex Executor::toPhyQubitSet(qindex logicQubitset) const {
 qindex Executor::fillRelatedQubits(qindex relatedLogicQb) const {
     int cnt = bitCount(relatedLogicQb);
     for (int i = 0; i < LOCAL_QUBIT_SIZE; i++) {
-        if (!(relatedLogicQb & (1 << state.layout[i]))) {
+        if (!(relatedLogicQb & (1ll << state.layout[i]))) {
             cnt++;
-            relatedLogicQb |= (1 << state.layout[i]);
+            relatedLogicQb |= (1ll << state.layout[i]);
             if (cnt == LOCAL_QUBIT_SIZE)
                 break;
         }
