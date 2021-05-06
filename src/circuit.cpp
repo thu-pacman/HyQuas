@@ -145,7 +145,7 @@ qComplex Circuit::ampAtGPU(qindex idx) {
     qindex id = toPhysicalID(idx);
     qComplex ret;
 #if USE_MPI
-    qindex localAmps = (1 << numQubits) / MyMPI::commSize;
+    qindex localAmps = (1ll << numQubits) / MyMPI::commSize;
     qindex rankID = id / localAmps;
 
     if (MyMPI::rank == rankID) {
@@ -153,7 +153,7 @@ qComplex Circuit::ampAtGPU(qindex idx) {
 #else
         int localID = id;
 #endif
-        qindex localGPUAmp = (1 << numQubits) / MyGlobalVars::numGPUs;
+        qindex localGPUAmp = (1ll << numQubits) / MyGlobalVars::numGPUs;
         int gpuID = localID / localGPUAmp;
         qindex localGPUID = localID % localGPUAmp;
         checkCudaErrors(cudaSetDevice(gpuID));
@@ -166,7 +166,7 @@ qComplex Circuit::ampAtGPU(qindex idx) {
 }
 
 bool Circuit::localAmpAt(qindex idx, ResultItem& item) {
-    qindex localAmps = (1 << numQubits) / MyMPI::commSize;
+    qindex localAmps = (1ll << numQubits) / MyMPI::commSize;
     qindex id = toPhysicalID(idx);
     if (id / localAmps == MyMPI::rank) {
         // printf("%d belongs to rank %d\n", idx, MyMPI::rank);
