@@ -55,6 +55,12 @@ typedef cuFloatComplex qComplex;
     exit(1); \
 }
 
+#define UNIMPLENTAED() { \
+    printf("file %s line %i: unimplemented!\n", __FILE__, __LINE__); \
+    fflush(stdout); \
+    exit(1); \
+}
+
 const int LOCAL_QUBIT_SIZE = 10; // is hardcoded
 const int BLAS_MAT_LIMIT = BLAS_MAT_LIMIT_DEFINED;
 const int THREAD_DEP = THREAD_DEP_DEFINED; // 1 << THREAD_DEP threads per block
@@ -186,3 +192,5 @@ qComplex make_qComplex(qreal x);
 bool operator < (const qComplex& a, const qComplex& b);
 
 int get_bit(int n);
+
+qindex to_bitmap(std::vector<int> qubits);

@@ -153,3 +153,9 @@ int get_bit(int n) {
     }
     return bit;
 }
+
+qindex to_bitmap(std::vector<int> qubits) {
+    qindex ret;
+    for (auto& x: qubits) ret |= 1ll << x;
+    return ret;
+}
