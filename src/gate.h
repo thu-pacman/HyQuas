@@ -37,7 +37,7 @@ struct Gate {
     }
     
     bool isDiagonal() const {
-        return type == GateType::CZ || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ || type == GateType::MU1 || type == GateType::MZ;
+        return type == GateType::CZ || type == GateType::CU1 || type == GateType::CRZ || type == GateType::U1 || type == GateType::Z || type == GateType::S || type == GateType::SDG || type == GateType::T || type == GateType::TDG || type == GateType::RZ;
     }
 
     bool hasControl(int q) const {

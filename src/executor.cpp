@@ -386,7 +386,11 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
                     return KernelGate::ID();
                 }
             } else {
-                cbits |= 1ll << toID.at(q);
+                if (IS_SHARE_QUBIT(q)) {
+                    cbits |= 1ll << toID.at(q);
+                } else {
+                    cbits |= 1ll << (toID.at(q) + LOCAL_QUBIT_SIZE);
+                }
             }
         }
         int t = gate.targetQubit;
@@ -399,7 +403,7 @@ KernelGate Executor::getGate(const Gate& gate, int part_id, int numLocalQubits, 
         } else {
             qComplex val = IS_HIGH_PART(part_id, t) ? gate.mat[1][1]: gate.mat[0][0];
             qComplex mat[2][2] = {val, make_qComplex(0), make_qComplex(0), val};
-            return KernelGate::mcGate(gate.type, cbits, 0, 0, gate.mat);
+            return KernelGate::mcGate(GateType::MCI, cbits, 0, 0, gate.mat);
         }
     } else if (gate.isTwoQubitGate()) {
         if (gate.isDiagonal()) {

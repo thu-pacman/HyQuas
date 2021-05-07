@@ -211,6 +211,31 @@ case GateType::ID: { \
     break; \
 }
 
+#define CASE_MC(TYPE, OP) \
+case GateType::TYPE: { \
+    int m = 1 << (LOCAL_QUBIT_SIZE - 1); \
+    for (int j = threadIdx.x; j < m; j += blockSize) { \
+        int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
+        if (((blockBias << LOCAL_QUBIT_SIZE | lo) & gate.encodeQubit) != gate.encodeQubit) continue;
+        int hi = lo | (1 << targetQubit); \
+        lo ^= lo >> 3 & 7; \
+        hi ^= hi >> 3 & 7; \
+        OP; \
+    } \
+    break; \
+}
+
+#define CASE_MC_SAME(TYPE, OP) \
+case GateType::TYPE: { \
+    int m = 1 << LOCAL_QUBIT_SIZE; \
+    for (int j = threadIdx.x; j < m; j += blockSize) { \
+        if (((blockBias << LOCAL_QUBIT_SIZE | j) & gate.encodeQubit) != gate.encodeQubit) continue;
+        j ^= j >> 3 & 7; \
+        OP; \
+    } \
+    break; \
+}
+
 template <unsigned int blockSize>
 __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
     for (int i = 0; i < numGates; i++) {
@@ -218,30 +243,72 @@ __device__ void doCompute(int numGates, int* loArr, int* shiftAt) {
         int targetQubit = deviceGates[i].targetQubit;
         char controlIsGlobal = deviceGates[i].controlIsGlobal;
         char targetIsGlobal = deviceGates[i].targetIsGlobal;
-        if (deviceGates[i].type == GateType::CCX) {
-            int controlQubit2 = deviceGates[i].controlQubit2;
-            int control2IsGlobal = deviceGates[i].control2IsGlobal;
-            if (!control2IsGlobal) {
-                int m = 1 << (LOCAL_QUBIT_SIZE - 1);
-                assert(!controlIsGlobal && !targetIsGlobal);
-                assert(deviceGates[i].type == GateType::CCX);
-                int maskTarget = (1 << targetQubit) - 1;
-                for (int j = threadIdx.x; j < m; j += blockSize) {
-                    int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
-                    if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
-                        continue;
-                    int hi = lo | (1 << targetQubit);
-                    lo ^= lo >> 3 & 7;
-                    hi ^= hi >> 3 & 7;
-                    XSingle(lo, hi);
+        // if (deviceGates[i].type == GateType::CCX) {
+        //     int controlQubit2 = deviceGates[i].controlQubit2;
+        //     int control2IsGlobal = deviceGates[i].control2IsGlobal;
+        //     if (!control2IsGlobal) {
+        //         int m = 1 << (LOCAL_QUBIT_SIZE - 1);
+        //         assert(!controlIsGlobal && !targetIsGlobal);
+        //         assert(deviceGates[i].type == GateType::CCX);
+        //         int maskTarget = (1 << targetQubit) - 1;
+        //         for (int j = threadIdx.x; j < m; j += blockSize) {
+        //             int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget);
+        //             if (!(lo >> controlQubit & 1) || !(lo >> controlQubit2 & 1))
+        //                 continue;
+        //             int hi = lo | (1 << targetQubit);
+        //             lo ^= lo >> 3 & 7;
+        //             hi ^= hi >> 3 & 7;
+        //             XSingle(lo, hi);
+        //         }
+        //         continue;
+        //     }
+        //     if (control2IsGlobal == 1 && !((blockIdx.x >> controlQubit2) & 1)) {
+        //         continue;
+        //     }
+        // }
+        if (gate.controlQubit == -2) { // mcGate
+            int m = 1 << (LOCAL_QUBIT_SIZE - 1);
+            int maskTarget = (1 << targetQubit) - 1;
+            switch (deviceGates[i].type) {
+                CASE_MC(MU1, U1Hi(hi, make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
+                CASE_MC(MZ, ZHi(hi))
+                CASE_MC(MU, U3Single(lo, hi, make_qComplex(deviceGates[i].r00, deviceGates[i].i00), make_qComplex(deviceGates[i].r01, deviceGates[i].i01), make_qComplex(deviceGates[i].r10, deviceGates[i].i10), make_qComplex(deviceGates[i].r11, deviceGates[i].i11)))
+                CASE_MC_SAME(MCI, GCC(j, deviceGates[i].i00))
+                default: {
+                    assert(false);
                 }
-                continue;
             }
-            if (control2IsGlobal == 1 && !((blockIdx.x >> controlQubit2) & 1)) {
-                continue;
+        } else if (gate.controlQubit == -3) { // twoQubitGate
+            assert(gate.type == GateType::FSIM);
+            int m = 1 << (LOCAL_QUBIT_SIZE - 2);
+            int smallQubit = controlQubit > targetQubit ? targetQubit : controlQubit;
+            int largeQubit = controlQubit > targetQubit ? controlQubit : targetQubit;
+            int maskSmall = (1 << smallQubit) - 1;
+            int maskLarge = (1 << largeQubit) - 1;
+            for (int j = threadIdx.x; j < m; j += blockSize) {
+                int s00 = ((j >> smallQubit) << (smallQubit + 1)) | (j & maskSmall); \
+                s00 = ((s00 >> largeQubit) << (largeQubit + 1)) | (s00 & maskLarge); \
+                int s01 = s00 | (1 << gate.encodeQubit);
+                int s10 = s00 | (1 << gate.targetQubit);
+                int s11 = s01 | s10;
+                s01 = s01 ^ (s01 >> 3 & 7);
+                s10 = s10 ^ (s10 >> 3 & 7);
+                s11 = s11 ^ (s11 >> 3 & 7);
+                qreal val_01 = shm[s01];
+                qreal val_10 = shm[s10];
+                qreal val_11 = shm[s11];
+
+                shm[s01] =  make_qComplex(
+                    COMPLEX_MULTIPLY_REAL(val_01, deviceGates[i].r00) + COMPLEX_MULTIPLY_REAL(val_10, deviceGates[i].r01),
+                    COMPLEX_MULTIPLY_IMAG(val_01, deviceGates[i].r00) + COMPLEX_MULTIPLY_IMAG(val_10, deviceGates[i].r01)
+                );
+                shm[s10] =  make_qComplex(
+                    COMPLEX_MULTIPLY_REAL(val_01, deviceGates[i].r01) + COMPLEX_MULTIPLY_REAL(val_10, deviceGates[i].r00),
+                    COMPLEX_MULTIPLY_IMAG(val_01, deviceGates[i].r01) + COMPLEX_MULTIPLY_IMAG(val_10, deviceGates[i].r00)
+                );
+                shm[s11] =  make_qComplex(COMPLEX_MULTIPLY_REAL(val_11, deviceGates[i].r11), COMPLEX_MULTIPLY_IMAG(val_11, deviceGates[i].r11));
             }
-        }
-        if (!controlIsGlobal) {
+        } else if (!controlIsGlobal) {
             if (!targetIsGlobal) {
                 int m = 1 << (LOCAL_QUBIT_SIZE - 2);
                 int lo = loArr[(controlQubit * 10 + targetQubit) << THREAD_DEP | threadIdx.x];
