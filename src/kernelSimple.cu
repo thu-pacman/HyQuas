@@ -469,10 +469,11 @@ __global__ void reduce(qreal* g_idata, qreal *g_odata, unsigned int n, unsigned 
     unsigned tid = threadIdx.x;
     unsigned idx = blockIdx.x * blockSize + threadIdx.x;
     unsigned twoGrid = gridSize << 1;
-    sdata[tid] = 0;
-    for (int i = idx; i < n; i += twoGrid) {
-        sdata[tid] += g_idata[i] + g_idata[i + gridSize];
+    qreal tmp = 0;
+    for (int i = idx; i < n; i += gridSize) {
+        tmp += g_idata[i];// + g_idata[i + gridSize];
     }
+    sdata[tid] = tmp;
     __syncthreads();
     blockReduce<blockSize>(sdata, tid);
     if (tid == 0) g_odata[blockIdx.x] = sdata[0];
@@ -604,6 +605,10 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
     extern __shared__ qreal sdata[]; // numQubits * blockSize
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     int tid = threadIdx.x;
+    
+    for(int j = 0; j < numQubits; j++) {
+        sdata[j * blockSize + tid] = 0;
+    }
 
     for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
         qreal val = a[i].x * a[i].x + a[i].y * a[i].y;
@@ -619,20 +624,20 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
 
     if (tid == 0) {
         for(int i = 0; i < numQubits; i++) {
-            ans[i * blockSize + blockIdx.x] = sdata[i * blockSize];
+            ans[i * gridDim.x + blockIdx.x] = sdata[i * blockSize];
         }
     }
 }
 
 void kernelMeasureLaunchNew(qComplex* deviceStateVec, int numQubits, qreal* pointers[3], cudaStream_t& stream) {\
     // printf("launch %d start\n", targetQubit);
-    qindex nVec = 1 << numQubits;
+    qindex nVec = 1 << (numQubits - 1);
     qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
     checkCudaErrors(cudaMalloc(&pointers[0], sizeof(qreal) * totalBlocks * numQubits));
     measureNew<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP, sizeof(qreal) * numQubits * (1<<THREAD_DEP), stream>>>(deviceStateVec, pointers[0], numQubits);
     checkCudaErrors(cudaMalloc(&pointers[1], sizeof(qreal) * (1<<REDUCE_BLOCK_DEP) * numQubits));
     for (int i = 0; i < numQubits; i++) {
-        reduce<1<<THREAD_DEP><<<1<<REDUCE_BLOCK_DEP, 1<<THREAD_DEP, 0, stream>>>
+        reduce<1<<THREAD_DEP><<<(1<<REDUCE_BLOCK_DEP), 1<<THREAD_DEP, sizeof(qreal) * (1<<THREAD_DEP), stream>>>
             (pointers[0] + i * totalBlocks, pointers[1] + i * (1<<REDUCE_BLOCK_DEP), totalBlocks, 1 << (THREAD_DEP + REDUCE_BLOCK_DEP));
     }
     pointers[2] = new qreal[(1<<REDUCE_BLOCK_DEP) * numQubits];
@@ -642,12 +647,10 @@ void kernelMeasureLaunchNew(qComplex* deviceStateVec, int numQubits, qreal* poin
 
 void kernelMeasureAllNew(std::vector<qComplex*>& deviceStateVec, qreal* results, int numLocalQubits) {
     qreal* pointers[MyGlobalVars::localGPUs][3];
-
     for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         kernelMeasureLaunchNew(deviceStateVec[i], numLocalQubits + 1, pointers[i], MyGlobalVars::streams[i]); 
     }
-
     for (int i = 0; i < MyGlobalVars::localGPUs; i++) {
         checkCudaErrors(cudaSetDevice(i));
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[i]));
@@ -656,10 +659,10 @@ void kernelMeasureAllNew(std::vector<qComplex*>& deviceStateVec, qreal* results,
             for (int k = 0; k < (1<<REDUCE_BLOCK_DEP); k++) {
                 ret += pointers[i][2][j * (1<<REDUCE_BLOCK_DEP) + k];
             }
-            checkCudaErrors(cudaFree(pointers[i][0]));
-            checkCudaErrors(cudaFree(pointers[i][1]));
-            delete[] pointers[i][2];
             results[i * (numLocalQubits + 1) + j] = ret;
         }
+        checkCudaErrors(cudaFree(pointers[i][0]));
+        checkCudaErrors(cudaFree(pointers[i][1]));
+        delete[] pointers[i][2];
     }
 }
