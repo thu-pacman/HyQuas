@@ -3,7 +3,7 @@
 #include <assert.h>
 using namespace std;
 
-const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
+const int SINGLE_SIZE_DEP = 9; // handle 1 << SINGLE_SIZE_DEP items per thread
 const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
@@ -470,8 +470,8 @@ __global__ void reduce(qreal* g_idata, qreal *g_odata, unsigned int n, unsigned 
     unsigned idx = blockIdx.x * blockSize + threadIdx.x;
     unsigned twoGrid = gridSize << 1;
     qreal tmp = 0;
-    for (int i = idx; i < n; i += gridSize) {
-        tmp += g_idata[i];// + g_idata[i + gridSize];
+    for (int i = idx; i < n; i += twoGrid) {
+        tmp += g_idata[i] + g_idata[i + gridSize];
     }
     sdata[tid] = tmp;
     __syncthreads();
@@ -605,15 +605,18 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
     extern __shared__ qreal sdata[]; // numQubits * blockSize
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     int tid = threadIdx.x;
+    qindex st = blockIdx.x * blockSize * (1 << SINGLE_SIZE_DEP);
     
     for(int j = 0; j < numQubits; j++) {
         sdata[j * blockSize + tid] = 0;
     }
 
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
-        qreal val = a[i].x * a[i].x + a[i].y * a[i].y;
+    for (qindex i = 0; i < (1 << SINGLE_SIZE_DEP); i++) {
+        qindex now = st + i * blockSize + tid;
+        qreal val = a[now].x * a[now].x + a[now].y * a[now].y;
         for(int j = 0; j < numQubits; j++) {
-            sdata[j * blockSize + tid] += (1 - ((i >> j) & 1)) * val;
+            sdata[j * blockSize + tid] += ((now & 1) ^ 1) * val;
+            now >>= 1;
         }
     }
 
