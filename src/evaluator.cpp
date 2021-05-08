@@ -113,8 +113,8 @@ double Evaluator::perfPerGate(int numQubits, const GateGroup* gg) {
     loadParam(numQubits);
     for(auto gate : (gg -> gates)) {
         switch(gate.type) {
-            case GateType::CCX : 
-                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
+            // case GateType::CCX : 
+            //     tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
             case GateType::CNOT : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
             case GateType::CY : 
@@ -178,8 +178,8 @@ double Evaluator::perfPerGate(int numQubits, const std::vector<GateType>& types)
     loadParam(numQubits);
     for(auto ty : types) {
         switch(ty) {
-            case GateType::CCX : 
-                tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
+            // case GateType::CCX : 
+            //     tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
             case GateType::CNOT : 
                 tim_pred += pergate_ctr_perf[numQubits][int(GateType::CNOT)][0][2]; break;
             case GateType::CY : 

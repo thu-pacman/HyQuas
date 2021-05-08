@@ -642,7 +642,7 @@ for (int i = 0; i < n; i++) { \
         qComplex v10 = mat[s10]; \
         qComplex v11 = mat[s11]; \
         mat[s01] = v01 * qComplex(gate.mat[0][0]) + v10 * qComplex(gate.mat[0][1]); \
-        mat[s10] = v01 * qComplex(gate.mat[1][0]) + v10 * qComplex(gate.mat[0][0]); \
+        mat[s10] = v01 * qComplex(gate.mat[0][1]) + v10 * qComplex(gate.mat[0][0]); \
         mat[s11] = v11 * qComplex(gate.mat[1][1]); \
     } \
 }

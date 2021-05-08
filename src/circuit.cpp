@@ -13,7 +13,7 @@
 #include "executor.h"
 using namespace std;
 
-Circuit::Circuit(int numQubits): numQubits(numQubits), state(State::empty), measureResults(numQubits, -1) {
+Circuit::Circuit(int numQubits): numQubits(numQubits), state(CircState::empty), measureResults(numQubits, -1) {
     kernelInit(deviceStateVec, numQubits);
 }
 
@@ -98,17 +98,17 @@ void Circuit::dumpGates() {
 void Circuit::addGate(const Gate& gate) {
     gates.push_back(gate);
 #ifdef IMPERATIVE
-    state = State::dirty;
+    state = CircState::dirty;
 #endif
 }
 
 #ifdef IMPERATIVE
 void Circuit::applyGates() {
-    if (state == State::dirty) {
+    if (state == CircState::dirty) {
         compile();
         run(false, false);
         gates.clear();
-        state = State::empty;
+        state = CircState::empty;
     }
 }
 #endif
@@ -340,7 +340,7 @@ qreal Circuit::measure(int qb) {
 #ifdef IMPERATIVE
     applyGates();
 #endif
-    if (state != State::measured) {
+    if (state != CircState::measured) {
         auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
         qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
@@ -384,7 +384,7 @@ qreal Circuit::measure(int qb) {
             MPI_Bcast(measureResults.data(), numQubits, MPI_CREAL, 0, MPI_COMM_WORLD);
         }
 #endif
-        state = State::measured;
+        state = CircState::measured;
         auto end = chrono::system_clock::now();
         auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
         Logger::add("Measure Time: %d us", int(duration.count()));

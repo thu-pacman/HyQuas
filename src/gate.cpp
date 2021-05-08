@@ -367,12 +367,13 @@ Gate Gate::MU(std::vector<int> controlQubits, int targetQubit, qComplex a0, qCom
 }
 
 Gate Gate::FSIM(int targetQubit1, int targetQubit2, qreal theta, qreal phi) {
+    if (targetQubit1 == targetQubit2) UNIMPLEMENTAED();
     Gate g;
     g.gateID = ++globalGateID;
     g.type = GateType::FSM;
     // a compressed matrix representation. be careful in blas backend
     g.mat[0][0] = make_qComplex(cos(theta)); g.mat[0][1] = make_qComplex(0, -sin(theta));
-    g.mat[0][1] = make_qComplex(0, -sin(theta)); g.mat[1][1] = make_qComplex(cos(theta), -sin(theta));
+    g.mat[1][0] = make_qComplex(0, -sin(theta)); g.mat[1][1] = make_qComplex(cos(phi), -sin(phi));
     g.name = "FSM";
     g.encodeQubit = targetQubit1;
     g.targetQubit = targetQubit2;

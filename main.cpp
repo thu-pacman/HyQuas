@@ -84,12 +84,12 @@ std::unique_ptr<Circuit> parse_circuit(const std::string &filename) {
             assert(qid.size() == 2);
             c->addGate(Gate::CNOT(qid[0], qid[1]));
             // printf("cx %d %d\n", qid[0], qid[1]);
-        } else if (strcmp(buffer, "ccx") == 0) {
-            fscanf(f, "%s", buffer);
-            auto qid = parse_qid(buffer);
-            assert(qid.size() == 3);
-            c->addGate(Gate::CCX(qid[0], qid[1], qid[2]));
-            // printf("ccx %d %d %d\n", qid[0], qid[1], qid[2]);
+        // } else if (strcmp(buffer, "ccx") == 0) {
+        //     fscanf(f, "%s", buffer);
+        //     auto qid = parse_qid(buffer);
+        //     assert(qid.size() == 3);
+        //     c->addGate(Gate::CCX(qid[0], qid[1], qid[2]));
+        //     // printf("ccx %d %d %d\n", qid[0], qid[1], qid[2]);
         } else if (strcmp(buffer, "cy") == 0) {
             fscanf(f, "%s", buffer);
             auto qid = parse_qid(buffer);

@@ -49,6 +49,6 @@ private:
     std::vector<std::vector<qComplex*>> deviceMats;
     Schedule schedule;
     std::vector<qComplex> result;
-    enum class State {dirty, empty, measured} state;
+    enum class CircState {dirty, empty, measured} state;
     std::vector<qreal> measureResults;
 };
