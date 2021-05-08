@@ -344,7 +344,7 @@ qreal Circuit::measure(int qb) {
         auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
         qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
-        kernelMeasureAll(deviceStateVec, prob[0], numLocalQubits);
+        kernelMeasureAllNew(deviceStateVec, prob[0], numLocalQubits);
         qreal allProb[MyGlobalVars::numGPUs][numLocalQubits + 1];
 #if USE_MPI
         if (MyMPI::rank == 0) {
