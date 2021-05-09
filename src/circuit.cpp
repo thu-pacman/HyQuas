@@ -181,7 +181,7 @@ void Circuit::masterCompile() {
     Logger::add("Total Gates %d", int(gates.size()));
 #if BACKEND == 1 || BACKEND == 2 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     Compiler compiler(numQubits, gates);
-    schedule = compiler.run();
+    schedule = compiler.run(schedule.finalState);
     int totalGroups = 0;
     for (auto& lg: schedule.localGroups) totalGroups += lg.fullGroups.size();
     int fullGates = 0, overlapGates = 0;

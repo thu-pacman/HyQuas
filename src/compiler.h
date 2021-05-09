@@ -9,7 +9,7 @@
 class Compiler {
 public:
     Compiler(int numQubits, std::vector<Gate> inputGates);
-    Schedule run();
+    Schedule run(const State& firstState);
 private:
     void fillLocals(LocalGroup& lg);
     std::vector<std::pair<std::vector<Gate>, qindex>> moveToNext(LocalGroup& lg);
@@ -34,14 +34,15 @@ protected:
 
 class SimpleCompiler: public OneLayerCompiler<2048> {
 public:
-    SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0);
-    LocalGroup run();
+    SimpleCompiler(int numQubits, int localSize, qindex localQubits, const std::vector<Gate>& inputGates, bool enableGlobal, qindex whiteList = 0, qindex required = 0, qindex first = 0);
+    LocalGroup run(const State& firstState);
 private:
     int localSize;
     qindex localQubits;
     bool enableGlobal;
     qindex whiteList;
     qindex required;
+    qindex first;
 };
 
 class AdvanceCompiler: public OneLayerCompiler<512> {

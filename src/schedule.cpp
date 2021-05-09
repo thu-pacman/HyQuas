@@ -559,6 +559,13 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     return newState;
 }
 
+State LocalGroup::initCopyState(const State& oldState) {
+    this->state = oldState;
+    a2aCommSize = -1;
+    a2aComm.clear();
+    return oldState;
+}
+
 void LocalGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup) {
     cuttPlans.clear();
 #if not INPLACE > 0

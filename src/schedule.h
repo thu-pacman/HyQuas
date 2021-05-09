@@ -31,6 +31,7 @@ struct State {
 
     std::vector<unsigned char> serialize() const;
     static State deserialize(const unsigned char* arr, int& cur);
+    bool isEmpty() const { return pos.size() == 0; }
 };
 
 struct GateGroup {
@@ -89,6 +90,7 @@ struct LocalGroup {
     State initState(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals, qindex overlapRelated);
     State initFirstGroupState(const State& oldState, int numQubits, const std::vector<int>& newGlobals);
     State initStateInplace(const State& oldState, int numQubits, const std::vector<int>& newGlobals, qindex overlapGlobals);
+    State initCopyState(const State& oldState);
     std::vector<unsigned char> serialize() const;
     static LocalGroup deserialize(const unsigned char* arr, int& cur);
 };
