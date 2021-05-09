@@ -13,8 +13,16 @@
 #include "executor.h"
 using namespace std;
 
-Circuit::Circuit(int numQubits): numQubits(numQubits), state(State::empty), measureResults(numQubits, -1) {
+Circuit::Circuit(int numQubits): numQubits(numQubits), state(State::empty), measureResults(numQubits, -1), destroyed(false) {
     kernelInit(deviceStateVec, numQubits);
+}
+
+Circuit::~Circuit() {
+    if (!destroyed) {
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            kernelDestroy(deviceStateVec[g]);
+        }
+    }
 }
 
 int Circuit::run(bool copy_back, bool destroy) {
@@ -68,6 +76,7 @@ int Circuit::run(bool copy_back, bool destroy) {
     if (destroy) {
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             kernelDestroy(deviceStateVec[g]);
+            destroyed = true;
         }
     }
     return duration.count();
@@ -339,8 +348,8 @@ void Circuit::printState() {
 qreal Circuit::measure(int qb) {
 #ifdef IMPERATIVE
     applyGates();
-#endif
     if (state != State::measured) {
+#endif
         auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
         qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
@@ -388,6 +397,8 @@ qreal Circuit::measure(int qb) {
         auto end = chrono::system_clock::now();
         auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
         Logger::add("Measure Time: %d us", int(duration.count()));
+#ifdef IMPERATIVE
     }
+#endif
     return measureResults[qb];
 }

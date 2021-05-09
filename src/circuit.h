@@ -20,6 +20,7 @@ struct ResultItem {
 class Circuit {
 public:
     Circuit(int numQubits);
+    ~Circuit();
 
     void addGate(const Gate& gate);
     void printState();
@@ -51,4 +52,5 @@ private:
     std::vector<qComplex> result;
     enum class State {dirty, empty, measured} state;
     std::vector<qreal> measureResults;
+    bool destroyed;
 };
