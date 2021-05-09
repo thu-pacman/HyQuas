@@ -340,6 +340,10 @@ qreal Circuit::measure(int qb) {
 #ifdef IMPERATIVE
     applyGates();
 #endif
+    if (schedule.finalState.isEmpty()) {
+        state = CircState::measured;
+        return 1;
+    }
     if (state != CircState::measured) {
         auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
