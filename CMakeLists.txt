@@ -106,9 +106,17 @@ set(MAX_SLICE "20" CACHE STRING "max slice in inplace mode")
 MESSAGE(STATUS "MAX_SLICE = ${MAX_SLICE}")
 add_definitions(-DMAX_SLICE=${MAX_SLICE})
 
+set(REDUCE_BLOCK_DEP "6" CACHE STRING "each thread handles 1<<dep numbers in reduce sum")
+MESSAGE(STATUS "REDUCE_BLOCK_DEP = ${REDUCE_BLOCK_DEP}")
+add_definitions(-DREDUCE_BLOCK_DEP_DEFINED=${REDUCE_BLOCK_DEP})
+
 if (NOT ${INPLACE} EQUAL "0" AND ${ENABLE_OVERLAP})
     MESSAGE(FATAL_ERROR "Do not support INPLACE and ENABLE_OVERLAP simultaneously")
 endif()
+
+set(REDUCE_BLOCK_DEP "6" CACHE STRING "each thread handles 1<<dep numbers in reduce sum")
+MESSAGE(STATUS "REDUCE_BLOCK_DEP = ${REDUCE_BLOCK_DEP}")
+add_definitions(-DREDUCE_BLOCK_DEP_DEFINED=${REDUCE_BLOCK_DEP})
 
 if (EVALUATOR_PREPROCESS)
     set(PROCESS process)
@@ -129,7 +137,7 @@ if (NOT(IMPERATIVE))
 endif (NOT(IMPERATIVE))
 
 if (MICRO_BENCH)
-    set(BENCHMARKS local-single local-ctr two-group-h bench-blas)
+    set(BENCHMARKS local-single local-ctr two-group-h bench-blas measure-perf)
     foreach(BENCHMARK IN LISTS BENCHMARKS)
         add_executable(${BENCHMARK} micro-benchmark/${BENCHMARK}.cpp)
         target_link_libraries(${BENCHMARK} QCSimulator ${CUTT} ${OpenMP_CXX_FLAGS} ${CUDA_CUBLAS_LIBRARIES} ${MPI_CXX_LIBRARIES} ${NCCL_LIBRARY})

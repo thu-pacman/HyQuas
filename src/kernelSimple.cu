@@ -3,8 +3,8 @@
 #include <assert.h>
 using namespace std;
 
-const int SINGLE_SIZE_DEP = 9; // handle 1 << SINGLE_SIZE_DEP items per thread
-const int REDUCE_BLOCK_DEP = 6; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
+const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
+const int REDUCE_BLOCK_DEP = REDUCE_BLOCK_DEP_DEFINED; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
 void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     size_t size = (sizeof(qComplex) << numQubits) >> MyGlobalVars::bit;
@@ -516,7 +516,7 @@ __global__ void measure(qComplex* a, qreal* ans, int numQubit_, int targetQubit)
     int tid = threadIdx.x;
     qindex mask = (qindex(1) << targetQubit) - 1;
     sdata[tid] = 0;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+    for (qindex i = (idx << REDUCE_BLOCK_DEP); i < ((idx + 1) << REDUCE_BLOCK_DEP); i++) {
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
         sdata[tid] += a[lo].x * a[lo].x + a[lo].y * a[lo].y;
     }
@@ -525,7 +525,6 @@ __global__ void measure(qComplex* a, qreal* ans, int numQubit_, int targetQubit)
     if (tid == 0) ans[blockIdx.x] = sdata[0];
 }
 
-// need to optimize
 template <unsigned int blockSize>
 __global__ void sum(qComplex* a, qreal* ans, int numQubit_, int targetQubit) {
     __shared__ qreal sdata[blockSize];
@@ -533,7 +532,7 @@ __global__ void sum(qComplex* a, qreal* ans, int numQubit_, int targetQubit) {
     int tid = threadIdx.x;
     qindex mask = (qindex(1) << targetQubit) - 1;
     sdata[tid] = 0;
-    for (qindex i = (idx << SINGLE_SIZE_DEP); i < ((idx + 1) << SINGLE_SIZE_DEP); i++) {
+    for (qindex i = (idx << REDUCE_BLOCK_DEP); i < ((idx + 1) << REDUCE_BLOCK_DEP); i++) {
         qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask);
         qindex hi = lo | (1 << targetQubit);
         sdata[tid] += a[lo].x * a[lo].x + a[lo].y * a[lo].y;
@@ -547,7 +546,7 @@ __global__ void sum(qComplex* a, qreal* ans, int numQubit_, int targetQubit) {
 qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit) {
     int numQubit_ = numQubits - 1;
     qindex nVec = 1 << numQubit_;
-    qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
+    qindex totalBlocks = nVec >> THREAD_DEP >> REDUCE_BLOCK_DEP;
     qreal *ans1, *ans2, *ans3;
     checkCudaErrors(cudaMalloc(&ans1, sizeof(qreal) * totalBlocks));
     if (targetQubit == -1) {
@@ -573,7 +572,7 @@ void kernelMeasureLaunch(qComplex* deviceStateVec, int numQubits, int targetQubi
     // printf("launch %d start\n", targetQubit);
     int numQubit_ = numQubits - 1;
     qindex nVec = 1 << numQubit_;
-    qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
+    qindex totalBlocks = nVec >> THREAD_DEP >> REDUCE_BLOCK_DEP;
     checkCudaErrors(cudaMalloc(&pointers[0], sizeof(qreal) * totalBlocks));
     if (targetQubit == -1) {
         sum<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP, 0, stream>>>(deviceStateVec, pointers[0], numQubit_, 0);
@@ -635,13 +634,13 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
     extern __shared__ qreal sdata[]; // numQubits * blockSize
     qindex idx = blockIdx.x * blockSize + threadIdx.x;
     int tid = threadIdx.x;
-    qindex st = blockIdx.x * blockSize * (1 << SINGLE_SIZE_DEP);
+    qindex st = blockIdx.x * blockSize * (1 << REDUCE_BLOCK_DEP);
     
     for(int j = 0; j < numQubits; j++) {
         sdata[j * blockSize + tid] = 0;
     }
 
-    for (qindex i = 0; i < (1 << SINGLE_SIZE_DEP); i++) {
+    for (qindex i = 0; i < (1 << REDUCE_BLOCK_DEP); i++) {
         qindex now = st + i * blockSize + tid;
         qreal val = a[now].x * a[now].x + a[now].y * a[now].y;
         for(int j = 0; j < numQubits; j++) {
@@ -665,7 +664,7 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
 void kernelMeasureLaunchNew(qComplex* deviceStateVec, int numQubits, qreal* pointers[3], cudaStream_t& stream) {\
     // printf("launch %d start\n", targetQubit);
     qindex nVec = 1 << (numQubits - 1);
-    qindex totalBlocks = nVec >> THREAD_DEP >> SINGLE_SIZE_DEP;
+    qindex totalBlocks = nVec >> THREAD_DEP >> REDUCE_BLOCK_DEP;
     checkCudaErrors(cudaMalloc(&pointers[0], sizeof(qreal) * totalBlocks * numQubits));
     measureNew<1<<THREAD_DEP><<<totalBlocks, 1<<THREAD_DEP, sizeof(qreal) * numQubits * (1<<THREAD_DEP), stream>>>(deviceStateVec, pointers[0], numQubits);
     checkCudaErrors(cudaMalloc(&pointers[1], sizeof(qreal) * (1<<REDUCE_BLOCK_DEP) * numQubits));
