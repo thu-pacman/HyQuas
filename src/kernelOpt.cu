@@ -216,7 +216,7 @@ case GateType::TYPE: { \
     int m = 1 << (LOCAL_QUBIT_SIZE - 1); \
     for (int j = threadIdx.x; j < m; j += blockSize) { \
         int lo = ((j >> targetQubit) << (targetQubit + 1)) | (j & maskTarget); \
-        if (((blockBias << LOCAL_QUBIT_SIZE | lo) & gate.encodeQubit) != gate.encodeQubit) continue; \
+        if (((blockIdx.x << LOCAL_QUBIT_SIZE | lo) & gate.encodeQubit) != gate.encodeQubit) continue; \
         int hi = lo | (1 << targetQubit); \
         lo ^= lo >> 3 & 7; \
         hi ^= hi >> 3 & 7; \
@@ -229,7 +229,7 @@ case GateType::TYPE: { \
 case GateType::TYPE: { \
     int m = 1 << LOCAL_QUBIT_SIZE; \
     for (int J = threadIdx.x; J < m; J += blockSize) { \
-        if (((blockBias << LOCAL_QUBIT_SIZE | J) & gate.encodeQubit) != gate.encodeQubit) continue; \
+        if (((blockIdx.x << LOCAL_QUBIT_SIZE | J) & gate.encodeQubit) != gate.encodeQubit) continue; \
         int j = J ^ (J >> 3 & 7); \
         OP; \
     } \

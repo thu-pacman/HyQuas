@@ -152,6 +152,7 @@ Schedule Compiler::run(const State& firstState) {
         AdvanceCompiler overlapCompiler(numQubits, overlapLocals, overlapBlasForbid, moveBack[id].first);
         AdvanceCompiler fullCompiler(numQubits, gg.relatedQubits, 0, gg.gates);
         switch (BACKEND) {
+            case 2: // no break;
             case 1: {
                 lg.overlapGroups = overlapCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, false, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
@@ -168,7 +169,6 @@ Schedule Compiler::run(const State& firstState) {
                 lg.fullGroups = fullCompiler.run(state, false, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
                 break;
             }
-            case 2: // no break;
             case 4: {
                 lg.overlapGroups = overlapCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits - MyGlobalVars::bit).fullGroups;
                 lg.fullGroups = fullCompiler.run(state, true, true, LOCAL_QUBIT_SIZE, BLAS_MAT_LIMIT, numLocalQubits).fullGroups;
@@ -385,6 +385,9 @@ std::vector<int> OneLayerCompiler<MAX_GATES>::getGroupOpt(qindex full, qindex re
                     }
                     cur[t]= new_cur;
                     related[t] = newRelated;
+                    for (auto q: gate.controlQubits) {
+                        related[q] = newRelated;
+                    }
                     continue;
                 }
             }

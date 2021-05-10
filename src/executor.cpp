@@ -138,7 +138,7 @@ void Executor::inplaceAll2All(int commSize, std::vector<int> comm, const State& 
                 checkCudaErrors(cudaSetDevice(g));
                 checkCudaErrors(cudaEventRecord(MyGlobalVars::events[g], MyGlobalVars::streams_comm[g]));
             }
-#if USE_MPI && MPI_GPU_GROUP_SZIE == 1
+#if USE_MPI && MPI_GPU_GROUP_SIZE == 1
             checkNCCLErrors(ncclGroupStart());
 #endif
             for (int a = 0; a < MyGlobalVars::numGPUs; a++) {
@@ -893,6 +893,7 @@ void Executor::allBarrier() {
 }
 
 void Executor::toGPU() {
+#if USE_MPI
     char token;
     int rankInGroup = MyMPI::rank % MPI_GPU_GROUP_SIZE;
     if (rankInGroup > 0) {
@@ -904,9 +905,11 @@ void Executor::toGPU() {
         checkCudaErrors(cudaMalloc(&deviceStateVec[g], sizeof(qComplex) << numLocalQubits));
         checkCudaErrors(cudaMemcpyAsync(deviceStateVec[g], hostStateVec[g], sizeof(qComplex) << numLocalQubits, cudaMemcpyHostToDevice, MyGlobalVars::streams[g]));
     }
+#endif
 }
 
 void Executor::toCPU() {
+#if USE_MPI
     int numLocalQubits = numQubits - MyGlobalVars::bit;
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaSetDevice(g));
@@ -922,6 +925,7 @@ void Executor::toCPU() {
     if (rankInGroup < MPI_GPU_GROUP_SIZE - 1) {
         checkMPIErrors(MPI_Send(&token, 1, MPI_CHAR, MyMPI::rank + 1, 0, MPI_COMM_WORLD));
     }
+#endif
 }
 
 void Executor::eventBarrierAll() {

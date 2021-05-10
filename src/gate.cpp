@@ -628,11 +628,29 @@ Gate Gate::random(int lo, int hi, GateType type) {
             gen_single_id(t);
             return RZ(t, gen_0_2pi_float());
         }
-        case GateType::FSM: // no break
-        case GateType::MU1: // no break
-        case GateType::MZ: // no break
-        case GateType::MU: {
+        case GateType::FSM: {
             UNIMPLEMENTAED();
+        }
+        case GateType::MU1: {
+            int t;
+            gen_single_id(t);
+            return MU1(std::vector<int>(), t, gen_0_2pi_float());
+        }
+        case GateType::MZ: {
+            int t;
+            gen_single_id(t);
+            return MZ(std::vector<int>(), t);
+        }
+        case GateType::MU: {
+            int t;
+            gen_single_id(t);
+            return MU(
+                std::vector<int>(), t,
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float())
+            );
         }
         default: {
             printf("invalid %d\n", (int) type);

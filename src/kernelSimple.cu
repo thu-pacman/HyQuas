@@ -99,6 +99,18 @@ size_t kernelInit(std::vector<qComplex*> &deviceStateVec, std::vector<qComplex*>
     }
 
 
+#define MC_GATE_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit) - 1; \
+    for (qindex i = idx << SINGLE_SIZE_DEP; i < (idx + 1) << SINGLE_SIZE_DEP; i++) { \
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask); \
+        if ((lo & encodeQubit) != encodeQubit) continue; \
+        qindex hi = lo | (qindex(1) << targetQubit);
+
+
+#define MC_GATE_END \
+    }
+
 // template <unsigned int blockSize>
 // __global__ void CCXKernel(qComplex* a, int numQubit_, int c1, int c2, int targetQubit) {
 //     CC_GATE_BEGIN {
@@ -259,6 +271,20 @@ __global__ void FSimKernel(qComplex* a, int numQubit_, int targetQubit1, int tar
 }
 
 
+template <unsigned int blockSize>
+__global__ void MUKernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+    MC_GATE_BEGIN {
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
+        a[lo].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
+        a[hi].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
+        a[hi].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+    } MC_GATE_END
+}
+
 #undef COMPLEX_MULTIPLY_REAL
 #undef COMPLEX_MULTIPLY_IMAG
 
@@ -393,6 +419,23 @@ __global__ void RZKernel(qComplex* a, int numQubit_, int targetQubit, qreal alph
     } SINGLE_GATE_END
 }
 
+template <unsigned int blockSize>
+__global__ void MU1Kernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit, qreal alpha, qreal beta) {
+    MC_GATE_BEGIN {
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
+    } MC_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void MZKernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit) {
+    MC_GATE_BEGIN {
+        a[hi].x = -a[hi].x;
+        a[hi].y = -a[hi].y;
+    } MC_GATE_END
+}
 
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
     checkCudaErrors(cudaSetDevice(0));
@@ -520,6 +563,26 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
             case GateType::RZ: {
                 RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                     deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].x, - gate.mat[0][0].y);
+                break;
+            }
+            case GateType::MU1: {
+                MU1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit, gate.mat[1][1].x, gate.mat[1][1].y
+                );
+                break;
+            }
+            case GateType::MU: {
+                MUKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit,
+                    gate.mat[0][0].x, gate.mat[0][0].y,
+                    gate.mat[0][1].x, gate.mat[0][1].y,
+                    gate.mat[1][0].x, gate.mat[1][0].y,
+                    gate.mat[1][1].x, gate.mat[1][1].y
+                );
+                break;
+            }
+            case GateType::MZ: {
+                MZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit);
                 break;
             }
             default: {
