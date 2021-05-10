@@ -53,12 +53,14 @@ void init() {
             checkNCCLErrors(ncclGetUniqueId(&id));
         checkMPIErrors(MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD));
         ncclComms = std::make_unique<ncclComm_t[]>(MyGlobalVars::localGPUs);
+        #if MPI_GPU_GROUP_SIZE == 1
         checkNCCLErrors(ncclGroupStart());
         for (int i = 0; i < localGPUs; i++) {
             checkCudaErrors(cudaSetDevice(i));
             checkNCCLErrors(ncclCommInitRank(&ncclComms[i], numGPUs, id, MyMPI::rank * localGPUs + i));
         }
         checkNCCLErrors(ncclGroupEnd());
+        #endif
     #endif
 }
 };

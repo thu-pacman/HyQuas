@@ -9,7 +9,7 @@
 #include "circuit.h"
 
 // kernelSimple
-void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits);
+size_t kernelInit(std::vector<qComplex*> &deviceStateVec, std::vector<qComplex*> &hostStateVec, int numQubits);
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates);
 qreal kernelMeasure(qComplex* deviceStateVec, int numQubits, int targetQubit);
 void kernelMeasureAll(std::vector<qComplex*>& deviceStateVec, qreal* results, int numLocalQubits);

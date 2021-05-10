@@ -23,7 +23,7 @@ public:
 
     void addGate(const Gate& gate);
     void printState();
-    qComplex ampAtGPU(qindex idx);
+    qComplex ampAtDevice(qindex idx);
     const int numQubits;
     qreal measure(int qb);
 
@@ -45,6 +45,7 @@ private:
     void gatherAndPrint(const std::vector<ResultItem>& results);
 #endif
     std::vector<Gate> gates;
+    std::vector<qComplex*> hostStateVec;
     std::vector<qComplex*> deviceStateVec;
     std::vector<std::vector<qComplex*>> deviceMats;
     Schedule schedule;

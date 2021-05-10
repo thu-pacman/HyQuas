@@ -106,6 +106,10 @@ set(MAX_SLICE "20" CACHE STRING "max slice in inplace mode")
 MESSAGE(STATUS "MAX_SLICE = ${MAX_SLICE}")
 add_definitions(-DMAX_SLICE=${MAX_SLICE})
 
+set(MPI_GPU_GROUP_SIZE "1" CACHE STRING "proc. that share the same GPU")
+MESSAGE(STATUS "MPI_GPU_GROUP_SIZE = ${MPI_GPU_GROUP_SIZE}")
+add_definitions(-DMPI_GPU_GROUP_SIZE=${MPI_GPU_GROUP_SIZE})
+
 if (NOT ${INPLACE} EQUAL "0" AND ${ENABLE_OVERLAP})
     MESSAGE(FATAL_ERROR "Do not support INPLACE and ENABLE_OVERLAP simultaneously")
 endif()

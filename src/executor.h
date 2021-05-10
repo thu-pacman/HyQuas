@@ -9,7 +9,7 @@
 
 class Executor {
 public:
-    Executor(std::vector<qComplex*> deviceStateVec, int numQubits, Schedule& schedule);
+    Executor(std::vector<qComplex*> deviceStateVec, std::vector<qComplex*> hostStateVec, int numQubits, Schedule& schedule);
     void run();
 private:
     // instructions
@@ -29,6 +29,8 @@ private:
     void eventBarrier();
     void eventBarrierAll();
     void allBarrier();
+    void toCPU();
+    void toGPU();
 
     // utils
     qindex toPhyQubitSet(qindex logicQubitset) const;
@@ -48,6 +50,8 @@ private:
     // constants
     std::vector<unsigned int*> threadBias;
     std::vector<qComplex*> deviceStateVec;
+    std::vector<qComplex*> hostStateVec;
+    std::vector<qComplex*> hostBuffer;
     std::vector<qComplex*> deviceBuffer;
     int numQubits;
     int numSlice, numSliceBit;

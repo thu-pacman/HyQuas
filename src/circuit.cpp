@@ -14,7 +14,7 @@
 using namespace std;
 
 Circuit::Circuit(int numQubits): numQubits(numQubits), state(CircState::empty), measureResults(numQubits, -1) {
-    kernelInit(deviceStateVec, numQubits);
+    kernelInit(deviceStateVec, hostStateVec, numQubits);
 }
 
 int Circuit::run(bool copy_back, bool destroy) {
@@ -26,7 +26,7 @@ int Circuit::run(bool copy_back, bool destroy) {
 #if BACKEND == 0
     kernelExecSimple(deviceStateVec[0], numQubits, gates);
 #elif BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
-    Executor(deviceStateVec, numQubits, schedule).run();
+    Executor(deviceStateVec, hostStateVec, numQubits, schedule).run();
 #elif BACKEND == 2
     gates.clear();
     for (size_t lgID = 0; lgID < schedule.localGroups.size(); lgID++) {
@@ -59,16 +59,22 @@ int Circuit::run(bool copy_back, bool destroy) {
 #if BACKEND == 0 || BACKEND == 2
         kernelDeviceToHost((qComplex*)result.data(), deviceStateVec[0], numQubits);
 #else
+#if MPI_GPU_GROUP_SIZE == 1
         qindex elements = 1ll << (numQubits - MyGlobalVars::bit);
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             kernelDeviceToHost((qComplex*)result.data() + elements * g, deviceStateVec[g], numQubits - MyGlobalVars::bit);
         }
+#else
+        memcpy(result.data(), hostStateVec[0], sizeof(qComplex) << (numQubits - MyGlobalVars::bit));
+#endif
 #endif
     }
     if (destroy) {
+#if MPI_GPU_GROUP_SIZE == 1
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             kernelDestroy(deviceStateVec[g]);
         }
+#endif
     }
     return duration.count();
 }
@@ -138,7 +144,7 @@ ResultItem Circuit::ampAt(qindex idx) {
     return ResultItem(idx, make_qComplex(result[id].x, result[id].y));
 }
 
-qComplex Circuit::ampAtGPU(qindex idx) {
+qComplex Circuit::ampAtDevice(qindex idx) {
 #ifdef IMPERATIVE
     applyGates();
 #endif
@@ -157,7 +163,11 @@ qComplex Circuit::ampAtGPU(qindex idx) {
         int gpuID = localID / localGPUAmp;
         qindex localGPUID = localID % localGPUAmp;
         checkCudaErrors(cudaSetDevice(gpuID));
+#if MPI_GPU_GROUP_SIZE == 1
         ret = kernelGetAmp(deviceStateVec[gpuID], localGPUID);
+#else
+        ret = hostStateVec[gpuID][localGPUID];
+#endif
 #if USE_MPI
     }
     MPI_Bcast(&ret, 1, MPI_Complex, rankID, MPI_COMM_WORLD);
@@ -348,7 +358,33 @@ qreal Circuit::measure(int qb) {
         auto start = chrono::system_clock::now();
         int numLocalQubits = numQubits - MyGlobalVars::bit;
         qreal prob[MyGlobalVars::localGPUs][numLocalQubits + 1];
+#if MPI_GPU_GROUP_SIZE == 1
         kernelMeasureAll(deviceStateVec, prob[0], numLocalQubits);
+#else
+        memset(prob, 0, sizeof(prob));
+        for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+            qreal local_prob[numLocalQubits + 1];
+            memset(local_prob, 0, sizeof(local_prob));
+            #pragma omp parallel shared(prob) private(local_prob)
+            {
+                #pragma omp for
+                for (int i = 0; i < (1 << numLocalQubits); i++) {
+                    for (int j = 0; j < numLocalQubits; j++) {
+                        qComplex amp = hostStateVec[g][i];
+                        qreal x = amp.x * amp.x + amp.y * amp.y;
+                        if (!(i >> j & 1))
+                            local_prob[j] += x;
+                        local_prob[numLocalQubits] += x;
+                    }
+                }
+                for (int j = 0; j < numLocalQubits; j++) {
+                    #pragma omp atomic
+                    prob[g][j] += local_prob[j];
+                }
+            }
+        }
+
+#endif
         qreal allProb[MyGlobalVars::numGPUs][numLocalQubits + 1];
 #if USE_MPI
         if (MyMPI::rank == 0) {
