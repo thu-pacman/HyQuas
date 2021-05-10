@@ -12,7 +12,7 @@ include_directories(${PROJECT_SOURCE_DIR}/third-party/dbg-macro)
 MESSAGE(STATUS "Found CUTT: ${CUTT}")
 
 set(CMAKE_CXX_FLAGS "-std=c++14 -O2 -g -Wall ${OpenMP_CXX_FLAGS}")
-set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_80 -code=sm_80 --ptxas-options=-v -lineinfo -keep")
+set(CUDA_NVCC_FLAGS "-Xcompiler -fopenmp -std=c++14 -O2 -g -arch=compute_70 -code=sm_70 --ptxas-options=-v -lineinfo -keep")
 set(BACKEND "group" CACHE STRING "Backend mode, one of [serial, group, group-serial, blas, mix, blas-advance]")
 MESSAGE(STATUS "Backend: ${BACKEND}")
 
@@ -106,9 +106,9 @@ set(MAX_SLICE "20" CACHE STRING "max slice in inplace mode")
 MESSAGE(STATUS "MAX_SLICE = ${MAX_SLICE}")
 add_definitions(-DMAX_SLICE=${MAX_SLICE})
 
-set(REDUCE_BLOCK_DEP "6" CACHE STRING "each thread handles 1<<dep numbers in reduce sum")
-MESSAGE(STATUS "REDUCE_BLOCK_DEP = ${REDUCE_BLOCK_DEP}")
-add_definitions(-DREDUCE_BLOCK_DEP_DEFINED=${REDUCE_BLOCK_DEP})
+set(MPI_GPU_GROUP_SIZE "1" CACHE STRING "proc. that share the same GPU")
+MESSAGE(STATUS "MPI_GPU_GROUP_SIZE = ${MPI_GPU_GROUP_SIZE}")
+add_definitions(-DMPI_GPU_GROUP_SIZE=${MPI_GPU_GROUP_SIZE})
 
 if (NOT ${INPLACE} EQUAL "0" AND ${ENABLE_OVERLAP})
     MESSAGE(FATAL_ERROR "Do not support INPLACE and ENABLE_OVERLAP simultaneously")

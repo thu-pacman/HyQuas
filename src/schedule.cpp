@@ -1,5 +1,6 @@
 #include "schedule.h"
 #include "logger.h"
+#include "utils.h"
 #include <cstring>
 #include <algorithm>
 #include <assert.h>
@@ -39,13 +40,18 @@ GateGroup GateGroup::merge(const GateGroup& a, const GateGroup& b) {
         if (!gate.isDiagonal()) {
             relatedQubits |= qindex(1) << gate.targetQubit;
         }
+        if (gate.isTwoQubitGate()) {
+            relatedQubits |= qindex(1) << gate.encodeQubit;
+        }
     } else {
         if (!gate.isDiagonal() || (localQubits >> gate.targetQubit & 1))
             relatedQubits |= qindex(1) << gate.targetQubit;
-        if (gate.controlQubit != -1 && (localQubits >> gate.controlQubit & 1))
+        if (gate.isControlGate() && (localQubits >> gate.controlQubit & 1))
             relatedQubits |= qindex(1) << gate.controlQubit;
-        if (gate.controlQubit2 != -1 && (localQubits >> gate.controlQubit2 & 1))
-            relatedQubits |= qindex(1) << gate.controlQubit2;
+        if (gate.isMCGate())
+            relatedQubits |= gate.encodeQubit;
+        if (gate.isTwoQubitGate())
+            relatedQubits |= qindex(1) << gate.encodeQubit;
     }
     return relatedQubits;
  }
@@ -74,10 +80,10 @@ void Schedule::dump(int numQubits) {
             }
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
-                    if (i == gate.controlQubit) {
+                    if (gate.hasControl(i)) {
                         printf(".");
                         for (int j = 1; j < L; j++) printf(" ");
-                    } else if (i == gate.targetQubit) {
+                    } else if (gate.hasTarget(i)) {
                         printf("%s", gate.name.c_str());
                         for (int j = gate.name.length(); j < L; j++)
                             printf(" ");
@@ -104,10 +110,10 @@ void Schedule::dump(int numQubits) {
             }
             for (const Gate& gate: gg.gates) {
                 for (int i = 0; i < numQubits; i++) {
-                    if (i == gate.controlQubit) {
+                    if (gate.hasControl(i)) {
                         printf(".");
                         for (int j = 1; j < L; j++) printf(" ");
-                    } else if (i == gate.targetQubit) {
+                    } else if (gate.hasTarget(i)) {
                         printf("%s", gate.name.c_str());
                         for (int j = gate.name.length(); j < L; j++)
                             printf(" ");
@@ -553,6 +559,13 @@ State LocalGroup::initFirstGroupState(const State& oldState, int numQubits, cons
     return newState;
 }
 
+State LocalGroup::initCopyState(const State& oldState) {
+    this->state = oldState;
+    a2aCommSize = -1;
+    a2aComm.clear();
+    return oldState;
+}
+
 void LocalGroup::getCuttPlanPointers(int numLocalQubits, std::vector<cuttHandle*> &cuttPlanPointers, std::vector<int*> &cuttPermPointers, std::vector<int> &locals, bool isFirstGroup) {
     cuttPlans.clear();
 #if not INPLACE > 0
@@ -622,6 +635,45 @@ for (int i = 0; i < n; i++) { \
     } \
 }
 
+#define APPLY_FSM_GATE() \
+for (int i = 0; i < n; i++) { \
+    for (int j = 0; j < (n >> 2); j++) { \
+        int s00 = j; \
+        s00 = insertBit(s00, b); \
+        s00 = insertBit(s00, a); \
+        s00 += i * n; \
+        int s01 = s00 | (1 << t1); \
+        int s10 = s00 | (1 << t2); \
+        int s11 = s01 | s10; \
+        qComplex v01 = mat[s01]; \
+        qComplex v10 = mat[s10]; \
+        qComplex v11 = mat[s11]; \
+        mat[s01] = v01 * qComplex(gate.mat[0][0]) + v10 * qComplex(gate.mat[0][1]); \
+        mat[s10] = v01 * qComplex(gate.mat[0][1]) + v10 * qComplex(gate.mat[0][0]); \
+        mat[s11] = v11 * qComplex(gate.mat[1][1]); \
+    } \
+}
+
+#define APPLY_MC_GATE() \
+for (int i = 0; i < n; i++) { \
+    for (int j = 0; j < (n >> 1); j++) { \
+        int lo = j; \
+        lo = insertBit(lo, t); \
+        if ((lo & cbits) != cbits) continue; \
+        lo += i * n; \
+        int hi = lo | 1 << t; \
+        qComplex v0 = mat[lo]; \
+        qComplex v1 = mat[hi]; \
+        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]); \
+        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]); \
+    } \
+}
+
+#define APPLY_MC_IDENTITY_GATE(val) \
+for (int i = 0; i < n * n; i++) { \
+    if ((i & cbits) == cbits) \
+        mat[i] = mat[i] * val; \
+}
 
 void GateGroup::initCPUMatrix(int numLocalQubit) {
     auto& pos = state.pos;
@@ -655,49 +707,81 @@ void GateGroup::initCPUMatrix(int numLocalQubit) {
         };
         
         for (auto& gate: gates) {
-            if (gate.controlQubit2 != -1) {
-                int c2 = pos[gate.controlQubit2];
-                int c1 = pos[gate.controlQubit];
-                int t = pos[gate.targetQubit];
-                assert(c2 < numMatQubits || c2 >= numLocalQubit);
-                assert(c1 < numMatQubits || c1 >= numLocalQubit);
-                assert(t < numMatQubits); // no diagnoal c2 gate now
-                // sort
-                int a = std::max(std::max(c1, c2), t);
-                int c = std::min(std::min(c1, c2), t);
-                int b = c2 + c1 + t - a - c;
-                if (c1 > c2) std::swap(c1, c2);
+            // if (gate.controlQubit2 != -1) {
+            //     int c2 = pos[gate.controlQubit2];
+            //     int c1 = pos[gate.controlQubit];
+            //     int t = pos[gate.targetQubit];
+            //     assert(c2 < numMatQubits || c2 >= numLocalQubit);
+            //     assert(c1 < numMatQubits || c1 >= numLocalQubit);
+            //     assert(t < numMatQubits); // no diagnoal c2 gate now
+            //     // sort
+            //     int a = std::max(std::max(c1, c2), t);
+            //     int c = std::min(std::min(c1, c2), t);
+            //     int b = c2 + c1 + t - a - c;
+            //     if (c1 > c2) std::swap(c1, c2);
 
-                if (c1 >= numLocalQubit) {
-                    if (!isHiGPU(c2)) continue;
-                    if (!isHiGPU(c1)) continue;
+            //     if (c1 >= numLocalQubit) {
+            //         if (!isHiGPU(c2)) continue;
+            //         if (!isHiGPU(c1)) continue;
+            //         #pragma omp for
+            //         APPLY_SINGLE_GATE()
+            //     } else if (c2 >= numLocalQubit) {
+            //         if (!isHiGPU(c2)) continue;
+            //         int a = std::max(c1, t);
+            //         int b = std::min(c1, t);
+            //         #pragma omp for
+            //         APPLY_CONTROL_GATE()
+            //     }
+            //     #pragma omp for
+            //     for (int i = 0; i < n; i++) {
+            //         for (int j = 0; j < (n >> 3); j++) {
+            //             int lo = j;
+            //             lo = insertBit(lo, c);
+            //             lo = insertBit(lo, b);
+            //             lo = insertBit(lo, a);
+            //             lo += i * n;
+            //             lo |= 1 << c2;
+            //             lo |= 1 << c1;
+            //             int hi = lo | 1 << t;
+            //             qComplex v0 = mat[lo];
+            //             qComplex v1 = mat[hi];
+            //             mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
+            //             mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
+            //         }
+            //     }
+            if (gate.isMCGate()) {
+                int t = pos[gate.targetQubit];
+                qindex cbits = 0;
+                for (auto q: gate.controlQubits) {
+                    int c = pos[q];
+                    if (c >= numLocalQubit && !isHiGPU(c))
+                        continue;
+                    assert(c < numMatQubits);
+                    cbits |= 1ll << c;
+                }
+                if (t >= numLocalQubit) {
+                    bool isHi = isHiGPU(t);
+                    auto val = gate.mat[isHi][isHi];
                     #pragma omp for
-                    APPLY_SINGLE_GATE()
-                } else if (c2 >= numLocalQubit) {
-                    if (!isHiGPU(c2)) continue;
-                    int a = std::max(c1, t);
-                    int b = std::min(c1, t);
+                    APPLY_MC_IDENTITY_GATE(val);
+                } else {
                     #pragma omp for
-                    APPLY_CONTROL_GATE()
+                    APPLY_MC_GATE();
+                }
+            } else if (gate.isTwoQubitGate()) {
+                int t1 = pos[gate.encodeQubit];
+                int t2 = pos[gate.targetQubit];
+                assert(t1 < numMatQubits || (t1 >= numLocalQubit && gate.isDiagonal()));
+                assert(t2 < numMatQubits || (t2 >= numLocalQubit && gate.isDiagonal()));
+                // sort
+                int a = std::max(t1, t2);
+                int b = std::min(t1, t2);
+                if (t1 >= numLocalQubit || t2 >= numLocalQubit) {
+                    UNIMPLEMENTAED();
                 }
                 #pragma omp for
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < (n >> 3); j++) {
-                        int lo = j;
-                        lo = insertBit(lo, c);
-                        lo = insertBit(lo, b);
-                        lo = insertBit(lo, a);
-                        lo += i * n;
-                        lo |= 1 << c2;
-                        lo |= 1 << c1;
-                        int hi = lo | 1 << t;
-                        qComplex v0 = mat[lo];
-                        qComplex v1 = mat[hi];
-                        mat[lo] = v0 * qComplex(gate.mat[0][0]) + v1 * qComplex(gate.mat[0][1]);
-                        mat[hi] = v0 * qComplex(gate.mat[1][0]) + v1 * qComplex(gate.mat[1][1]);
-                    }
-                }
-            } else if (gate.controlQubit != -1) {
+                APPLY_FSM_GATE()
+            } else if (gate.isControlGate()) {
                 int c1 = pos[gate.controlQubit];
                 int t = pos[gate.targetQubit];
                 assert(c1 < numMatQubits || c1 >= numLocalQubit);

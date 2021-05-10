@@ -6,19 +6,19 @@
 
 static int globalGateID = 0;
 
-Gate Gate::CCX(int controlQubit, int controlQubit2, int targetQubit) {
-    Gate g;
-    g.gateID = ++ globalGateID;
-    g.type = GateType::CCX;
-    g.mat[0][0] = make_qComplex(0); g.mat[0][1] = make_qComplex(1);
-    g.mat[1][0] = make_qComplex(1); g.mat[1][1] = make_qComplex(0);
-    g.name = "CCX";
-    g.targetQubit = targetQubit;
-    g.controlQubit = controlQubit;
-    g.controlQubit2 = controlQubit2;
-    return g;
+// Gate Gate::CCX(int controlQubit, int controlQubit2, int targetQubit) {
+//     Gate g;
+//     g.gateID = ++ globalGateID;
+//     g.type = GateType::CCX;
+//     g.mat[0][0] = make_qComplex(0); g.mat[0][1] = make_qComplex(1);
+//     g.mat[1][0] = make_qComplex(1); g.mat[1][1] = make_qComplex(0);
+//     g.name = "CCX";
+//     g.targetQubit = targetQubit;
+//     g.controlQubit = controlQubit;
+//     g.controlQubit2 = controlQubit2;
+//     return g;
 
-}
+// }
 
 Gate Gate::CNOT(int controlQubit, int targetQubit) {
     Gate g;
@@ -316,6 +316,72 @@ Gate Gate::U(int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1
     return g;
 }
 
+Gate Gate::MU1(std::vector<int> controlQubits, int targetQubit, qreal lambda) {
+    if (controlQubits.size() == 0) return Gate::U1(targetQubit, lambda);
+    if (controlQubits.size() == 1) return Gate::CU1(controlQubits[0], targetQubit, lambda);
+    Gate g;
+    g.gateID = ++globalGateID;
+    g.type = GateType::MU1;
+    g.mat[0][0] = make_qComplex(1);
+    g.mat[0][1] = make_qComplex(0);
+    g.mat[1][0] = make_qComplex(0);
+    g.mat[1][1] = make_qComplex(cos(lambda), sin(lambda));
+    g.name = "MU1";
+    g.encodeQubit = to_bitmap(controlQubits);
+    g.targetQubit = targetQubit;
+    g.controlQubit = -2;
+    g.controlQubits = controlQubits;
+    return g;
+}
+
+Gate Gate::MZ(std::vector<int> controlQubits, int targetQubit) {
+    if (controlQubits.size() == 0) return Gate::Z(targetQubit);
+    if (controlQubits.size() == 1) return Gate::CZ(controlQubits[0], targetQubit);
+    Gate g;
+    g.gateID = ++globalGateID;
+    g.type = GateType::MZ;
+    g.mat[0][0] = make_qComplex(1); g.mat[0][1] = make_qComplex(0);
+    g.mat[1][0] = make_qComplex(0); g.mat[1][1] = make_qComplex(-1);
+    g.name = "MZ";
+    g.encodeQubit = to_bitmap(controlQubits);
+    g.targetQubit = targetQubit;
+    g.controlQubit = -2;
+    g.controlQubits = controlQubits;
+    return g;
+}
+
+Gate Gate::MU(std::vector<int> controlQubits, int targetQubit, qComplex a0, qComplex a1, qComplex b0, qComplex b1) {
+    if (controlQubits.size() == 0) return Gate::U(targetQubit, a0, a1, b0, b1);
+    if (controlQubits.size() == 1) return Gate::CU(controlQubits[0], targetQubit, a0, a1, b0, b1);
+    Gate g;
+    g.gateID = ++globalGateID;
+    g.type = GateType::MU;
+    g.mat[0][0] = a0; g.mat[0][1] = a1;
+    g.mat[1][0] = b0; g.mat[1][1] = b1;
+    g.name = "MU";
+    g.encodeQubit = to_bitmap(controlQubits);
+    g.targetQubit = targetQubit;
+    g.controlQubit = -2;
+    g.controlQubits = controlQubits;
+    return g;
+}
+
+Gate Gate::FSIM(int targetQubit1, int targetQubit2, qreal theta, qreal phi) {
+    if (targetQubit1 == targetQubit2) UNIMPLEMENTAED();
+    Gate g;
+    g.gateID = ++globalGateID;
+    g.type = GateType::FSM;
+    // a compressed matrix representation. be careful in blas backend
+    g.mat[0][0] = make_qComplex(cos(theta)); g.mat[0][1] = make_qComplex(0, -sin(theta));
+    g.mat[1][0] = make_qComplex(0, -sin(theta)); g.mat[1][1] = make_qComplex(cos(phi), -sin(phi));
+    g.name = "FSM";
+    g.encodeQubit = targetQubit1;
+    g.targetQubit = targetQubit2;
+    g.controlQubit = -3;
+    return g;
+}
+    
+
 Gate Gate::UC(int targetQubit, qComplex alpha, qComplex beta) {
     Gate g;
     g.gateID = ++ globalGateID;
@@ -420,11 +486,11 @@ Gate Gate::random(int lo, int hi, GateType type) {
         t = rand() % (hi - lo) + lo;
     };
     switch (type) {
-        case GateType::CCX: {
-            int t, c1, c2;
-            gen_c2_id(t, c1, c2);
-            return CCX(c1, c2, t);
-        }
+        // case GateType::CCX: {
+        //     int t, c1, c2;
+        //     gen_c2_id(t, c1, c2);
+        //     return CCX(c1, c2, t);
+        // }
         case GateType::CNOT: {
             int t, c1;
             gen_c1_id(t, c1);
@@ -439,6 +505,22 @@ Gate Gate::random(int lo, int hi, GateType type) {
             int t, c1;
             gen_c1_id(t, c1);
             return CZ(c1, t);
+        }
+        case GateType::CU: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CU(
+                c1, t,
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float())
+            );
+        }
+        case GateType::CUC: {
+            int t, c1;
+            gen_c1_id(t, c1);
+            return CUC(c1, t, make_qComplex(gen_01_float(), gen_01_float()), make_qComplex(gen_01_float(), gen_01_float()));
         }
         case GateType::CRX: {
             int t, c1;
@@ -469,6 +551,22 @@ Gate Gate::random(int lo, int hi, GateType type) {
             int t;
             gen_single_id(t);
             return U2(t, gen_0_2pi_float(), gen_0_2pi_float());
+        }
+        case GateType::U: {
+            int t;
+            gen_single_id(t);
+            return U(
+                t,
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float())
+            );
+        }
+        case GateType::UC: {
+            int t;
+            gen_single_id(t);
+            return UC(t, make_qComplex(gen_01_float(), gen_01_float()), make_qComplex(gen_01_float(), gen_01_float()));
         }
         case GateType::U3: {
             int t;
@@ -530,6 +628,30 @@ Gate Gate::random(int lo, int hi, GateType type) {
             gen_single_id(t);
             return RZ(t, gen_0_2pi_float());
         }
+        case GateType::FSM: {
+            UNIMPLEMENTAED();
+        }
+        case GateType::MU1: {
+            int t;
+            gen_single_id(t);
+            return MU1(std::vector<int>(), t, gen_0_2pi_float());
+        }
+        case GateType::MZ: {
+            int t;
+            gen_single_id(t);
+            return MZ(std::vector<int>(), t);
+        }
+        case GateType::MU: {
+            int t;
+            gen_single_id(t);
+            return MU(
+                std::vector<int>(), t,
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float())
+            );
+        }
         default: {
             printf("invalid %d\n", (int) type);
             assert(false);
@@ -548,6 +670,18 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
         }
         case GateType::CZ: {
             return CZ(controlQubit, targetQubit);
+        }
+        case GateType::CU: {
+            return CU(
+                controlQubit, targetQubit,
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float()),
+                make_qComplex(gen_01_float(), gen_01_float())
+            );
+        }
+        case GateType::CUC: {
+            return CUC(controlQubit, targetQubit, make_qComplex(gen_01_float(), gen_01_float()), make_qComplex(gen_01_float(), gen_01_float()));
         }
         case GateType::CRX: {
             return CRX(controlQubit, targetQubit, gen_0_2pi_float());
@@ -568,27 +702,27 @@ Gate Gate::control(int controlQubit, int targetQubit, GateType type) {
     exit(1);
 }
 
-GateType Gate::toCU(GateType type) {
-    if (type == GateType::CCX) {
-        return GateType::CNOT;
-    } else {
-        UNREACHABLE()
-    }
-}
+// GateType Gate::toCU(GateType type) {
+//     if (type == GateType::CCX) {
+//         return GateType::CNOT;
+//     } else {
+//         UNREACHABLE()
+//     }
+// }
 
 GateType Gate::toU(GateType type) {
     switch (type) {
-        case GateType::CCX:
-        case GateType::CU:
-            return GateType::U;
-        case GateType::CUC:
-            return GateType::UC;
+        // case GateType::CCX:
         case GateType::CNOT:
             return GateType::X;
         case GateType::CY:
             return GateType::Y;
         case GateType::CZ:
             return GateType::Z;
+        case GateType::CU:
+            return GateType::U;
+        case GateType::CUC:
+            return GateType::UC;
         case GateType::CRX:
             return GateType::RX;
         case GateType::CRY:
@@ -610,7 +744,7 @@ std::vector<unsigned char> Gate::serialize() const {
     auto name_len = name.length();
     int len =
         sizeof(name_len) + name.length() + 1 + sizeof(gateID) + sizeof(type) + sizeof(mat)
-        + sizeof(targetQubit) + sizeof(controlQubit) + sizeof(controlQubit2);
+        + sizeof(targetQubit) + sizeof(controlQubit) + sizeof(encodeQubit);
     std::vector<unsigned char> ret; ret.resize(len);
     unsigned char* arr = ret.data();
     int cur = 0;
@@ -621,7 +755,7 @@ std::vector<unsigned char> Gate::serialize() const {
     strcpy(reinterpret_cast<char*>(arr) + cur, name.c_str()); cur += name_len + 1;
     SERIALIZE_STEP(targetQubit);
     SERIALIZE_STEP(controlQubit);
-    SERIALIZE_STEP(controlQubit2);
+    SERIALIZE_STEP(encodeQubit);
     assert(cur == len);
     return ret;
 }
@@ -635,6 +769,15 @@ Gate Gate::deserialize(const unsigned char* arr, int& cur) {
     g.name = std::string(reinterpret_cast<const char*>(arr) + cur, name_len); cur += name_len + 1;
     DESERIALIZE_STEP(g.targetQubit);
     DESERIALIZE_STEP(g.controlQubit);
-    DESERIALIZE_STEP(g.controlQubit2);
+    DESERIALIZE_STEP(g.encodeQubit);
+    if (g.controlQubit == -2) {
+        g.controlQubits.clear();
+        int qid = 0;
+        qindex ctrs = g.encodeQubit;
+        while (ctrs > 0) {
+            if (ctrs & 1) g.controlQubits.push_back(qid);
+            qid ++;
+        }
+    }
     return g;
 }

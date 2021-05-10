@@ -53,12 +53,14 @@ void init() {
             checkNCCLErrors(ncclGetUniqueId(&id));
         checkMPIErrors(MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, MPI_COMM_WORLD));
         ncclComms = std::make_unique<ncclComm_t[]>(MyGlobalVars::localGPUs);
+        #if MPI_GPU_GROUP_SIZE == 1
         checkNCCLErrors(ncclGroupStart());
         for (int i = 0; i < localGPUs; i++) {
             checkCudaErrors(cudaSetDevice(i));
             checkNCCLErrors(ncclCommInitRank(&ncclComms[i], numGPUs, id, MyMPI::rank * localGPUs + i));
         }
         checkNCCLErrors(ncclGroupEnd());
+        #endif
     #endif
 }
 };
@@ -152,4 +154,10 @@ int get_bit(int n) {
         exit(1);
     }
     return bit;
+}
+
+qindex to_bitmap(std::vector<int> qubits) {
+    qindex ret;
+    for (auto& x: qubits) ret |= 1ll << x;
+    return ret;
 }

@@ -6,7 +6,7 @@ using namespace std;
 const int SINGLE_SIZE_DEP = 0; // handle 1 << SINGLE_SIZE_DEP items per thread
 const int REDUCE_BLOCK_DEP = REDUCE_BLOCK_DEP_DEFINED; // 1 << REDUCE_BLOCK_DEP blocks in final reduction
 
-void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
+size_t kernelInit(std::vector<qComplex*> &deviceStateVec, std::vector<qComplex*> &hostStateVec, int numQubits) {
     size_t size = (sizeof(qComplex) << numQubits) >> MyGlobalVars::bit;
     if ((MyGlobalVars::numGPUs > 1 && !INPLACE) || BACKEND == 3 || BACKEND == 4) {
         size <<= 1;
@@ -21,15 +21,25 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     checkCudaErrors(cudaMemsetAsync(deviceStateVec[0], 0, sizeof(qComplex) << numQubits, MyGlobalVars::streams[0]));
 #else
     deviceStateVec.resize(MyGlobalVars::localGPUs);
+    hostStateVec.resize(MyGlobalVars::localGPUs);
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
+#if MPI_GPU_GROUP_SIZE == 1
         checkCudaErrors(cudaSetDevice(g));
         checkCudaErrors(cudaMalloc(&deviceStateVec[g], size));
         checkCudaErrors(cudaMemsetAsync(deviceStateVec[g], 0, size, MyGlobalVars::streams[g]));
+#else
+        hostStateVec[g] = (qComplex*) malloc(size);
+        memset(hostStateVec[g], 0, size);
+#endif
     }
 #endif
     qComplex one = make_qComplex(1.0, 0.0);
     if  (!USE_MPI || MyMPI::rank == 0) {
+#if MPI_GPU_GROUP_SIZE == 1
         checkCudaErrors(cudaMemcpyAsync(deviceStateVec[0], &one, sizeof(qComplex), cudaMemcpyHostToDevice, MyGlobalVars::streams[0])); // state[0] = 1
+#else
+        hostStateVec[0][0] = one;
+#endif
     }
 #if BACKEND == 1 || BACKEND == 3 || BACKEND == 4 || BACKEND == 5
     initControlIdx();
@@ -37,6 +47,7 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
     for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
         checkCudaErrors(cudaStreamSynchronize(MyGlobalVars::streams[g]));
     }
+    return size;
 }
 
 
@@ -72,19 +83,45 @@ void kernelInit(std::vector<qComplex*> &deviceStateVec, int numQubits) {
         qindex hi = lo | (qindex(1) << targetQubit);
 #define CC_GATE_END }
 
+#define TWO_QUBIT_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit1) - 1; \
+    for (qindex i = idx << SINGLE_SIZE_DEP; i < (idx + 1) << SINGLE_SIZE_DEP; i++) { \
+        qindex s00 = ((i >> targetQubit1) << (targetQubit1 + 1)) | (i & mask); \
+        if ((s00 >> targetQubit2) & 1) \
+            continue; \
+        qindex s01 = s00 | (qindex(1) << targetQubit1); \
+        qindex s10 = s00 | (qindex(1) << targetQubit2); \
+        qindex s11 = s01 | s10;
 
 
-template <unsigned int blockSize>
-__global__ void CCXKernel(qComplex* a, int numQubit_, int c1, int c2, int targetQubit) {
-    CC_GATE_BEGIN {
-        qreal real = a[lo].x;
-        qreal imag = a[lo].y;
-        a[lo].x = a[hi].x;
-        a[lo].y = a[hi].y;
-        a[hi].x = real;
-        a[hi].y = imag;
-    } CC_GATE_END
-}
+#define TWO_QUBIT_END \
+    }
+
+
+#define MC_GATE_BEGIN \
+    qindex idx = blockIdx.x * blockSize + threadIdx.x; \
+    qindex mask = (qindex(1) << targetQubit) - 1; \
+    for (qindex i = idx << SINGLE_SIZE_DEP; i < (idx + 1) << SINGLE_SIZE_DEP; i++) { \
+        qindex lo = ((i >> targetQubit) << (targetQubit + 1)) | (i & mask); \
+        if ((lo & encodeQubit) != encodeQubit) continue; \
+        qindex hi = lo | (qindex(1) << targetQubit);
+
+
+#define MC_GATE_END \
+    }
+
+// template <unsigned int blockSize>
+// __global__ void CCXKernel(qComplex* a, int numQubit_, int c1, int c2, int targetQubit) {
+//     CC_GATE_BEGIN {
+//         qreal real = a[lo].x;
+//         qreal imag = a[lo].y;
+//         a[lo].x = a[hi].x;
+//         a[lo].y = a[hi].y;
+//         a[hi].x = real;
+//         a[hi].y = imag;
+//     } CC_GATE_END
+// }
 
 
 template <unsigned int blockSize>
@@ -212,6 +249,40 @@ __global__ void UKernel(qComplex* a, int numQubit_, int targetQubit, qreal r00, 
         a[hi].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
         a[hi].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
     } SINGLE_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void FSimKernel(qComplex* a, int numQubit_, int targetQubit1, int targetQubit2, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+    TWO_QUBIT_BEGIN {
+        qComplex val_01 = a[s01];
+        qComplex val_10 = a[s10];
+        qComplex val_11 = a[s11];
+
+        a[s01] =  make_qComplex(
+            COMPLEX_MULTIPLY_REAL(val_01.x, val_01.y, r00, i00) + COMPLEX_MULTIPLY_REAL(val_10.x, val_10.y, r01, i01),
+            COMPLEX_MULTIPLY_IMAG(val_01.x, val_01.y, r00, i00) + COMPLEX_MULTIPLY_IMAG(val_10.x, val_10.y, r01, i01)
+        );
+        a[s10] =  make_qComplex(
+            COMPLEX_MULTIPLY_REAL(val_01.x, val_01.y, r01, i01) + COMPLEX_MULTIPLY_REAL(val_10.x, val_10.y, r00, i00),
+            COMPLEX_MULTIPLY_IMAG(val_01.x, val_01.y, r01, i01) + COMPLEX_MULTIPLY_IMAG(val_10.x, val_10.y, r00, i00)
+        );
+        a[s11] =  make_qComplex(COMPLEX_MULTIPLY_REAL(val_11.x, val_11.y, r11, i11), COMPLEX_MULTIPLY_IMAG(val_11.x, val_11.y, r11, i11));
+    } TWO_QUBIT_END
+}
+
+
+template <unsigned int blockSize>
+__global__ void MUKernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit, qreal r00, qreal i00, qreal r01, qreal i01, qreal r10, qreal i10, qreal r11, qreal i11) {
+    MC_GATE_BEGIN {
+        qreal loReal = a[lo].x;
+        qreal loImag = a[lo].y;
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[lo].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r01, i01);
+        a[lo].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r00, i00) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r01, i01);
+        a[hi].x = COMPLEX_MULTIPLY_REAL(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_REAL(hiReal, hiImag, r11, i11);
+        a[hi].y = COMPLEX_MULTIPLY_IMAG(loReal, loImag, r10, i10) + COMPLEX_MULTIPLY_IMAG(hiReal, hiImag, r11, i11);
+    } MC_GATE_END
 }
 
 #undef COMPLEX_MULTIPLY_REAL
@@ -348,6 +419,23 @@ __global__ void RZKernel(qComplex* a, int numQubit_, int targetQubit, qreal alph
     } SINGLE_GATE_END
 }
 
+template <unsigned int blockSize>
+__global__ void MU1Kernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit, qreal alpha, qreal beta) {
+    MC_GATE_BEGIN {
+        qreal hiReal = a[hi].x;
+        qreal hiImag = a[hi].y;
+        a[hi].x = alpha * hiReal - beta * hiImag;
+        a[hi].y = alpha * hiImag + beta * hiReal;
+    } MC_GATE_END
+}
+
+template <unsigned int blockSize>
+__global__ void MZKernel(qComplex* a, int numQubit_, int targetQubit, qindex encodeQubit) {
+    MC_GATE_BEGIN {
+        a[hi].x = -a[hi].x;
+        a[hi].y = -a[hi].y;
+    } MC_GATE_END
+}
 
 void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector<Gate> & gates) {
     checkCudaErrors(cudaSetDevice(0));
@@ -355,8 +443,18 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
     int nVec = 1 << numQubit_;
     for (auto& gate: gates) {
         switch (gate.type) {
-            case GateType::CCX: {
-                CCXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.controlQubit2, gate.targetQubit);
+            // case GateType::CCX: {
+            //     CCXKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.controlQubit, gate.controlQubit2, gate.targetQubit);
+            //     break;
+            // }
+            case GateType::FSM: {
+                FSimKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.encodeQubit, gate.targetQubit,
+                    gate.mat[0][0].x, gate.mat[0][0].y,
+                    gate.mat[0][1].x, gate.mat[0][1].y,
+                    gate.mat[1][0].x, gate.mat[1][0].y,
+                    gate.mat[1][1].x, gate.mat[1][1].y
+                );
                 break;
             }
             case GateType::CNOT: {
@@ -465,6 +563,26 @@ void kernelExecSimple(qComplex* deviceStateVec, int numQubits, const std::vector
             case GateType::RZ: {
                 RZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
                     deviceStateVec, numQubit_, gate.targetQubit, gate.mat[0][0].x, - gate.mat[0][0].y);
+                break;
+            }
+            case GateType::MU1: {
+                MU1Kernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit, gate.mat[1][1].x, gate.mat[1][1].y
+                );
+                break;
+            }
+            case GateType::MU: {
+                MUKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(
+                    deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit,
+                    gate.mat[0][0].x, gate.mat[0][0].y,
+                    gate.mat[0][1].x, gate.mat[0][1].y,
+                    gate.mat[1][0].x, gate.mat[1][0].y,
+                    gate.mat[1][1].x, gate.mat[1][1].y
+                );
+                break;
+            }
+            case GateType::MZ: {
+                MZKernel<1<<THREAD_DEP><<<nVec>>(SINGLE_SIZE_DEP + THREAD_DEP), 1<<THREAD_DEP>>>(deviceStateVec, numQubit_, gate.targetQubit, gate.encodeQubit);
                 break;
             }
             default: {
@@ -661,7 +779,7 @@ __global__ void measureNew(qComplex* a, qreal* ans, int numQubits) {
     }
 }
 
-void kernelMeasureLaunchNew(qComplex* deviceStateVec, int numQubits, qreal* pointers[3], cudaStream_t& stream) {\
+void kernelMeasureLaunchNew(qComplex* deviceStateVec, int numQubits, qreal* pointers[3], cudaStream_t& stream) {
     // printf("launch %d start\n", targetQubit);
     qindex nVec = 1 << (numQubits - 1);
     qindex totalBlocks = nVec >> THREAD_DEP >> REDUCE_BLOCK_DEP;

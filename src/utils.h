@@ -6,6 +6,7 @@
 #include <cutt.h>
 #include <cuda_runtime.h>
 #include <memory>
+#include <vector>
 #include <cublas_v2.h>
 
 #if USE_MPI
@@ -51,6 +52,12 @@ typedef cuFloatComplex qComplex;
 
 #define UNREACHABLE() { \
     printf("file %s line %i: unreachable!\n", __FILE__, __LINE__); \
+    fflush(stdout); \
+    exit(1); \
+}
+
+#define UNIMPLEMENTAED() { \
+    printf("file %s line %i: unimplemented!\n", __FILE__, __LINE__); \
     fflush(stdout); \
     exit(1); \
 }
@@ -186,3 +193,5 @@ qComplex make_qComplex(qreal x);
 bool operator < (const qComplex& a, const qComplex& b);
 
 int get_bit(int n);
+
+qindex to_bitmap(std::vector<int> qubits);
