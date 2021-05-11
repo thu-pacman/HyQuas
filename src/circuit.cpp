@@ -373,10 +373,10 @@ qreal Circuit::measure(int qb) {
         memset(prob, 0, sizeof(prob));
         for (int g = 0; g < MyGlobalVars::localGPUs; g++) {
             qreal local_prob[numLocalQubits + 1];
-            memset(local_prob, 0, sizeof(local_prob));
-            // #pragma omp parallel shared(prob) private(local_prob)
-            // {
-                // #pragma omp for
+            #pragma omp parallel shared(prob) private(local_prob)
+            {
+                memset(local_prob, 0, sizeof(local_prob));
+                #pragma omp for
                 for (int i = 0; i < (1ll << numLocalQubits); i++) {
                     qComplex amp = hostStateVec[g][i];
                     qreal x = amp.x * amp.x + amp.y * amp.y;
@@ -390,7 +390,7 @@ qreal Circuit::measure(int qb) {
                     #pragma omp atomic
                     prob[g][j] += local_prob[j];
                 }
-            // }
+            }
         }
 
 #endif
