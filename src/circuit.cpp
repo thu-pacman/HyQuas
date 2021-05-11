@@ -377,7 +377,7 @@ qreal Circuit::measure(int qb) {
             {
                 memset(local_prob, 0, sizeof(local_prob));
                 #pragma omp for
-                for (int i = 0; i < (1ll << numLocalQubits); i++) {
+                for (qindex i = 0; i < (1ll << numLocalQubits); i++) {
                     qComplex amp = hostStateVec[g][i];
                     qreal x = amp.x * amp.x + amp.y * amp.y;
                     for (int j = 0; j < numLocalQubits; j++) {
