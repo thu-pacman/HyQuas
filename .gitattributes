@@ -1,0 +1,2 @@
+tests/input/*.qasm filter=lfs diff=lfs merge=lfs -text
+tests/output/*.log filter=lfs diff=lfs merge=lfs -text
