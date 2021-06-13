@@ -1,6 +1,6 @@
 [submodule "third-party/cutt"]
 	path = third-party/cutt
-	url = git@git.tsinghua.edu.cn:chen-zha17/cutt.git
+	url = https://github.com/heheda12345/cutt.git
 [submodule "third-party/dbg-macro"]
 	path = third-party/dbg-macro
 	url = https://github.com/sharkdp/dbg-macro.git
