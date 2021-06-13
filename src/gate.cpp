@@ -126,9 +126,9 @@ Gate Gate::U2(int targetQubit, qreal phi, qreal lambda) {
     g.gateID = ++ globalGateID;
     g.type = GateType::U2;
     g.mat[0][0] = make_qComplex(1.0 / sqrt(2));
-    g.mat[0][1] = make_qComplex(-cos(lambda), -sin(lambda));
-    g.mat[1][0] = make_qComplex(cos(lambda), sin(lambda));
-    g.mat[1][1] = make_qComplex(cos(lambda + phi), sin(lambda + phi));
+    g.mat[0][1] = make_qComplex(-cos(lambda) / sqrt(2), -sin(lambda) / sqrt(2));
+    g.mat[1][0] = make_qComplex(cos(phi) / sqrt(2), sin(phi) / sqrt(2));
+    g.mat[1][1] = make_qComplex(cos(lambda + phi) / sqrt(2), sin(lambda + phi) / sqrt(2));
     g.name = "U2";
     g.targetQubit = targetQubit;
     g.controlQubit = -1;
