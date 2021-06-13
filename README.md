@@ -2,11 +2,11 @@
 
 HyQuas is a **Hy**brid partitioner based **Qua**ntum circuit **S**imulation system on GPU, which supports both single-GPU, single-node-multi-GPU, and multi-node-multi-GPU quantum circuit simulation.
 
-For single-GPU simulation, it provides two highly optimized methods, *OShareMem* and *TransMM*. *OShareMem* method optimizes the shared-memory based quantum circuit simulation by $2.67 \times$. *TransMM* method converts quantum circuit simulation to standard operations and enables the usage of highly optimized libraries like cuBLAS and powerful hardwares like Tensor Cores. It leads up to $8.43 \times$ speedup over previous gate-merging based simulation. Moreover, it can select the better simulation method for different parts of a given quantum circuit according to its pattern. 
+For single-GPU simulation, it provides two highly optimized methods, *OShareMem* and *TransMM*. *OShareMem* method optimizes the shared-memory based quantum circuit simulation by <img src="https://render.githubusercontent.com/render/math?math=2.67 \times">. *TransMM* method converts quantum circuit simulation to standard operations and enables the usage of highly optimized libraries like cuBLAS and powerful hardwares like Tensor Cores. It leads up to <img src="https://render.githubusercontent.com/render/math?math=8.43 \times"> speedup over previous gate-merging based simulation. Moreover, it can select the better simulation method for different parts of a given quantum circuit according to its pattern. 
 
 For distributed simulation, it provides a GPU-centric communication pipelining approach. It can utilize the high-throughput NVLink connections to make the simulation even faster while still preserving low communication traffic.
 
-Experimental results show that HyQuas can achieve up to $10.71 \times$ speedup on a single GPU and $227 \times$ speedup on a GPU cluster over state-of-the-art quantum circuit simulation systems.
+Experimental results show that HyQuas can achieve up to <img src="https://render.githubusercontent.com/render/math?math=10.71 \times"> speedup on a single GPU and <img src="https://render.githubusercontent.com/render/math?math=227 \times"> speedup on a GPU cluster over state-of-the-art quantum circuit simulation systems.
 
 For more details, please refer to our paper:
 ```
