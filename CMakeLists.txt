@@ -4,7 +4,7 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 find_package(CUDA REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(Nccl REQUIRED)
-#find_package(MPI REQUIRED)
+find_package(MPI REQUIRED)
 
 find_library(CUTT cutt "${PROJECT_SOURCE_DIR}/third-party/cutt/cutt/lib")
 include_directories(${PROJECT_SOURCE_DIR}/third-party/cutt/cutt/include)

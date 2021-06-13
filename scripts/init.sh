@@ -4,7 +4,8 @@ set -e
 
 source env.sh ""
 
-cd $HOME/QCSimulator/build
+mkdir -p $HYQUAS_ROOT/build
+cd $HYQUAS_ROOT/build
 rm CMakeCache.txt || true
 cmake $* ..
 make clean
