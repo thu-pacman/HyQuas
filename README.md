@@ -8,11 +8,6 @@ For distributed simulation, it provides a GPU-centric communication pipelining a
 
 Experimental results show that HyQuas can achieve up to <img src="https://render.githubusercontent.com/render/math?math=10.71 \times"> speedup on a single GPU and <img src="https://render.githubusercontent.com/render/math?math=227 \times"> speedup on a GPU cluster over state-of-the-art quantum circuit simulation systems.
 
-For more details, please refer to our paper:
-```
-Chen Zhang, Zeyu Song, Haojie Wang, Kaiyuan Rong, and Jidong Zhai. 2021. HyQuas: hybrid partitioner based quantum circuit simulation system on GPU. In Proceedings of the ACM International Conference on Supercomputing (ICS '21). Association for Computing Machinery, New York, NY, USA, 443–454. DOI:https://doi.org/10.1145/3447818.3460357
-```
-
 ## Compile and Run
 1. Get the source code
     ```bash
@@ -84,3 +79,25 @@ The HyQuas system is still under development. It has the following **unstable** 
 * Support for more control qubits.
 * Support for some two-qubit gates.
 * Fast measurement of quantum state.
+
+# Cite
+To cite HyQuas, you can use the following BibTex:
+```
+@inproceedings{10.1145/3447818.3460357,
+    author = {Zhang, Chen and Song, Zeyu and Wang, Haojie and Rong, Kaiyuan and Zhai, Jidong},
+    title = {HyQuas: Hybrid Partitioner Based Quantum Circuit Simulation System on GPU},
+    year = {2021},
+    isbn = {9781450383356},
+    publisher = {Association for Computing Machinery},
+    address = {New York, NY, USA},
+    url = {https://doi.org/10.1145/3447818.3460357},
+    doi = {10.1145/3447818.3460357},
+    booktitle = {Proceedings of the ACM International Conference on Supercomputing},
+    pages = {443–454},
+    numpages = {12},
+    keywords = {quantum computing, GPU computing, simulation},
+    location = {Virtual Event, USA},
+    series = {ICS '21}
+}
+
+```
