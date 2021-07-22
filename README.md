@@ -73,7 +73,7 @@ Experimental results show that HyQuas can achieve up to <img src="https://render
 
 For more ways to use our simulator (like only using the *OShareMem* method or *TransMM* method, tuning off the overlap of communication and computation), and for reproducing our results in the ICS'21 paper, please refer to our `benchmark/` directory.
 
-The HyQuas system is still under development. It has the following **unstable** feathers now. See our dev branch for details.
+It also supports the following **unstable** feathers now. See our dev branch for details.
 * Simulating more qubits by saving the state in CPU memory while still compute with GPU.
 * An imperative mode, so that you do not need to explicitly call `c->compile();` and `c->run()`.
 * Support for more control qubits.
