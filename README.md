@@ -71,6 +71,8 @@ Experimental results show that HyQuas can achieve up to <img src="https://render
         CUDA_VISIBLE_DEVICES=0,1,2,3 ./check.sh
         ```
 
+**Please use the commands in check.sh for evaluating the performance of HyQuas because the run_\*.sh compiles the simulator in debug mode and check.sh compiles it in release mode.**
+
 For more ways to use our simulator (like only using the *OShareMem* method or *TransMM* method, tuning off the overlap of communication and computation), and for reproducing our results in the ICS'21 paper, please refer to our `benchmark/` directory.
 
 It also supports the following **unstable** feathers now. See our dev branch for details.
